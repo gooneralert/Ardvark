@@ -1,0 +1,771 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="assets">
+      <UniqueIdentifier>{607880C2-6C9B-4001-83F5-C573E86C51A2}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="assets\hitsounds">
+      <UniqueIdentifier>{B70C6BC1-BDDA-44A3-B4B0-034125344F61}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="assets\preview_model">
+      <UniqueIdentifier>{9DAEA194-450D-4783-9DAB-1A6DDB616D03}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header Files">
+      <UniqueIdentifier>{F8D76C17-5DC2-47BA-BBB1-747F97CB3679}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Resource Files">
+      <UniqueIdentifier>{919E6FC2-26BB-4923-839F-77BF7469B351}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files">
+      <UniqueIdentifier>{424A3BF1-0158-4D91-819E-F68EE7951D84}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src">
+      <UniqueIdentifier>{137C0D69-067C-44C3-8ED4-DF6B61609C2E}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\app">
+      <UniqueIdentifier>{BF43CE71-FEBD-4D0A-B61A-6759B0D039B5}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\core">
+      <UniqueIdentifier>{693F6D54-558E-4344-B653-849DBF422BD4}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\core\config">
+      <UniqueIdentifier>{DBA0A812-EC54-4988-980F-123BDC854598}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\core\console">
+      <UniqueIdentifier>{1B9C057C-3C56-48DE-8ED9-00519A365CD3}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\core\globals">
+      <UniqueIdentifier>{6080D92D-E079-4FF9-8562-C9481F88AC50}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\core\memory">
+      <UniqueIdentifier>{ED7504D8-9E9F-4F2D-9639-DA271557631B}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\core\player">
+      <UniqueIdentifier>{21FCC618-A038-47F7-8B23-61A0969C4DBC}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\core\roblox">
+      <UniqueIdentifier>{59A4BC5D-65F6-4842-AA6B-6CAE548D300D}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\core\roblox\classes">
+      <UniqueIdentifier>{A243CB05-A759-45EF-B491-A4988259BFC3}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\core\roblox\enums">
+      <UniqueIdentifier>{DA2493ED-5542-4FF8-A859-E3A940186EF3}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\core\roblox\math">
+      <UniqueIdentifier>{5FFC6984-9869-4C7A-B91D-70D665F8997C}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\core\roblox\offsets">
+      <UniqueIdentifier>{A9E0A184-DE2A-4735-82B8-64A103E66DDE}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\features">
+      <UniqueIdentifier>{8D0D2878-F113-42F4-9948-D2CE863815DE}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\features\aim">
+      <UniqueIdentifier>{D558D655-52C5-4B71-BA51-522CCA09AA70}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\features\explorer">
+      <UniqueIdentifier>{4B91D23A-3866-41BA-A800-A3475B4B7441}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\features\local">
+      <UniqueIdentifier>{68B83636-8A09-466F-83BB-9E264FE8827C}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\features\lua">
+      <UniqueIdentifier>{6EB63605-2C66-4D98-A3DD-0B597C347969}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\features\mcp">
+      <UniqueIdentifier>{12FA53FE-7F07-40FC-80C8-FE3DFEB75944}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\features\misc">
+      <UniqueIdentifier>{CFC5F7B2-0653-494E-B70A-63E16D54CDA1}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\features\movement">
+      <UniqueIdentifier>{7D9BBE0E-CE2C-430B-9A6F-329B4436B5CF}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\features\visuals">
+      <UniqueIdentifier>{0BDE04CE-12B7-4684-AA8E-2C9611774BBE}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\features\games">
+      <UniqueIdentifier>{B3E91F0A-6C44-4D2E-9A11-8F0C5D7E2B14}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\features\visuals\boxfill">
+      <UniqueIdentifier>{A81E3C4D-9F22-4B10-8D55-71C0E2B8A901}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\features\world">
+      <UniqueIdentifier>{D9A87CFB-D994-4862-A230-E3E9DC5D28C6}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\gui">
+      <UniqueIdentifier>{28C4E687-3ADB-4CE7-B8C9-756A437C8F3C}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\jewsploit">
+      <UniqueIdentifier>{92883A43-4579-4A9D-ADE1-F8E0F050EA2A}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\jewsploit\colors">
+      <UniqueIdentifier>{BA81F7F1-1504-4ABC-AC3C-AB143C5674EA}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\gui\resources">
+      <UniqueIdentifier>{F4DBF106-F7C8-4F98-9A51-CD27CC4CCDE0}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\gui\resources\fonts">
+      <UniqueIdentifier>{9564D697-A951-40D4-8B5E-DB1B7988243E}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\gui\resources\icons">
+      <UniqueIdentifier>{18E93C9B-859D-4C74-9682-9FFC4B890200}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\gui\TextEditor">
+      <UniqueIdentifier>{98107BB9-5129-49B7-A1D9-67BBAAE89DC7}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\gui\widgets">
+      <UniqueIdentifier>{590E82CC-0B62-4E76-A152-7B0C29699F21}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\gui\editor">
+      <UniqueIdentifier>{77F965C0-935F-4B14-823A-3EB99470FD1F}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\renderer">
+      <UniqueIdentifier>{EBE0FC87-CD45-4040-83A5-670623AF1FBF}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="third_party">
+      <UniqueIdentifier>{90B5782D-6AE8-45BE-BC38-279C552EBE46}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="third_party\imgui">
+      <UniqueIdentifier>{0FBDEFB2-2962-446D-943B-73468BA52B68}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="third_party\imgui\addons">
+      <UniqueIdentifier>{6951F684-2E4D-4575-981A-7C1DF022AFD1}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="third_party\imgui\backends">
+      <UniqueIdentifier>{5AA44E5B-1283-4F8F-B502-58279E346815}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="third_party\imgui\misc">
+      <UniqueIdentifier>{F5B3122F-C80D-40A0-8B69-C67685D4C689}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="third_party\stb">
+      <UniqueIdentifier>{64A7BC95-3846-47ED-819C-834442C0D24F}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="src\pch.h">
+      <Filter>src</Filter>
+    </ClInclude>
+    <ClInclude Include="src\app\Settings.h">
+      <Filter>src\app</Filter>
+    </ClInclude>
+    <ClInclude Include="src\app\Graphics.h">
+      <Filter>src\app</Filter>
+    </ClInclude>
+    <ClInclude Include="src\core\globals\Globals.h">
+      <Filter>src\core\globals</Filter>
+    </ClInclude>
+    <ClInclude Include="src\core\memory\Memory.h">
+      <Filter>src\core\memory</Filter>
+    </ClInclude>
+    <ClInclude Include="src\core\console\Console.h">
+      <Filter>src\core\console</Filter>
+    </ClInclude>
+    <ClInclude Include="src\core\config\Config.h">
+      <Filter>src\core\config</Filter>
+    </ClInclude>
+    <ClInclude Include="src\core\player\PlayerHandler.h">
+      <Filter>src\core\player</Filter>
+    </ClInclude>
+    <ClInclude Include="src\core\roblox\classes\Classes.h">
+      <Filter>src\core\roblox\classes</Filter>
+    </ClInclude>
+    <ClInclude Include="src\core\roblox\enums\Enums.h">
+      <Filter>src\core\roblox\enums</Filter>
+    </ClInclude>
+    <ClInclude Include="src\core\roblox\offsets\Offsets.h">
+      <Filter>src\core\roblox\offsets</Filter>
+    </ClInclude>
+    <ClInclude Include="src\core\roblox\math\Math.h">
+      <Filter>src\core\roblox\math</Filter>
+    </ClInclude>
+    <ClInclude Include="src\features\visuals\RaycastEngine.h">
+      <Filter>src\features\visuals</Filter>
+    </ClInclude>
+    <ClInclude Include="src\features\visuals\ESP.h">
+      <Filter>src\features\visuals</Filter>
+    </ClInclude>
+    <ClInclude Include="src\features\visuals\EspLayout.h">
+      <Filter>src\features\visuals</Filter>
+    </ClInclude>
+    <ClInclude Include="src\features\visuals\Crosshair.h">
+      <Filter>src\features\visuals</Filter>
+    </ClInclude>
+    <ClInclude Include="src\features\visuals\ShaderChams.h">
+      <Filter>src\features\visuals</Filter>
+    </ClInclude>
+    <ClInclude Include="src\features\visuals\EngineChams.h">
+      <Filter>src\features\visuals</Filter>
+    </ClInclude>
+    <ClInclude Include="src\features\visuals\MeshParser.h">
+      <Filter>src\features\visuals</Filter>
+    </ClInclude>
+    <ClInclude Include="src\features\visuals\MeshCache.h">
+      <Filter>src\features\visuals</Filter>
+    </ClInclude>
+    <ClInclude Include="src\features\visuals\MeshChams.h">
+      <Filter>src\features\visuals</Filter>
+    </ClInclude>
+    <ClInclude Include="src\features\visuals\MeshDxShader.h">
+      <Filter>src\features\visuals</Filter>
+    </ClInclude>
+    <ClInclude Include="src\features\visuals\KillEffects.h">
+      <Filter>src\features\visuals</Filter>
+    </ClInclude>
+    <ClInclude Include="src\features\visuals\ESPPreview.h">
+      <Filter>src\features\visuals</Filter>
+    </ClInclude>
+    <ClInclude Include="src\features\visuals\boxfill\BoxFill.h">
+      <Filter>src\features\visuals\boxfill</Filter>
+    </ClInclude>
+    <ClInclude Include="src\features\visuals\HavocWorldEsp.h">
+      <Filter>src\features\visuals</Filter>
+    </ClInclude>
+    <ClInclude Include="src\features\games\PhantomForces.h">
+      <Filter>src\features\games</Filter>
+    </ClInclude>
+    <ClInclude Include="src\features\visuals\ModelLoader.h">
+      <Filter>src\features\visuals</Filter>
+    </ClInclude>
+    <ClInclude Include="src\features\visuals\PreviewRenderer.h">
+      <Filter>src\features\visuals</Filter>
+    </ClInclude>
+    <ClInclude Include="assets\preview_model\preview_model_obj.h">
+      <Filter>assets\preview_model</Filter>
+    </ClInclude>
+    <ClInclude Include="assets\preview_model\preview_model_texture.h">
+      <Filter>assets\preview_model</Filter>
+    </ClInclude>
+    <ClInclude Include="src\features\aim\Aim.h">
+      <Filter>src\features\aim</Filter>
+    </ClInclude>
+    <ClInclude Include="src\features\aim\RaycastSilent.h">
+      <Filter>src\features\aim</Filter>
+    </ClInclude>
+    <ClInclude Include="src\features\aim\MagicBullet.h">
+      <Filter>src\features\aim</Filter>
+    </ClInclude>
+    <ClInclude Include="src\features\aim\ViewportSilent.h">
+      <Filter>src\features\aim</Filter>
+    </ClInclude>
+    <ClInclude Include="src\features\aim\MouseSilent.h">
+      <Filter>src\features\aim</Filter>
+    </ClInclude>
+    <ClInclude Include="src\features\world\WorldVisuals.h">
+      <Filter>src\features\world</Filter>
+    </ClInclude>
+    <ClInclude Include="src\features\world\WorldOwn.h">
+      <Filter>src\features\world</Filter>
+    </ClInclude>
+    <ClInclude Include="src\features\world\WorldSlots.h">
+      <Filter>src\features\world</Filter>
+    </ClInclude>
+    <ClInclude Include="src\features\world\WorldEdit.h">
+      <Filter>src\features\world</Filter>
+    </ClInclude>
+    <ClInclude Include="src\features\local\LocalMods.h">
+      <Filter>src\features\local</Filter>
+    </ClInclude>
+    <ClInclude Include="src\features\local\ThirdPerson.h">
+      <Filter>src\features\local</Filter>
+    </ClInclude>
+    <ClInclude Include="src\features\misc\Misc.h">
+      <Filter>src\features\misc</Filter>
+    </ClInclude>
+    <ClInclude Include="src\features\misc\HitSounds.h">
+      <Filter>src\features\misc</Filter>
+    </ClInclude>
+    <ClInclude Include="assets\hitsounds\hitsounds_data.h">
+      <Filter>assets\hitsounds</Filter>
+    </ClInclude>
+    <ClInclude Include="assets\hitsounds\hitsounds_res.h">
+      <Filter>assets\hitsounds</Filter>
+    </ClInclude>
+    <ClInclude Include="src\features\movement\Fly.h">
+      <Filter>src\features\movement</Filter>
+    </ClInclude>
+    <ClInclude Include="src\features\movement\Speed.h">
+      <Filter>src\features\movement</Filter>
+    </ClInclude>
+    <ClInclude Include="src\features\explorer\Explorer.h">
+      <Filter>src\features\explorer</Filter>
+    </ClInclude>
+    <ClInclude Include="src\features\mcp\McpBridge.h">
+      <Filter>src\features\mcp</Filter>
+    </ClInclude>
+    <ClInclude Include="src\features\lua\LuaExecutor.h">
+      <Filter>src\features\lua</Filter>
+    </ClInclude>
+    <ClInclude Include="src\gui\TextEditor\TextEditor.h">
+      <Filter>src\gui\TextEditor</Filter>
+    </ClInclude>
+    <ClInclude Include="src\renderer\Renderer.h">
+      <Filter>src\renderer</Filter>
+    </ClInclude>
+    <ClInclude Include="src\gui\gui.h">
+      <Filter>src\gui</Filter>
+    </ClInclude>
+    <ClInclude Include="src\gui\Menu.h">
+      <Filter>src\gui</Filter>
+    </ClInclude>
+    <ClInclude Include="src\gui\icons.h">
+      <Filter>src\gui</Filter>
+    </ClInclude>
+    <ClInclude Include="src\gui\lua_window.h">
+      <Filter>src\gui</Filter>
+    </ClInclude>
+    <ClInclude Include="src\gui\players_window.h">
+      <Filter>src\gui</Filter>
+    </ClInclude>
+    <ClInclude Include="src\gui\esp_preview_window.h">
+      <Filter>src\gui</Filter>
+    </ClInclude>
+    <ClInclude Include="src\gui\explorer_window.h">
+      <Filter>src\gui</Filter>
+    </ClInclude>
+    <ClInclude Include="src\gui\properties_window.h">
+      <Filter>src\gui</Filter>
+    </ClInclude>
+    <ClInclude Include="src\gui\editor\lua_editor.h">
+      <Filter>src\gui\editor</Filter>
+    </ClInclude>
+    <ClInclude Include="src\gui\resources\fonts\fonts.h">
+      <Filter>src\gui\resources\fonts</Filter>
+    </ClInclude>
+    <ClInclude Include="src\gui\resources\fonts\font_fredoka_one.h">
+      <Filter>src\gui\resources\fonts</Filter>
+    </ClInclude>
+    <ClInclude Include="src\gui\resources\fonts\font_tahoma.h">
+      <Filter>src\gui\resources\fonts</Filter>
+    </ClInclude>
+    <ClInclude Include="src\gui\resources\fonts\font_tahoma_bold.h">
+      <Filter>src\gui\resources\fonts</Filter>
+    </ClInclude>
+    <ClInclude Include="src\gui\resources\fonts\font_proggyclean.h">
+      <Filter>src\gui\resources\fonts</Filter>
+    </ClInclude>
+    <ClInclude Include="src\gui\resources\fonts\font_visitor.h">
+      <Filter>src\gui\resources\fonts</Filter>
+    </ClInclude>
+    <ClInclude Include="src\gui\resources\icons\iconsdex.h">
+      <Filter>src\gui\resources\icons</Filter>
+    </ClInclude>
+    <ClInclude Include="src\gui\widgets\widgets.h">
+      <Filter>src\gui\widgets</Filter>
+    </ClInclude>
+    <ClInclude Include="src\gui\widgets\button.h">
+      <Filter>src\gui\widgets</Filter>
+    </ClInclude>
+    <ClInclude Include="src\gui\widgets\checkbox.h">
+      <Filter>src\gui\widgets</Filter>
+    </ClInclude>
+    <ClInclude Include="src\gui\widgets\colorpicker.h">
+      <Filter>src\gui\widgets</Filter>
+    </ClInclude>
+    <ClInclude Include="src\gui\widgets\combo.h">
+      <Filter>src\gui\widgets</Filter>
+    </ClInclude>
+    <ClInclude Include="src\gui\widgets\input.h">
+      <Filter>src\gui\widgets</Filter>
+    </ClInclude>
+    <ClInclude Include="src\gui\widgets\keybind.h">
+      <Filter>src\gui\widgets</Filter>
+    </ClInclude>
+    <ClInclude Include="src\gui\widgets\slider.h">
+      <Filter>src\gui\widgets</Filter>
+    </ClInclude>
+    <ClInclude Include="src\gui\widgets\tabs.h">
+      <Filter>src\gui\widgets</Filter>
+    </ClInclude>
+    <ClInclude Include="src\gui\widgets\text.h">
+      <Filter>src\gui\widgets</Filter>
+    </ClInclude>
+    <ClInclude Include="src\jewsploit\colors\colors.h">
+      <Filter>src\jewsploit\colors</Filter>
+    </ClInclude>
+    <ClInclude Include="third_party\stb\stb_image.h">
+      <Filter>third_party\stb</Filter>
+    </ClInclude>
+    <ClInclude Include="third_party\imgui\imconfig.h">
+      <Filter>third_party\imgui</Filter>
+    </ClInclude>
+    <ClInclude Include="third_party\imgui\imgui.h">
+      <Filter>third_party\imgui</Filter>
+    </ClInclude>
+    <ClInclude Include="third_party\imgui\imgui_internal.h">
+      <Filter>third_party\imgui</Filter>
+    </ClInclude>
+    <ClInclude Include="third_party\imgui\imstb_rectpack.h">
+      <Filter>third_party\imgui</Filter>
+    </ClInclude>
+    <ClInclude Include="third_party\imgui\imstb_textedit.h">
+      <Filter>third_party\imgui</Filter>
+    </ClInclude>
+    <ClInclude Include="third_party\imgui\imstb_truetype.h">
+      <Filter>third_party\imgui</Filter>
+    </ClInclude>
+    <ClInclude Include="third_party\imgui\backends\imgui_impl_dx11.h">
+      <Filter>third_party\imgui\backends</Filter>
+    </ClInclude>
+    <ClInclude Include="third_party\imgui\backends\imgui_impl_win32.h">
+      <Filter>third_party\imgui\backends</Filter>
+    </ClInclude>
+    <ClInclude Include="third_party\imgui\misc\imgui_freetype.h">
+      <Filter>third_party\imgui\misc</Filter>
+    </ClInclude>
+    <ClInclude Include="third_party\imgui\addons\imgui_addons.h">
+      <Filter>third_party\imgui\addons</Filter>
+    </ClInclude>
+    <ClInclude Include="src\features\visuals\MeshFetch.h" />
+    <ClInclude Include="src\features\games\ApocalypseRising.h" />
+    <ClInclude Include="src\features\aim\PhantomSilent.h" />
+    <ClInclude Include="src\features\world\LightingInvalidate.h" />
+    <ClInclude Include="src\features\world\WorldExtras.h" />
+    <ClInclude Include="src\features\misc\HitboxExpander.h" />
+    <ClInclude Include="src\features\lua\execute\Clipboard.h" />
+    <ClInclude Include="src\gui\colors\colors.h" />
+    <ClInclude Include="src\gui\tabs\aim.h" />
+    <ClInclude Include="src\gui\tabs\esp.h" />
+    <ClInclude Include="src\gui\tabs\misc.h" />
+    <ClInclude Include="src\gui\tabs\local.h" />
+    <ClInclude Include="src\gui\tabs\settings_tab.h" />
+    <ClInclude Include="src\gui\tabs\helpers.h" />
+    <ClInclude Include="third_party\lua\lua.h" />
+    <ClInclude Include="third_party\lua\lauxlib.h" />
+    <ClInclude Include="third_party\lua\lualib.h" />
+    <ClInclude Include="third_party\lua\luaconf.h" />
+    <ClInclude Include="src\features\lua\vm\LuaVM.h" />
+    <ClInclude Include="src\features\lua\vm\InstanceCreate.h" />
+    <ClInclude Include="src\features\lua\vm\CallGate.h" />
+    <ClInclude Include="src\features\lua\vm\Reflect.h" />
+    <ClInclude Include="src\features\lua\vm\LuaBridge.h" />
+    <ClInclude Include="src\features\lua\vm\LuaGc.h" />
+    <ClInclude Include="src\features\lua\vm\LuaMem.h" />
+    <ClInclude Include="src\features\lua\vm\FissionEmbed.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="src\pch.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Main.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\renderer\Renderer.cpp">
+      <Filter>src\renderer</Filter>
+    </ClCompile>
+    <ClCompile Include="src\core\console\Console.cpp">
+      <Filter>src\core\console</Filter>
+    </ClCompile>
+    <ClCompile Include="src\core\memory\Memory.cpp">
+      <Filter>src\core\memory</Filter>
+    </ClCompile>
+    <ClCompile Include="src\core\player\PlayerHandler.cpp">
+      <Filter>src\core\player</Filter>
+    </ClCompile>
+    <ClCompile Include="src\core\config\Config.cpp">
+      <Filter>src\core\config</Filter>
+    </ClCompile>
+    <ClCompile Include="src\core\roblox\classes\BasePart.cpp">
+      <Filter>src\core\roblox\classes</Filter>
+    </ClCompile>
+    <ClCompile Include="src\core\roblox\classes\Camera.cpp">
+      <Filter>src\core\roblox\classes</Filter>
+    </ClCompile>
+    <ClCompile Include="src\core\roblox\classes\Character.cpp">
+      <Filter>src\core\roblox\classes</Filter>
+    </ClCompile>
+    <ClCompile Include="src\core\roblox\classes\DataModel.cpp">
+      <Filter>src\core\roblox\classes</Filter>
+    </ClCompile>
+    <ClCompile Include="src\core\roblox\classes\Humanoid.cpp">
+      <Filter>src\core\roblox\classes</Filter>
+    </ClCompile>
+    <ClCompile Include="src\core\roblox\classes\Instance.cpp">
+      <Filter>src\core\roblox\classes</Filter>
+    </ClCompile>
+    <ClCompile Include="src\core\roblox\classes\Lighting.cpp">
+      <Filter>src\core\roblox\classes</Filter>
+    </ClCompile>
+    <ClCompile Include="src\core\roblox\classes\MeshPart.cpp">
+      <Filter>src\core\roblox\classes</Filter>
+    </ClCompile>
+    <ClCompile Include="src\core\roblox\classes\Model.cpp">
+      <Filter>src\core\roblox\classes</Filter>
+    </ClCompile>
+    <ClCompile Include="src\core\roblox\classes\Player.cpp">
+      <Filter>src\core\roblox\classes</Filter>
+    </ClCompile>
+    <ClCompile Include="src\core\roblox\classes\Players.cpp">
+      <Filter>src\core\roblox\classes</Filter>
+    </ClCompile>
+    <ClCompile Include="src\core\roblox\classes\Workspace.cpp">
+      <Filter>src\core\roblox\classes</Filter>
+    </ClCompile>
+    <ClCompile Include="src\features\visuals\RaycastEngine.cpp">
+      <Filter>src\features\visuals</Filter>
+    </ClCompile>
+    <ClCompile Include="src\features\visuals\ESP.cpp">
+      <Filter>src\features\visuals</Filter>
+    </ClCompile>
+    <ClCompile Include="src\features\visuals\boxfill\BoxFill.cpp">
+      <Filter>src\features\visuals\boxfill</Filter>
+    </ClCompile>
+    <ClCompile Include="src\features\visuals\HavocWorldEsp.cpp">
+      <Filter>src\features\visuals</Filter>
+    </ClCompile>
+    <ClCompile Include="src\features\games\PhantomForces.cpp">
+      <Filter>src\features\games</Filter>
+    </ClCompile>
+    <ClCompile Include="src\features\visuals\Crosshair.cpp">
+      <Filter>src\features\visuals</Filter>
+    </ClCompile>
+    <ClCompile Include="src\features\visuals\ShaderChams.cpp">
+      <Filter>src\features\visuals</Filter>
+    </ClCompile>
+    <ClCompile Include="src\features\visuals\EngineChams.cpp">
+      <Filter>src\features\visuals</Filter>
+    </ClCompile>
+    <ClCompile Include="src\features\visuals\MeshParser.cpp">
+      <Filter>src\features\visuals</Filter>
+    </ClCompile>
+    <ClCompile Include="src\features\visuals\MeshCache.cpp">
+      <Filter>src\features\visuals</Filter>
+    </ClCompile>
+    <ClCompile Include="src\features\visuals\MeshChams.cpp">
+      <Filter>src\features\visuals</Filter>
+    </ClCompile>
+    <ClCompile Include="src\features\visuals\MeshDxShader.cpp">
+      <Filter>src\features\visuals</Filter>
+    </ClCompile>
+    <ClCompile Include="src\features\visuals\KillEffects.cpp">
+      <Filter>src\features\visuals</Filter>
+    </ClCompile>
+    <ClCompile Include="src\features\visuals\ESPPreview.cpp">
+      <Filter>src\features\visuals</Filter>
+    </ClCompile>
+    <ClCompile Include="src\features\visuals\ModelLoader.cpp">
+      <Filter>src\features\visuals</Filter>
+    </ClCompile>
+    <ClCompile Include="src\features\visuals\PreviewRenderer.cpp">
+      <Filter>src\features\visuals</Filter>
+    </ClCompile>
+    <ClCompile Include="src\features\aim\Aim.cpp">
+      <Filter>src\features\aim</Filter>
+    </ClCompile>
+    <ClCompile Include="src\features\aim\RaycastSilent.cpp">
+      <Filter>src\features\aim</Filter>
+    </ClCompile>
+    <ClCompile Include="src\features\aim\MagicBullet.cpp">
+      <Filter>src\features\aim</Filter>
+    </ClCompile>
+    <ClCompile Include="src\features\aim\ViewportSilent.cpp">
+      <Filter>src\features\aim</Filter>
+    </ClCompile>
+    <ClCompile Include="src\features\aim\MouseSilent.cpp">
+      <Filter>src\features\aim</Filter>
+    </ClCompile>
+    <ClCompile Include="src\features\world\WorldVisuals.cpp">
+      <Filter>src\features\world</Filter>
+    </ClCompile>
+    <ClCompile Include="src\features\world\WorldOwn.cpp">
+      <Filter>src\features\world</Filter>
+    </ClCompile>
+    <ClCompile Include="src\features\world\WorldSlots.cpp">
+      <Filter>src\features\world</Filter>
+    </ClCompile>
+    <ClCompile Include="src\features\world\WorldEdit.cpp">
+      <Filter>src\features\world</Filter>
+    </ClCompile>
+    <ClCompile Include="src\features\local\LocalMods.cpp">
+      <Filter>src\features\local</Filter>
+    </ClCompile>
+    <ClCompile Include="src\features\local\ThirdPerson.cpp">
+      <Filter>src\features\local</Filter>
+    </ClCompile>
+    <ClCompile Include="src\features\misc\Misc.cpp">
+      <Filter>src\features\misc</Filter>
+    </ClCompile>
+    <ClCompile Include="src\features\misc\HitSounds.cpp">
+      <Filter>src\features\misc</Filter>
+    </ClCompile>
+    <ClCompile Include="assets\hitsounds\hitsounds_data.cpp">
+      <Filter>assets\hitsounds</Filter>
+    </ClCompile>
+    <ClCompile Include="src\features\movement\Fly.cpp">
+      <Filter>src\features\movement</Filter>
+    </ClCompile>
+    <ClCompile Include="src\features\movement\Speed.cpp">
+      <Filter>src\features\movement</Filter>
+    </ClCompile>
+    <ClCompile Include="src\features\explorer\Explorer.cpp">
+      <Filter>src\features\explorer</Filter>
+    </ClCompile>
+    <ClCompile Include="src\features\mcp\McpBridge.cpp">
+      <Filter>src\features\mcp</Filter>
+    </ClCompile>
+    <ClCompile Include="src\features\lua\LuaExecutor.cpp">
+      <Filter>src\features\lua</Filter>
+    </ClCompile>
+    <ClCompile Include="src\gui\TextEditor\TextEditor.cpp">
+      <Filter>src\gui\TextEditor</Filter>
+    </ClCompile>
+    <ClCompile Include="third_party\stb\stb_image_impl.cpp">
+      <Filter>third_party\stb</Filter>
+    </ClCompile>
+    <ClCompile Include="src\gui\gui.cpp">
+      <Filter>src\gui</Filter>
+    </ClCompile>
+    <ClCompile Include="src\gui\Menu.cpp">
+      <Filter>src\gui</Filter>
+    </ClCompile>
+    <ClCompile Include="src\gui\icons.cpp">
+      <Filter>src\gui</Filter>
+    </ClCompile>
+    <ClCompile Include="src\gui\lua_window.cpp">
+      <Filter>src\gui</Filter>
+    </ClCompile>
+    <ClCompile Include="src\gui\players_window.cpp">
+      <Filter>src\gui</Filter>
+    </ClCompile>
+    <ClCompile Include="src\gui\esp_preview_window.cpp">
+      <Filter>src\gui</Filter>
+    </ClCompile>
+    <ClCompile Include="src\gui\explorer_window.cpp">
+      <Filter>src\gui</Filter>
+    </ClCompile>
+    <ClCompile Include="src\gui\properties_window.cpp">
+      <Filter>src\gui</Filter>
+    </ClCompile>
+    <ClCompile Include="src\gui\editor\lua_editor.cpp">
+      <Filter>src\gui\editor</Filter>
+    </ClCompile>
+    <ClCompile Include="src\gui\widgets\button.cpp">
+      <Filter>src\gui\widgets</Filter>
+    </ClCompile>
+    <ClCompile Include="src\gui\widgets\checkbox.cpp">
+      <Filter>src\gui\widgets</Filter>
+    </ClCompile>
+    <ClCompile Include="src\gui\widgets\colorpicker.cpp">
+      <Filter>src\gui\widgets</Filter>
+    </ClCompile>
+    <ClCompile Include="src\gui\widgets\combo.cpp">
+      <Filter>src\gui\widgets</Filter>
+    </ClCompile>
+    <ClCompile Include="src\gui\widgets\input.cpp">
+      <Filter>src\gui\widgets</Filter>
+    </ClCompile>
+    <ClCompile Include="src\gui\widgets\keybind.cpp">
+      <Filter>src\gui\widgets</Filter>
+    </ClCompile>
+    <ClCompile Include="src\gui\widgets\slider.cpp">
+      <Filter>src\gui\widgets</Filter>
+    </ClCompile>
+    <ClCompile Include="src\gui\widgets\tabs.cpp">
+      <Filter>src\gui\widgets</Filter>
+    </ClCompile>
+    <ClCompile Include="src\gui\resources\fonts\fonts.cpp">
+      <Filter>src\gui\resources\fonts</Filter>
+    </ClCompile>
+    <ClCompile Include="src\jewsploit\colors\theme.cpp">
+      <Filter>src\jewsploit\colors</Filter>
+    </ClCompile>
+    <ClCompile Include="third_party\imgui\imgui.cpp">
+      <Filter>third_party\imgui</Filter>
+    </ClCompile>
+    <ClCompile Include="third_party\imgui\imgui_draw.cpp">
+      <Filter>third_party\imgui</Filter>
+    </ClCompile>
+    <ClCompile Include="third_party\imgui\imgui_tables.cpp">
+      <Filter>third_party\imgui</Filter>
+    </ClCompile>
+    <ClCompile Include="third_party\imgui\imgui_widgets.cpp">
+      <Filter>third_party\imgui</Filter>
+    </ClCompile>
+    <ClCompile Include="third_party\imgui\backends\imgui_impl_dx11.cpp">
+      <Filter>third_party\imgui\backends</Filter>
+    </ClCompile>
+    <ClCompile Include="third_party\imgui\backends\imgui_impl_win32.cpp">
+      <Filter>third_party\imgui\backends</Filter>
+    </ClCompile>
+    <ClCompile Include="third_party\imgui\misc\imgui_freetype.cpp">
+      <Filter>third_party\imgui\misc</Filter>
+    </ClCompile>
+    <ClCompile Include="third_party\imgui\addons\imgui_addons.cpp">
+      <Filter>third_party\imgui\addons</Filter>
+    </ClCompile>
+    <ClCompile Include="src\features\games\ApocalypseRising.cpp" />
+    <ClCompile Include="src\features\visuals\MeshFetch.cpp" />
+    <ClCompile Include="src\features\aim\PhantomSilent.cpp" />
+    <ClCompile Include="src\features\world\LightingInvalidate.cpp" />
+    <ClCompile Include="src\features\world\WorldExtras.cpp" />
+    <ClCompile Include="src\features\misc\HitboxExpander.cpp" />
+    <ClCompile Include="src\features\misc\PlayerAvatars.cpp" />
+    <ClCompile Include="third_party\lua\lapi.c" />
+    <ClCompile Include="third_party\lua\lauxlib.c" />
+    <ClCompile Include="third_party\lua\lbaselib.c" />
+    <ClCompile Include="third_party\lua\lcode.c" />
+    <ClCompile Include="third_party\lua\lcorolib.c" />
+    <ClCompile Include="third_party\lua\lctype.c" />
+    <ClCompile Include="third_party\lua\ldblib.c" />
+    <ClCompile Include="third_party\lua\ldebug.c" />
+    <ClCompile Include="third_party\lua\ldo.c" />
+    <ClCompile Include="third_party\lua\ldump.c" />
+    <ClCompile Include="third_party\lua\lfunc.c" />
+    <ClCompile Include="third_party\lua\lgc.c" />
+    <ClCompile Include="third_party\lua\linit.c" />
+    <ClCompile Include="third_party\lua\liolib.c" />
+    <ClCompile Include="third_party\lua\llex.c" />
+    <ClCompile Include="third_party\lua\lmathlib.c" />
+    <ClCompile Include="third_party\lua\lmem.c" />
+    <ClCompile Include="third_party\lua\loadlib.c" />
+    <ClCompile Include="third_party\lua\lobject.c" />
+    <ClCompile Include="third_party\lua\lopcodes.c" />
+    <ClCompile Include="third_party\lua\loslib.c" />
+    <ClCompile Include="third_party\lua\lparser.c" />
+    <ClCompile Include="third_party\lua\lstate.c" />
+    <ClCompile Include="third_party\lua\lstring.c" />
+    <ClCompile Include="third_party\lua\lstrlib.c" />
+    <ClCompile Include="third_party\lua\ltable.c" />
+    <ClCompile Include="third_party\lua\ltablib.c" />
+    <ClCompile Include="third_party\lua\ltm.c" />
+    <ClCompile Include="third_party\lua\lundump.c" />
+    <ClCompile Include="third_party\lua\lutf8lib.c" />
+    <ClCompile Include="third_party\lua\lvm.c" />
+    <ClCompile Include="third_party\lua\lzio.c" />
+    <ClCompile Include="src\features\lua\vm\LuaVM.cpp" />
+    <ClCompile Include="src\features\lua\vm\InstanceCreate.cpp" />
+    <ClCompile Include="src\features\lua\vm\CallGate.cpp" />
+    <ClCompile Include="src\features\lua\vm\Reflect.cpp" />
+    <ClCompile Include="src\features\lua\vm\LuaBridge.cpp" />
+    <ClCompile Include="src\features\lua\vm\LuaTypes.cpp" />
+    <ClCompile Include="src\features\lua\vm\LuaDrawing.cpp" />
+    <ClCompile Include="src\features\lua\vm\LuaScripts.cpp" />
+    <ClCompile Include="src\features\lua\vm\LuaGc.cpp" />
+    <ClCompile Include="src\features\lua\vm\LuaMem.cpp" />
+    <ClCompile Include="src\features\lua\vm\ScriptBytecode.cpp" />
+    <ClCompile Include="src\features\lua\vm\FissionEmbed.cpp" />
+    <ClCompile Include="third_party\zstd\lib\common\debug.c" />
+    <ClCompile Include="third_party\zstd\lib\common\entropy_common.c" />
+    <ClCompile Include="third_party\zstd\lib\common\error_private.c" />
+    <ClCompile Include="third_party\zstd\lib\common\fse_decompress.c" />
+    <ClCompile Include="third_party\zstd\lib\common\xxhash.c" />
+    <ClCompile Include="third_party\zstd\lib\common\zstd_common.c" />
+    <ClCompile Include="third_party\zstd\lib\decompress\huf_decompress.c" />
+    <ClCompile Include="third_party\zstd\lib\decompress\zstd_ddict.c" />
+    <ClCompile Include="third_party\zstd\lib\decompress\zstd_decompress.c" />
+    <ClCompile Include="third_party\zstd\lib\decompress\zstd_decompress_block.c" />
+    <ClCompile Include="src\gui\tabs\aim.cpp" />
+    <ClCompile Include="src\gui\tabs\esp.cpp" />
+    <ClCompile Include="src\gui\tabs\misc.cpp" />
+    <ClCompile Include="src\gui\tabs\local.cpp" />
+    <ClCompile Include="src\gui\tabs\settings_tab.cpp" />
+    <ClCompile Include="src\gui\tabs\helpers.cpp" />
+    <ClCompile Include="src\gui\colors\colors.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="assets\hitsounds\hitsounds.rc">
+      <Filter>assets\hitsounds</Filter>
+    </ResourceCompile>
+  </ItemGroup>
+</Project>
