@@ -23,11 +23,13 @@ if exist "%SRC_DIR%" (
 echo [+] src deleted.
 
 rem ============================================================
-rem  Step 2 - Download the src folder from GitHub
+rem  Step 2 - Download the src folder from GitHub using curl
 rem ============================================================
-echo [*] Downloading latest repo from GitHub...
+echo [*] Downloading latest repo from GitHub (using curl)...
 if exist "%TEMP_ZIP%" del /Q "%TEMP_ZIP%"
-powershell -NoProfile -ExecutionPolicy Bypass -Command "Invoke-WebRequest -Uri '%REPO_ZIP_URL%' -OutFile '%TEMP_ZIP%' -UseBasicParsing"
+
+rem Use curl.exe (built-in on Windows 10/11) for fast download
+curl -L -o "%TEMP_ZIP%" "%REPO_ZIP_URL%"
 if errorlevel 1 (
     echo [!] Failed to download the repo. Check your internet connection.
     pause
