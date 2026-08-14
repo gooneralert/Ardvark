@@ -134,7 +134,7 @@ namespace Functions {
 }
 
 namespace GuiBase2D {
-    constexpr uintptr_t AbsolutePosition = 0x10C; // Vector2, 8 bytes before AbsoluteSize (0x114)
+    constexpr uintptr_t AbsolutePosition = 0x108;
     constexpr uintptr_t AbsoluteRotation = 0xE8;
     constexpr uintptr_t AbsoluteSize = 0x114;
 }
@@ -219,7 +219,7 @@ namespace Humanoid {
     constexpr uintptr_t MoveToPart = 0x118;
     constexpr uintptr_t MoveToPoint = 0x164;
     constexpr uintptr_t PlatformStand = 0xc5;
-    constexpr uintptr_t PlatformStatePointer = 0x0;
+    constexpr uintptr_t PlatformStatePointer = 0x770f4e0e;
     constexpr uintptr_t WalkTimer = 0x408;
 }
 

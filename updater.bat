@@ -28,7 +28,6 @@ rem ============================================================
 echo [*] Downloading latest repo from GitHub (using curl)...
 if exist "%TEMP_ZIP%" del /Q "%TEMP_ZIP%"
 
-rem Use curl.exe (built-in on Windows 10/11) for fast download
 curl -L -o "%TEMP_ZIP%" "%REPO_ZIP_URL%"
 if errorlevel 1 (
     echo [!] Failed to download the repo. Check your internet connection.
@@ -36,11 +35,19 @@ if errorlevel 1 (
     exit /b 1
 )
 
-echo [*] Extracting archive...
+echo [*] Extracting archive (fast mode)...
 if exist "%TEMP_EXTRACT%" rmdir /S /Q "%TEMP_EXTRACT%"
-powershell -NoProfile -ExecutionPolicy Bypass -Command "Expand-Archive -Path '%TEMP_ZIP%' -DestinationPath '%TEMP_EXTRACT%' -Force"
+mkdir "%TEMP_EXTRACT%" 2>nul
+
+rem Try tar first (built-in on Win10/11), then fallback to .NET ZipFile
+where tar >nul 2>nul
+if %errorlevel% equ 0 (
+    tar -xf "%TEMP_ZIP%" -C "%TEMP_EXTRACT%"
+) else (
+    powershell -NoProfile -Command "Add-Type -AssemblyName System.IO.Compression.FileSystem; [System.IO.Compression.ZipFile]::ExtractToDirectory('%TEMP_ZIP%', '%TEMP_EXTRACT%')"
+)
 if errorlevel 1 (
-    echo [!] Failed to extract the archive.
+    echo [!] Extraction failed.
     pause
     exit /b 1
 )
