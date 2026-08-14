@@ -34,7 +34,8 @@ struct DrawObject {
 	bool alive{ true };
 	bool visible{ true };
 	float thickness{ 1.f };
-	float transparency{ 0.f }; // 0 = opaque
+	float transparency{ 1.f }; // executor API: 1 = fully opaque, 0 = transparent
+	int zindex{ 1 };
 	float r{ 1.f }, g{ 1.f }, b{ 1.f };
 	float fromX{ 0 }, fromY{ 0 };
 	float toX{ 0 }, toY{ 0 };
@@ -46,6 +47,7 @@ struct DrawObject {
 	bool centered{ false };
 	bool outline{ false };
 	std::string text;
+	std::string font;
 };
 
 constexpr size_t k_max_objects = 4096;
@@ -72,7 +74,8 @@ float sane(double v)
 
 ImU32 MakeColor(const DrawObject& o)
 {
-	const float a = std::clamp(1.f - o.transparency, 0.f, 1.f);
+	// Executor Drawing API: Transparency 1 = fully opaque, 0 = fully transparent.
+	const float a = std::clamp(o.transparency, 0.f, 1.f);
 	return IM_COL32(
 		static_cast<int>(std::clamp(o.r, 0.f, 1.f) * 255.f),
 		static_cast<int>(std::clamp(o.g, 0.f, 1.f) * 255.f),
@@ -153,7 +156,7 @@ int l_index(lua_State* L)
 	if (std::strcmp(key, "Transparency") == 0) { lua_pushnumber(L, o.transparency); return 1; }
 	if (std::strcmp(key, "Thickness") == 0) { lua_pushnumber(L, o.thickness); return 1; }
 	if (std::strcmp(key, "Color") == 0) { LuaTypes::PushColor3(L, o.r, o.g, o.b); return 1; }
-	if (std::strcmp(key, "ZIndex") == 0) { lua_pushinteger(L, 0); return 1; }
+	if (std::strcmp(key, "ZIndex") == 0) { lua_pushinteger(L, o.zindex); return 1; }
 
 	if (o.type == DrawType::Line)
 	{
@@ -167,6 +170,7 @@ int l_index(lua_State* L)
 		if (std::strcmp(key, "Size") == 0) { lua_pushnumber(L, o.size); return 1; }
 		if (std::strcmp(key, "Center") == 0) { lua_pushboolean(L, o.centered); return 1; }
 		if (std::strcmp(key, "Outline") == 0) { lua_pushboolean(L, o.outline); return 1; }
+		if (std::strcmp(key, "Font") == 0) { lua_pushstring(L, o.font.c_str()); return 1; }
 	}
 	if (o.type == DrawType::Circle)
 	{
@@ -216,6 +220,12 @@ int l_newindex(lua_State* L)
 	if (std::strcmp(key, "Visible") == 0) { o.visible = flag; return 0; }
 	if (std::strcmp(key, "Transparency") == 0) { if (isnum) o.transparency = num; return 0; }
 	if (std::strcmp(key, "Thickness") == 0) { if (isnum) o.thickness = num; return 0; }
+	if (std::strcmp(key, "ZIndex") == 0)
+	{
+		if (isnum)
+			o.zindex = static_cast<int>(num);
+		return 0;
+	}
 	if (std::strcmp(key, "Color") == 0)
 	{
 		if (iscol)
@@ -253,6 +263,12 @@ int l_newindex(lua_State* L)
 		if (std::strcmp(key, "Size") == 0) { if (isnum) o.size = num; return 0; }
 		if (std::strcmp(key, "Center") == 0) { o.centered = flag; return 0; }
 		if (std::strcmp(key, "Outline") == 0) { o.outline = flag; return 0; }
+		if (std::strcmp(key, "Font") == 0)
+		{
+			if (lua_type(L, 3) == LUA_TSTRING)
+				o.font = str;
+			return 0;
+		}
 	}
 	if (o.type == DrawType::Circle)
 	{
@@ -436,75 +452,120 @@ void Clear()
 	g_objects.clear();
 }
 
+void DrawSnapshot(ImDrawList* dl, ImFont* font,
+	const std::vector<std::shared_ptr<DrawObject>>& objs)
+{
+	// This runs on Roblox's present thread — never let a drawing fault
+	// take down the game.
+	__try
+	{
+		for (const auto& sp : objs)
+		{
+			if (!sp || !sp->alive || !sp->visible)
+				continue;
+			const auto& o = *sp;
+			const ImU32 col = MakeColor(o);
+			const float th = std::max(1.f, o.thickness);
+
+			switch (o.type)
+			{
+			case DrawType::Line:
+			{
+				const ImVec2 f(std::clamp(o.fromX, -100000.f, 100000.f),
+					std::clamp(o.fromY, -100000.f, 100000.f));
+				const ImVec2 t(std::clamp(o.toX, -100000.f, 100000.f),
+					std::clamp(o.toY, -100000.f, 100000.f));
+				dl->AddLine(f, t, col, th);
+				break;
+			}
+			case DrawType::Text:
+			{
+				if (!font)
+					break;
+				const float fs = std::clamp(o.size > 0.f ? o.size : 13.f, 1.f, 200.f);
+				ImVec2 pos(std::clamp(o.posX, -100000.f, 100000.f),
+					std::clamp(o.posY, -100000.f, 100000.f));
+				if (o.centered)
+				{
+					const ImVec2 sz = font->CalcTextSizeA(fs, FLT_MAX, 0.f, o.text.c_str());
+					pos.x -= sz.x * 0.5f;
+					pos.y -= sz.y * 0.5f;
+				}
+				if (o.outline)
+				{
+					const ImU32 oc = IM_COL32(0, 0, 0, (col >> 24) & 0xFF);
+					dl->AddText(font, fs, ImVec2(pos.x - 1, pos.y), oc, o.text.c_str());
+					dl->AddText(font, fs, ImVec2(pos.x + 1, pos.y), oc, o.text.c_str());
+					dl->AddText(font, fs, ImVec2(pos.x, pos.y - 1), oc, o.text.c_str());
+					dl->AddText(font, fs, ImVec2(pos.x, pos.y + 1), oc, o.text.c_str());
+				}
+				dl->AddText(font, fs, pos, col, o.text.c_str());
+				break;
+			}
+			case DrawType::Circle:
+			{
+				const ImVec2 c(std::clamp(o.posX, -100000.f, 100000.f),
+					std::clamp(o.posY, -100000.f, 100000.f));
+				const float r = std::clamp(o.radius, 0.5f, 100000.f);
+				if (o.filled)
+					dl->AddCircleFilled(c, r, col, 64);
+				else
+					dl->AddCircle(c, r, col, 64, th);
+				break;
+			}
+			case DrawType::Square:
+			{
+				const float x0 = std::clamp(o.posX, -100000.f, 100000.f);
+				const float y0 = std::clamp(o.posY, -100000.f, 100000.f);
+				const float w = std::clamp(o.width, 0.f, 100000.f);
+				const float h = std::clamp(o.height, 0.f, 100000.f);
+				const ImVec2 a(x0, y0);
+				const ImVec2 b(x0 + w, y0 + h);
+				if (o.filled)
+					dl->AddRectFilled(a, b, col);
+				else
+					dl->AddRect(a, b, col, 0.f, 0, th);
+				break;
+			}
+			}
+		}
+	}
+	__except (EXCEPTION_EXECUTE_HANDLER)
+	{
+	}
+}
+
 void Render()
 {
 	ImDrawList* dl = ImGui::GetBackgroundDrawList();
 	if (!dl)
 		return;
-
 	ImFont* font = ImGui::GetFont();
-	const float base_fs = ImGui::GetFontSize();
 
-	// луа-поток мутирует объекты в любой момент, поэтому держим лок на весь проход:
-	// снапшот shared_ptr спасал только от free, но не от гонки по полям (text особенно)
-	std::lock_guard lock(g_mutex);
-	g_objects.erase(
-		std::remove_if(g_objects.begin(), g_objects.end(),
-			[](const std::shared_ptr<DrawObject>& o) { return !o || !o->alive; }),
-		g_objects.end());
-
-	for (const auto& sp : g_objects)
+	// Snapshot under the lock, then draw unlocked so a fault here can't leave
+	// the mutex held (which would deadlock Roblox's present thread). Use
+	// try_to_lock so a leaked/held mutex never blocks the overlay render thread.
+	std::vector<std::shared_ptr<DrawObject>> snapshot;
 	{
-		if (!sp || !sp->alive || !sp->visible)
-			continue;
-		const auto& o = *sp;
-		const ImU32 col = MakeColor(o);
-		const float th = std::max(1.f, o.thickness);
-
-		switch (o.type)
-		{
-		case DrawType::Line:
-			dl->AddLine(ImVec2(o.fromX, o.fromY), ImVec2(o.toX, o.toY), col, th);
-			break;
-		case DrawType::Text:
-		{
-			const float fs = o.size > 0.f ? o.size : base_fs;
-			ImVec2 pos(o.posX, o.posY);
-			if (o.centered && font)
-			{
-				const ImVec2 sz = font->CalcTextSizeA(fs, FLT_MAX, 0.f, o.text.c_str());
-				pos.x -= sz.x * 0.5f;
-				pos.y -= sz.y * 0.5f;
-			}
-			if (o.outline)
-			{
-				const ImU32 oc = IM_COL32(0, 0, 0, (col >> 24) & 0xFF);
-				dl->AddText(font, fs, ImVec2(pos.x - 1, pos.y), oc, o.text.c_str());
-				dl->AddText(font, fs, ImVec2(pos.x + 1, pos.y), oc, o.text.c_str());
-				dl->AddText(font, fs, ImVec2(pos.x, pos.y - 1), oc, o.text.c_str());
-				dl->AddText(font, fs, ImVec2(pos.x, pos.y + 1), oc, o.text.c_str());
-			}
-			dl->AddText(font, fs, pos, col, o.text.c_str());
-			break;
-		}
-		case DrawType::Circle:
-			if (o.filled)
-				dl->AddCircleFilled(ImVec2(o.posX, o.posY), o.radius, col, 64);
-			else
-				dl->AddCircle(ImVec2(o.posX, o.posY), o.radius, col, 64, th);
-			break;
-		case DrawType::Square:
-		{
-			const ImVec2 a(o.posX, o.posY);
-			const ImVec2 b(o.posX + o.width, o.posY + o.height);
-			if (o.filled)
-				dl->AddRectFilled(a, b, col);
-			else
-				dl->AddRect(a, b, col, 0.f, 0, th);
-			break;
-		}
-		}
+		std::unique_lock lock(g_mutex, std::try_to_lock);
+		if (!lock.owns_lock())
+			return;
+		g_objects.erase(
+			std::remove_if(g_objects.begin(), g_objects.end(),
+				[](const std::shared_ptr<DrawObject>& o) { return !o || !o->alive; }),
+			g_objects.end());
+		snapshot.reserve(g_objects.size());
+		for (const auto& sp : g_objects)
+			snapshot.push_back(sp);
 	}
+
+	// Z-order: draw lower ZIndex first (behind), higher ZIndex on top.
+	std::stable_sort(snapshot.begin(), snapshot.end(),
+		[](const std::shared_ptr<DrawObject>& a, const std::shared_ptr<DrawObject>& b) {
+			return (a ? a->zindex : 0) < (b ? b->zindex : 0);
+		});
+
+	DrawSnapshot(dl, font, snapshot);
 }
 
 void Register(lua_State* L)
@@ -527,6 +588,16 @@ void Register(lua_State* L)
 	lua_setfield(L, -2, "new");
 	lua_pushcfunction(L, l_clear);
 	lua_setfield(L, -2, "clear");
+	// Matcha Drawing.Fonts enum
+	lua_newtable(L);
+	lua_pushstring(L, "UI");          lua_setfield(L, -2, "UI");
+	lua_pushstring(L, "System");      lua_setfield(L, -2, "System");
+	lua_pushstring(L, "SystemBold");  lua_setfield(L, -2, "SystemBold");
+	lua_pushstring(L, "Minecraft");   lua_setfield(L, -2, "Minecraft");
+	lua_pushstring(L, "Monospace");   lua_setfield(L, -2, "Monospace");
+	lua_pushstring(L, "Pixel");       lua_setfield(L, -2, "Pixel");
+	lua_pushstring(L, "Fortnite");    lua_setfield(L, -2, "Fortnite");
+	lua_setfield(L, -2, "Fonts");
 	lua_setglobal(L, "Drawing");
 
 	lua_newtable(L);

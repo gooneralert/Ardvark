@@ -509,7 +509,7 @@ namespace gui
         ImGui::BeginChild("topbar_inner", ImVec2(topbar_size.x - content_margin * 2.f, topbar_size.y - content_margin * 2.f), ImGuiChildFlags_Borders, ImGuiWindowFlags_NoScrollbar);
         ImGui::PopStyleColor();
 
-        std::string topbar_str = "jewsploit";
+        std::string topbar_str = "Ardvark";
         if (Cheat::Globals::InstanceDataModel.address)
         {
             auto pid = Cheat::Globals::InstanceDataModel.GetPlaceId();

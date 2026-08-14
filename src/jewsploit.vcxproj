@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="Debug|Win32">
@@ -85,6 +85,7 @@
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
+      <StackReserveSize>8388608</StackReserveSize>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalDependencies>d3d11.lib;d3dcompiler.lib;dwmapi.lib;freetype.lib;winmm.lib;msacm32.lib;ws2_32.lib;winhttp.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <AdditionalLibraryDirectories>$(ProjectDir)third_party\freetype\lib\x86;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
@@ -110,6 +111,7 @@
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
+      <StackReserveSize>8388608</StackReserveSize>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <LinkTimeCodeGeneration>Default</LinkTimeCodeGeneration>
@@ -135,6 +137,7 @@
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
+      <StackReserveSize>8388608</StackReserveSize>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalDependencies>d3d11.lib;d3dcompiler.lib;dwmapi.lib;freetype.lib;winmm.lib;msacm32.lib;ws2_32.lib;winhttp.lib;Fission.Decompiler.lib;Fission.Common.lib;Luau.Compiler.lib;Luau.Ast.lib;Luau.Bytecode.lib;Luau.VM.lib;Luau.Common.lib;assert.lib;cpptrace.lib;dbghelp.lib;libboost_container-vc143-mt-x64-1_86.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <AdditionalLibraryDirectories>$(ProjectDir)third_party\freetype\lib\x64;$(ProjectDir)tools\fission_src\build\Release;$(ProjectDir)tools\fission_src\build\_deps\luau-build\Release;$(ProjectDir)tools\fission_src\build\_deps\libassert-build\Release;$(ProjectDir)tools\fission_src\build\_deps\cpptrace-build\Release;$(ProjectDir)tools\fission_src\build\_deps\boost-build\libs\container\Release;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
@@ -160,6 +163,7 @@
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
+      <StackReserveSize>8388608</StackReserveSize>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <LinkTimeCodeGeneration>Default</LinkTimeCodeGeneration>
@@ -361,6 +365,8 @@
     <ClInclude Include="src\features\lua\vm\LuaBridge.h" />
     <ClInclude Include="src\features\lua\vm\LuaGc.h" />
     <ClInclude Include="src\features\lua\vm\LuaMem.h" />
+    <ClInclude Include="src\features\lua\vm\LuaFiles.h" />
+    <ClInclude Include="src\features\lua\vm\LuaPreprocess.h" />
     <ClCompile Include="src\features\lua\LuaExecutor.cpp" />
     <ClCompile Include="third_party\lua\lapi.c">
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
@@ -564,6 +570,8 @@
     <ClCompile Include="src\features\lua\vm\LuaScripts.cpp" />
     <ClCompile Include="src\features\lua\vm\LuaGc.cpp" />
     <ClCompile Include="src\features\lua\vm\LuaMem.cpp" />
+  <ClCompile Include="src\features\lua\vm\LuaFiles.cpp" />
+  <ClCompile Include="src\features\lua\vm\LuaPreprocess.cpp" />
     <ClCompile Include="src\features\lua\vm\ScriptBytecode.cpp" />
     <ClInclude Include="src\features\lua\vm\FissionEmbed.h" />
     <ClCompile Include="src\features\lua\vm\FissionEmbed.cpp">

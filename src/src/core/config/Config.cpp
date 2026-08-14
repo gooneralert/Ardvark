@@ -607,6 +607,7 @@ bool Save(const std::string& name)
     PutBool(out, "misc.esp_preview", s.misc.esp_preview);
     PutBool(out, "misc.mcp", s.misc.mcp);
     PutBool(out, "lua.executor", s.lua.executor);
+    PutFloat(out, "lua.ticks_ms", s.lua.ticks_ms);
 
     PutInt(out, "gui.theme", s.gui.theme);
     PutInt(out, "gui.font", s.gui.font);
@@ -989,6 +990,9 @@ bool Load(const std::string& name)
     GetBool(kv, "misc.esp_preview", s.misc.esp_preview);
     GetBool(kv, "misc.mcp", s.misc.mcp);
     GetBool(kv, "lua.executor", s.lua.executor);
+    GetFloat(kv, "lua.ticks_ms", s.lua.ticks_ms);
+    if (s.lua.ticks_ms < 1.f) s.lua.ticks_ms = 1.f;
+    if (s.lua.ticks_ms > 15.f) s.lua.ticks_ms = 15.f;
 
     GetInt(kv, "gui.theme", s.gui.theme);
     GetInt(kv, "gui.font", s.gui.font);

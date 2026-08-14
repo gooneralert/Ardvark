@@ -19,7 +19,7 @@ inline void EnsureDefaultTab()
 
 	EditorTab t;
 	t.name = "main";
-	t.text = "-- jewsploit lua\nprint(\"hello\")\n";
+	t.text = "-- Ardvark lua\nprint(\"hello\")\n";
 	t.editor = MakeEditor(t.text.c_str());
 	g_tabs.push_back(std::move(t));
 	g_tab = 0;

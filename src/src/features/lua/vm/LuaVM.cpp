@@ -1,4 +1,4 @@
-#include "pch.h"
+﻿#include "pch.h"
 #include "LuaVM.h"
 #include "LuaBridge.h"
 #include "LuaTypes.h"
@@ -6,12 +6,16 @@
 #include "LuaScripts.h"
 #include "LuaGc.h"
 #include "LuaMem.h"
+#include "LuaFiles.h"
+#include "LuaPreprocess.h"
+#include "ScriptBytecode.h"
 #include "features/lua/LuaExecutor.h"
 #include "renderer/Renderer.h"
 #include "core/globals/Globals.h"
 #include "core/memory/Memory.h"
 #include "core/roblox/classes/Classes.h"
 #include "core/roblox/offsets/Offsets.h"
+#include "app/Settings.h"
 
 #include <Windows.h>
 #include <winhttp.h>
@@ -47,6 +51,35 @@ std::atomic<bool> g_busy{ false };
 std::atomic<bool> g_tick_run{ false };
 std::thread g_tick_th;
 
+// SEH guard around lua_resume (POD-only function so __try is allowed). A fault
+// inside the Lua VM becomes LUA_ERRRUN instead of killing the whole external.
+// Normal Lua errors (longjmp) pass through untouched.
+int LuaResumeCatch(lua_State* co, lua_State* L, int nargs, int* nres)
+{
+	__try
+	{
+		return lua_resume(co, L, nargs, nres);
+	}
+	__except (EXCEPTION_EXECUTE_HANDLER)
+	{
+		return LUA_ERRRUN;
+	}
+}
+
+// SEH guard around the source compile (luaL_loadbuffer). A parser/codegen fault
+// becomes LUA_ERRRUN instead of taking down the external.
+int LuaLoadBufferCatch(lua_State* L, const char* src, size_t len, const char* name)
+{
+	__try
+	{
+		return luaL_loadbuffer(L, src, len, name);
+	}
+	__except (EXCEPTION_EXECUTE_HANDLER)
+	{
+		return LUA_ERRRUN;
+	}
+}
+
 struct WaitEntry {
 	int ref = LUA_NOREF;
 	float left = 0.f;
@@ -67,8 +100,8 @@ struct ConnEntry {
 };
 std::vector<ConnEntry> g_conns;
 
-// слоты переиспользуются и чистятся на каждый execute — без seq старый
-// Connection/Task токен убил бы чужую запись
+// ÑÐ»Ð¾Ñ‚Ñ‹ Ð¿ÐµÑ€ÐµÐ¸ÑÐ¿Ð¾Ð»ÑŒÐ·ÑƒÑŽÑ‚ÑÑ Ð¸ Ñ‡Ð¸ÑÑ‚ÑÑ‚ÑÑ Ð½Ð° ÐºÐ°Ð¶Ð´Ñ‹Ð¹ execute â€” Ð±ÐµÐ· seq ÑÑ‚Ð°Ñ€Ñ‹Ð¹
+// Connection/Task Ñ‚Ð¾ÐºÐµÐ½ ÑƒÐ±Ð¸Ð» Ð±Ñ‹ Ñ‡ÑƒÐ¶ÑƒÑŽ Ð·Ð°Ð¿Ð¸ÑÑŒ
 std::uint32_t g_token_seq = 0;
 
 struct ConnUd {
@@ -108,7 +141,7 @@ unsigned g_poll_tick = 0;
 
 void schedule_wait(lua_State* L, float sec)
 {
-	// resume главного стейта = смерть vm, туда попасть можно из delay-колбэка
+	// resume Ð³Ð»Ð°Ð²Ð½Ð¾Ð³Ð¾ ÑÑ‚ÐµÐ¹Ñ‚Ð° = ÑÐ¼ÐµÑ€Ñ‚ÑŒ vm, Ñ‚ÑƒÐ´Ð° Ð¿Ð¾Ð¿Ð°ÑÑ‚ÑŒ Ð¼Ð¾Ð¶Ð½Ð¾ Ð¸Ð· delay-ÐºÐ¾Ð»Ð±ÑÐºÐ°
 	if (!lua_isyieldable(L))
 		return;
 
@@ -174,7 +207,7 @@ int l_warn(lua_State* L)
 
 int l_identifyexecutor(lua_State* L)
 {
-	lua_pushstring(L, "jewsploit");
+	lua_pushstring(L, "Ardvark");
 	lua_pushstring(L, "0.1");
 	return 2;
 }
@@ -196,13 +229,13 @@ int l_spawn(lua_State* L)
 	lua_xmove(L, co, 1);
 	// Lua 5.4: nresults must be a valid int* (writes through it)
 	int nres = 0;
-	const int status = lua_resume(co, L, 0, &nres);
+	const int status = LuaResumeCatch(co, L, 0, &nres);
 	if (status != LUA_OK && status != LUA_YIELD)
 	{
 		LogErr(lua_tostring(co, -1));
 		lua_pop(co, 1);
 	}
-	// thread наружу — task.cancel(thread)
+	// thread Ð½Ð°Ñ€ÑƒÐ¶Ñƒ â€” task.cancel(thread)
 	return 1;
 }
 
@@ -281,7 +314,7 @@ int l_cancel(lua_State* L)
 		return 0;
 	}
 
-	// yielded thread из wait/spawn
+	// yielded thread Ð¸Ð· wait/spawn
 	if (lua_isthread(L, 1))
 	{
 		lua_State* co = lua_tothread(L, 1);
@@ -326,7 +359,7 @@ int l_getmousepos(lua_State* L)
 	GetCursorPos(&pt);
 	if (HWND hwnd = Renderer::GetHwnd())
 		ScreenToClient(hwnd, &pt);
-	// два number — как в большинстве executor api
+	// Ð´Ð²Ð° number â€” ÐºÐ°Ðº Ð² Ð±Ð¾Ð»ÑŒÑˆÐ¸Ð½ÑÑ‚Ð²Ðµ executor api
 	lua_pushnumber(L, static_cast<lua_Number>(pt.x));
 	lua_pushnumber(L, static_cast<lua_Number>(pt.y));
 	return 2;
@@ -377,7 +410,15 @@ void OpenSafeLibs(lua_State* L)
 	luaL_requiref(L, LUA_COLIBNAME, luaopen_coroutine, 1);
 	lua_pop(L, 1);
 
-	// убрать опасное из base
+	// standard libs the old luavm (and Matcha base) exposes
+	luaL_requiref(L, LUA_OSLIBNAME, luaopen_os, 1);
+	lua_pop(L, 1);
+	luaL_requiref(L, LUA_IOLIBNAME, luaopen_io, 1);
+	lua_pop(L, 1);
+	luaL_requiref(L, LUA_LOADLIBNAME, luaopen_package, 1);
+	lua_pop(L, 1);
+
+	// ÑƒÐ±Ñ€Ð°Ñ‚ÑŒ Ð¾Ð¿Ð°ÑÐ½Ð¾Ðµ Ð¸Ð· base
 	lua_pushnil(L);
 	lua_setglobal(L, "dofile");
 	lua_pushnil(L);
@@ -450,7 +491,7 @@ void kill_conn(ConnEntry& c)
 	}
 }
 
-// nargs уже на g_L сверху. не жрём их — caller pop
+// nargs ÑƒÐ¶Ðµ Ð½Ð° g_L ÑÐ²ÐµÑ€Ñ…Ñƒ. Ð½Ðµ Ð¶Ñ€Ñ‘Ð¼ Ð¸Ñ… â€” caller pop
 void fire_conns(int kind, std::uint64_t owner, const char* prop, int nargs)
 {
 	if (!g_L)
@@ -463,7 +504,7 @@ void fire_conns(int kind, std::uint64_t owner, const char* prop, int nargs)
 	const size_t n = g_conns.size();
 	for (size_t i = 0; i < n && i < g_conns.size(); ++i)
 	{
-		// хендлер может звать Connect и растить g_conns — держать ссылку нельзя
+		// Ñ…ÐµÐ½Ð´Ð»ÐµÑ€ Ð¼Ð¾Ð¶ÐµÑ‚ Ð·Ð²Ð°Ñ‚ÑŒ Connect Ð¸ Ñ€Ð°ÑÑ‚Ð¸Ñ‚ÑŒ g_conns â€” Ð´ÐµÑ€Ð¶Ð°Ñ‚ÑŒ ÑÑÑ‹Ð»ÐºÑƒ Ð½ÐµÐ»ÑŒÐ·Ñ
 		if (!g_conns[i].alive || g_conns[i].fn_ref == LUA_NOREF)
 			continue;
 		if (!conn_owner_ok(g_conns[i], kind, owner, prop))
@@ -498,7 +539,7 @@ void wake_waits(int kind, std::uint64_t owner, const char* prop, int nargs)
 	const size_t n = g_sigwaits.size();
 	for (size_t i = 0; i < n && i < g_sigwaits.size(); ++i)
 	{
-		// резюм может добавить новых ждунов — индекс, не ссылка
+		// Ñ€ÐµÐ·ÑŽÐ¼ Ð¼Ð¾Ð¶ÐµÑ‚ Ð´Ð¾Ð±Ð°Ð²Ð¸Ñ‚ÑŒ Ð½Ð¾Ð²Ñ‹Ñ… Ð¶Ð´ÑƒÐ½Ð¾Ð² â€” Ð¸Ð½Ð´ÐµÐºÑ, Ð½Ðµ ÑÑÑ‹Ð»ÐºÐ°
 		if (!wait_owner_ok(g_sigwaits[i], kind, owner, prop))
 			continue;
 
@@ -520,7 +561,7 @@ void wake_waits(int kind, std::uint64_t owner, const char* prop, int nargs)
 			lua_pushvalue(g_L, arg0 + a);
 		lua_xmove(g_L, co, nargs);
 		int nres = 0;
-		const int st = lua_resume(co, g_L, nargs, &nres);
+		const int st = LuaResumeCatch(co, g_L, nargs, &nres);
 		if (st != LUA_OK && st != LUA_YIELD)
 		{
 			LogErr(lua_tostring(co, -1));
@@ -663,7 +704,7 @@ bool has_kind(int k0, int k1 = -1);
 
 void poll_players()
 {
-	// без коннектов это чистый обход детей Players каждый тик — дорого
+	// Ð±ÐµÐ· ÐºÐ¾Ð½Ð½ÐµÐºÑ‚Ð¾Ð² ÑÑ‚Ð¾ Ñ‡Ð¸ÑÑ‚Ñ‹Ð¹ Ð¾Ð±Ñ…Ð¾Ð´ Ð´ÐµÑ‚ÐµÐ¹ Players ÐºÐ°Ð¶Ð´Ñ‹Ð¹ Ñ‚Ð¸Ðº â€” Ð´Ð¾Ñ€Ð¾Ð³Ð¾
 	if (!has_kind(1, 2) && !has_kind(3))
 	{
 		if (g_plr_seeded)
@@ -845,7 +886,7 @@ void poll_input()
 
 void collect_desc(std::uint64_t root, std::unordered_set<std::uint64_t>& out, size_t& nodes, int depth = 0)
 {
-	// workspace DescendantAdded без лимита = смерть
+	// workspace DescendantAdded Ð±ÐµÐ· Ð»Ð¸Ð¼Ð¸Ñ‚Ð° = ÑÐ¼ÐµÑ€Ñ‚ÑŒ
 	if (!g_Memory.IsValid(root) || nodes > 1500 || depth > 24)
 		return;
 	for (const auto& c : Instance(root).GetChildren())
@@ -907,7 +948,7 @@ std::string read_prop_snap(std::uint64_t addr, const std::string& prop)
 
 	if (prop == "Text")
 	{
-		// gui text — если StringValue-like string at Value
+		// gui text â€” ÐµÑÐ»Ð¸ StringValue-like string at Value
 		if (cls == "StringValue")
 			return g_Memory.ReadString(addr + ::Misc::Value);
 	}
@@ -942,13 +983,13 @@ void poll_hierarchy()
 			watch_desc.insert(w.owner);
 	}
 
-	// снапшоты живут по адресу — без чистки мапы растут всю сессию
+	// ÑÐ½Ð°Ð¿ÑˆÐ¾Ñ‚Ñ‹ Ð¶Ð¸Ð²ÑƒÑ‚ Ð¿Ð¾ Ð°Ð´Ñ€ÐµÑÑƒ â€” Ð±ÐµÐ· Ñ‡Ð¸ÑÑ‚ÐºÐ¸ Ð¼Ð°Ð¿Ñ‹ Ñ€Ð°ÑÑ‚ÑƒÑ‚ Ð²ÑÑŽ ÑÐµÑÑÐ¸ÑŽ
 	for (auto it = g_kids_snap.begin(); it != g_kids_snap.end();)
 		it = watch_kids.count(it->first) ? std::next(it) : g_kids_snap.erase(it);
 	for (auto it = g_desc_snap.begin(); it != g_desc_snap.end();)
 		it = watch_desc.count(it->first) ? std::next(it) : g_desc_snap.erase(it);
 
-	// каждый тик обходить детей всех watched = сотни ReadProcessMemory в секунду
+	// ÐºÐ°Ð¶Ð´Ñ‹Ð¹ Ñ‚Ð¸Ðº Ð¾Ð±Ñ…Ð¾Ð´Ð¸Ñ‚ÑŒ Ð´ÐµÑ‚ÐµÐ¹ Ð²ÑÐµÑ… watched = ÑÐ¾Ñ‚Ð½Ð¸ ReadProcessMemory Ð² ÑÐµÐºÑƒÐ½Ð´Ñƒ
 	if ((g_poll_tick % 2) == 0)
 	{
 		for (std::uint64_t owner : watch_kids)
@@ -984,7 +1025,7 @@ void poll_hierarchy()
 		}
 	}
 
-	// DescendantAdded — раз в N тиков, а то workspace жрёт всё
+	// DescendantAdded â€” Ñ€Ð°Ð· Ð² N Ñ‚Ð¸ÐºÐ¾Ð², Ð° Ñ‚Ð¾ workspace Ð¶Ñ€Ñ‘Ñ‚ Ð²ÑÑ‘
 	if (!watch_desc.empty() && (g_poll_tick % 8) == 0)
 	{
 		for (std::uint64_t owner : watch_desc)
@@ -1018,8 +1059,8 @@ void poll_hierarchy()
 				++fired;
 				it->second.insert(a);
 			}
-			// упёрлись в лимит — остаток добираем следующим проходом,
-			// swap проглотил бы их навсегда
+			// ÑƒÐ¿Ñ‘Ñ€Ð»Ð¸ÑÑŒ Ð² Ð»Ð¸Ð¼Ð¸Ñ‚ â€” Ð¾ÑÑ‚Ð°Ñ‚Ð¾Ðº Ð´Ð¾Ð±Ð¸Ñ€Ð°ÐµÐ¼ ÑÐ»ÐµÐ´ÑƒÑŽÑ‰Ð¸Ð¼ Ð¿Ñ€Ð¾Ñ…Ð¾Ð´Ð¾Ð¼,
+			// swap Ð¿Ñ€Ð¾Ð³Ð»Ð¾Ñ‚Ð¸Ð» Ð±Ñ‹ Ð¸Ñ… Ð½Ð°Ð²ÑÐµÐ³Ð´Ð°
 			if (!capped)
 				it->second.swap(now);
 		}
@@ -1068,8 +1109,8 @@ void poll_props()
 			it = seen.count(it->first) ? std::next(it) : g_prop_snap.erase(it);
 	}
 
-	// каждый ключ = чтение чужого процесса; за тик берём фиксированный кусок
-	// по кругу, иначе 500 Changed-коннектов вешают тикер
+	// ÐºÐ°Ð¶Ð´Ñ‹Ð¹ ÐºÐ»ÑŽÑ‡ = Ñ‡Ñ‚ÐµÐ½Ð¸Ðµ Ñ‡ÑƒÐ¶Ð¾Ð³Ð¾ Ð¿Ñ€Ð¾Ñ†ÐµÑÑÐ°; Ð·Ð° Ñ‚Ð¸Ðº Ð±ÐµÑ€Ñ‘Ð¼ Ñ„Ð¸ÐºÑÐ¸Ñ€Ð¾Ð²Ð°Ð½Ð½Ñ‹Ð¹ ÐºÑƒÑÐ¾Ðº
+	// Ð¿Ð¾ ÐºÑ€ÑƒÐ³Ñƒ, Ð¸Ð½Ð°Ñ‡Ðµ 500 Changed-ÐºÐ¾Ð½Ð½ÐµÐºÑ‚Ð¾Ð² Ð²ÐµÑˆÐ°ÑŽÑ‚ Ñ‚Ð¸ÐºÐµÑ€
 	if (g_prop_cursor >= keys.size())
 		g_prop_cursor = 0;
 
@@ -1098,7 +1139,7 @@ std::uint64_t g_bus_pay_addr = 0;
 std::int32_t g_bus_last_seq = 0;
 bool g_bus_seeded = false;
 
-// ReplicatedStorage.JewsploitTest.Bus — LocalScript кладёт ивенты, мы poll
+// ReplicatedStorage.JewsploitTest.Bus â€” LocalScript ÐºÐ»Ð°Ð´Ñ‘Ñ‚ Ð¸Ð²ÐµÐ½Ñ‚Ñ‹, Ð¼Ñ‹ poll
 std::uint64_t find_child_named(std::uint64_t parent, const char* name)
 {
 	if (!g_Memory.IsValid(parent) || !name || !name[0])
@@ -1129,7 +1170,7 @@ std::uint64_t find_jp_bus()
 	return find_child_named(folder, "Bus");
 }
 
-// JP_Prompt лежит в Workspace.JP_Pad, не в корне
+// JP_Prompt Ð»ÐµÐ¶Ð¸Ñ‚ Ð² Workspace.JP_Pad, Ð½Ðµ Ð² ÐºÐ¾Ñ€Ð½Ðµ
 std::uint64_t find_child_deep(std::uint64_t parent, const char* name, int depth)
 {
 	if (!g_Memory.IsValid(parent) || !name || !name[0] || depth < 0)
@@ -1208,7 +1249,7 @@ void poll_jp_bus()
 		return;
 	}
 
-	// три поиска по имени на каждый тик — держим адреса, пока валидны
+	// Ñ‚Ñ€Ð¸ Ð¿Ð¾Ð¸ÑÐºÐ° Ð¿Ð¾ Ð¸Ð¼ÐµÐ½Ð¸ Ð½Ð° ÐºÐ°Ð¶Ð´Ñ‹Ð¹ Ñ‚Ð¸Ðº â€” Ð´ÐµÑ€Ð¶Ð¸Ð¼ Ð°Ð´Ñ€ÐµÑÐ°, Ð¿Ð¾ÐºÐ° Ð²Ð°Ð»Ð¸Ð´Ð½Ñ‹
 	if (!g_bus_seq_addr || !g_bus_pay_addr
 		|| !g_Memory.IsValid(g_bus_seq_addr) || !g_Memory.IsValid(g_bus_pay_addr))
 	{
@@ -1297,7 +1338,7 @@ void RegisterRunService(lua_State* L)
 	push_signal(L, 0, 0, nullptr);
 	lua_setfield(L, -2, "RenderStepped");
 
-	// старые скрипты иногда Stepped жрут
+	// ÑÑ‚Ð°Ñ€Ñ‹Ðµ ÑÐºÑ€Ð¸Ð¿Ñ‚Ñ‹ Ð¸Ð½Ð¾Ð³Ð´Ð° Stepped Ð¶Ñ€ÑƒÑ‚
 	push_signal(L, 0, 0, nullptr);
 	lua_setfield(L, -2, "Stepped");
 
@@ -1385,7 +1426,7 @@ int l_bit_lrotate(lua_State* L)
 {
 	std::uint32_t x = bit_to_u32(L, 1);
 	int d = static_cast<int>(luaL_checkinteger(L, 2)) & 31;
-	// сдвиг на 32 — UB, при d==0 вторая половина обязана быть нулём
+	// ÑÐ´Ð²Ð¸Ð³ Ð½Ð° 32 â€” UB, Ð¿Ñ€Ð¸ d==0 Ð²Ñ‚Ð¾Ñ€Ð°Ñ Ð¿Ð¾Ð»Ð¾Ð²Ð¸Ð½Ð° Ð¾Ð±ÑÐ·Ð°Ð½Ð° Ð±Ñ‹Ñ‚ÑŒ Ð½ÑƒÐ»Ñ‘Ð¼
 	lua_pushinteger(L, static_cast<lua_Integer>((x << d) | (x >> ((32 - d) & 31))));
 	return 1;
 }
@@ -1464,7 +1505,7 @@ int l_tween_create(lua_State* L)
 	lua_setfield(L, -2, "Pause");
 	lua_pushcfunction(L, l_tween_play);
 	lua_setfield(L, -2, "Destroy");
-	// Completed — мёртвый signal (kind 99 никто не файрит)
+	// Completed â€” Ð¼Ñ‘Ñ€Ñ‚Ð²Ñ‹Ð¹ signal (kind 99 Ð½Ð¸ÐºÑ‚Ð¾ Ð½Ðµ Ñ„Ð°Ð¹Ñ€Ð¸Ñ‚)
 	push_signal(L, 99, 0, nullptr);
 	lua_setfield(L, -2, "Completed");
 	return 1;
@@ -1686,8 +1727,8 @@ int l_httpget(lua_State* L)
 	const char* url = luaL_checkstring(L, 1);
 	int status = 0;
 	{
-		// lua собран как C: luaL_error делает longjmp мимо деструкторов,
-		// поэтому тело должно умереть до ошибки
+		// lua ÑÐ¾Ð±Ñ€Ð°Ð½ ÐºÐ°Ðº C: luaL_error Ð´ÐµÐ»Ð°ÐµÑ‚ longjmp Ð¼Ð¸Ð¼Ð¾ Ð´ÐµÑÑ‚Ñ€ÑƒÐºÑ‚Ð¾Ñ€Ð¾Ð²,
+		// Ð¿Ð¾ÑÑ‚Ð¾Ð¼Ñƒ Ñ‚ÐµÐ»Ð¾ Ð´Ð¾Ð»Ð¶Ð½Ð¾ ÑƒÐ¼ÐµÑ€ÐµÑ‚ÑŒ Ð´Ð¾ Ð¾ÑˆÐ¸Ð±ÐºÐ¸
 		std::string out;
 		if (http_request_raw("GET", url, {}, {}, out, status)
 			&& status >= 200 && status < 300)
@@ -1699,9 +1740,62 @@ int l_httpget(lua_State* L)
 	return luaL_error(L, "HttpGet failed (%d)", status);
 }
 
+int l_httppost(lua_State* L)
+{
+	const char* url = luaL_checkstring(L, 1);
+	size_t bn = 0;
+	const char* body = luaL_optlstring(L, 2, "", &bn);
+	const char* ctype = luaL_optstring(L, 3, "application/json");
+
+	std::string hdrs = std::string("Content-Type: ") + ctype + "\r\n";
+	if (lua_istable(L, 4))
+	{
+		lua_pushnil(L);
+		while (lua_next(L, 4))
+		{
+			if (lua_type(L, -2) == LUA_TSTRING && lua_type(L, -1) == LUA_TSTRING)
+			{
+				hdrs += lua_tostring(L, -2);
+				hdrs += ": ";
+				hdrs += lua_tostring(L, -1);
+				hdrs += "\r\n";
+			}
+			lua_pop(L, 1);
+		}
+		lua_pop(L, 1);
+	}
+
+	std::string out;
+	int status = 0;
+	if (http_request_raw("POST", url, std::string(body, bn), hdrs, out, status))
+	{
+		lua_pushlstring(L, out.data(), out.size());
+		return 1;
+	}
+	lua_pushlstring(L, out.data(), out.size());
+	return 1;
+}
+
+int l_guid(lua_State* L)
+{
+	// no ole32 dependency: format from the PRNG
+	std::uint8_t b[16];
+	for (int i = 0; i < 16; ++i)
+		b[i] = static_cast<std::uint8_t>(std::rand() & 0xff);
+	b[6] = static_cast<std::uint8_t>((b[6] & 0x0f) | 0x40);
+	b[8] = static_cast<std::uint8_t>((b[8] & 0x3f) | 0x80);
+	char buf[64];
+	std::snprintf(buf, sizeof(buf),
+		"%02X%02X%02X%02X-%02X%02X-%02X%02X-%02X%02X-%02X%02X%02X%02X%02X%02X",
+		b[0], b[1], b[2], b[3], b[4], b[5], b[6], b[7],
+		b[8], b[9], b[10], b[11], b[12], b[13], b[14], b[15]);
+	lua_pushstring(L, buf);
+	return 1;
+}
+
 int http_arg(lua_State* L)
 {
-	// HttpService:Foo(x) → self,x  /  HttpService.Foo(x) → x
+	// HttpService:Foo(x) â†’ self,x  /  HttpService.Foo(x) â†’ x
 	if (lua_istable(L, 1) && lua_gettop(L) >= 2)
 		return 2;
 	return 1;
@@ -1711,7 +1805,7 @@ int l_httpservice_getasync(lua_State* L)
 {
 	const int i = http_arg(L);
 	luaL_checkstring(L, i);
-	// нельзя держать const char* и чистить стек — строку соберёт gc
+	// Ð½ÐµÐ»ÑŒÐ·Ñ Ð´ÐµÑ€Ð¶Ð°Ñ‚ÑŒ const char* Ð¸ Ñ‡Ð¸ÑÑ‚Ð¸Ñ‚ÑŒ ÑÑ‚ÐµÐº â€” ÑÑ‚Ñ€Ð¾ÐºÑƒ ÑÐ¾Ð±ÐµÑ€Ñ‘Ñ‚ gc
 	lua_pushvalue(L, i);
 	lua_replace(L, 1);
 	lua_settop(L, 1);
@@ -1829,23 +1923,664 @@ int l_json_decode(lua_State* L)
 
 void RegisterHttp(lua_State* L)
 {
-	lua_pushcfunction(L, l_request);
-	lua_setglobal(L, "request");
-	lua_pushcfunction(L, l_request);
-	lua_setglobal(L, "http_request");
-	lua_pushcfunction(L, l_httpget);
-	lua_setglobal(L, "HttpGet");
+	lua_pushcfunction(L, l_request);   lua_setglobal(L, "request");
+	lua_pushcfunction(L, l_request);   lua_setglobal(L, "http_request");
+	lua_pushcfunction(L, l_httpget);   lua_setglobal(L, "HttpGet");
+	lua_pushcfunction(L, l_httpget);   lua_setglobal(L, "httpget");
+	lua_pushcfunction(L, l_httppost);  lua_setglobal(L, "HttpPost");
+	lua_pushcfunction(L, l_httppost);  lua_setglobal(L, "httppost");
 
 	lua_newtable(L);
-	lua_pushcfunction(L, l_httpservice_getasync);
-	lua_setfield(L, -2, "GetAsync");
-	lua_pushcfunction(L, l_httpservice_requestasync);
-	lua_setfield(L, -2, "RequestAsync");
-	lua_pushcfunction(L, l_json_encode);
-	lua_setfield(L, -2, "JSONEncode");
-	lua_pushcfunction(L, l_json_decode);
-	lua_setfield(L, -2, "JSONDecode");
+	lua_pushcfunction(L, l_httpservice_getasync);   lua_setfield(L, -2, "GetAsync");
+	lua_pushcfunction(L, l_httpservice_requestasync); lua_setfield(L, -2, "RequestAsync");
+	lua_pushcfunction(L, l_json_encode);             lua_setfield(L, -2, "JSONEncode");
+	lua_pushcfunction(L, l_json_decode);             lua_setfield(L, -2, "JSONDecode");
+	lua_pushcfunction(L, l_guid);                    lua_setfield(L, -2, "GenerateGUID");
 	lua_setglobal(L, "HttpService");
+}
+
+// ============================================================================
+// Script-runner compatible globals (Matcha API surface)
+// Ported from the old script runner and adapted to the external C++ VM.
+// ============================================================================
+
+std::unordered_map<std::string, std::string> g_fflags;
+bool g_input_enabled = true;
+
+// --- clipboard ---
+int l_setclipboard(lua_State* L)
+{
+	const char* s = luaL_checkstring(L, 1);
+	if (!OpenClipboard(nullptr))
+		return 0;
+	EmptyClipboard();
+	const size_t n = std::strlen(s);
+	HGLOBAL mem = GlobalAlloc(GMEM_MOVEABLE, n + 1);
+	if (mem)
+	{
+		char* p = static_cast<char*>(GlobalLock(mem));
+		if (p)
+		{
+			std::memcpy(p, s, n);
+			p[n] = '\0';
+		}
+		GlobalUnlock(mem);
+		SetClipboardData(CF_TEXT, mem);
+	}
+	CloseClipboard();
+	return 0;
+}
+
+int l_getclipboard(lua_State* L)
+{
+	std::string out;
+	if (OpenClipboard(nullptr))
+	{
+		if (HANDLE h = GetClipboardData(CF_TEXT))
+		{
+			const char* p = static_cast<const char*>(GlobalLock(h));
+			if (p)
+				out = p;
+			GlobalUnlock(h);
+		}
+		CloseClipboard();
+	}
+	lua_pushlstring(L, out.data(), out.size());
+	return 1;
+}
+
+// --- base64 ---
+std::string b64_encode(const std::string& in)
+{
+	static const char* tbl =
+		"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+	std::string o;
+	o.reserve(((in.size() + 2) / 3) * 4);
+	unsigned int carry = 0;
+	int bits = 0;
+	for (unsigned char c : in)
+	{
+		carry = (carry << 8) | c;
+		bits += 8;
+		while (bits >= 6)
+		{
+			bits -= 6;
+			o.push_back(tbl[(carry >> bits) & 0x3f]);
+		}
+	}
+	if (bits > 0)
+		o.push_back(tbl[(carry << (6 - bits)) & 0x3f]);
+	while (o.size() % 4)
+		o.push_back('=');
+	return o;
+}
+
+std::string b64_decode(const std::string& in)
+{
+	auto val = [](int c) -> int {
+		if (c >= 'A' && c <= 'Z') return c - 'A';
+		if (c >= 'a' && c <= 'z') return c - 'a' + 26;
+		if (c >= '0' && c <= '9') return c - '0' + 52;
+		if (c == '+') return 62;
+		if (c == '/') return 63;
+		return -1;
+	};
+	std::string o;
+	int carry = 0;
+	int bits = 0;
+	for (unsigned char c : in)
+	{
+		if (c == '=' || c == ' ' || c == '\r' || c == '\n' || c == '\t')
+			continue;
+		const int v = val(c);
+		if (v < 0)
+			continue;
+		carry = (carry << 6) | v;
+		bits += 6;
+		if (bits >= 8)
+		{
+			bits -= 8;
+			o.push_back(static_cast<char>((carry >> bits) & 0xff));
+		}
+	}
+	return o;
+}
+
+int l_base64encode(lua_State* L)
+{
+	size_t n = 0;
+	const char* s = luaL_checklstring(L, 1, &n);
+	std::string o = b64_encode(std::string(s, n));
+	lua_pushlstring(L, o.data(), o.size());
+	return 1;
+}
+
+int l_base64decode(lua_State* L)
+{
+	size_t n = 0;
+	const char* s = luaL_checklstring(L, 1, &n);
+	std::string o = b64_decode(std::string(s, n));
+	lua_pushlstring(L, o.data(), o.size());
+	return 1;
+}
+
+// --- fast flags ---
+int l_setfflag(lua_State* L)
+{
+	const char* name = luaL_checkstring(L, 1);
+	const char* value = luaL_checkstring(L, 2);
+	if (name && *name)
+		g_fflags[name] = value ? value : "";
+	return 0;
+}
+
+int l_getfflag(lua_State* L)
+{
+	const char* name = luaL_checkstring(L, 1);
+	auto it = g_fflags.find(name ? name : "");
+	if (it == g_fflags.end())
+		lua_pushnil(L);
+	else
+		lua_pushstring(L, it->second.c_str());
+	return 1;
+}
+
+// --- time ---
+int l_tick(lua_State* L)
+{
+	const auto now = std::chrono::steady_clock::now().time_since_epoch();
+	lua_pushnumber(L, std::chrono::duration<double>(now).count());
+	return 1;
+}
+
+// --- typeof: Roblox-specific names for userdata ---
+int l_typeof(lua_State* L)
+{
+	if (luaL_testudata(L, 1, "jewsploit.Instance")) { lua_pushstring(L, "Instance"); return 1; }
+	if (luaL_testudata(L, 1, "jewsploit.Vector3")) { lua_pushstring(L, "Vector3"); return 1; }
+	if (luaL_testudata(L, 1, "jewsploit.Vector2")) { lua_pushstring(L, "Vector2"); return 1; }
+	if (luaL_testudata(L, 1, "jewsploit.Color3")) { lua_pushstring(L, "Color3"); return 1; }
+	if (luaL_testudata(L, 1, "jewsploit.CFrame")) { lua_pushstring(L, "CFrame"); return 1; }
+	if (luaL_testudata(L, 1, "jewsploit.Drawing")) { lua_pushstring(L, "Drawing"); return 1; }
+	if (luaL_testudata(L, 1, "jewsploit.RBXScriptConnection")) { lua_pushstring(L, "RBXScriptConnection"); return 1; }
+	if (luaL_testudata(L, 1, "jewsploit.Mouse")) { lua_pushstring(L, "Mouse"); return 1; }
+	if (luaL_testudata(L, 1, "jewsploit.Task")) { lua_pushstring(L, "task"); return 1; }
+	lua_pushstring(L, lua_typename(L, lua_type(L, 1)));
+	return 1;
+}
+
+// --- loadstring / load ---
+int l_loadstring(lua_State* L)
+{
+	size_t n = 0;
+	const char* src = luaL_checklstring(L, 1, &n);
+	const char* name = luaL_optstring(L, 2, "chunk");
+	const std::string processed = LuaPreprocess::Preprocess(std::string(src, n));
+	if (luaL_loadbuffer(L, processed.data(), processed.size(), name) != LUA_OK)
+	{
+		lua_pushnil(L);
+		lua_insert(L, -2);
+		return 2;
+	}
+	return 1;
+}
+
+int l_load(lua_State* L)
+{
+	return l_loadstring(L);
+}
+
+// --- run_secure: protected payload (base64), fallback to raw ---
+int l_run_secure(lua_State* L)
+{
+	size_t n = 0;
+	const char* src = luaL_checklstring(L, 1, &n);
+	std::string code(src, n);
+	std::string run = b64_decode(code);
+	if (run.empty())
+		run = code;
+	run = LuaPreprocess::Preprocess(run);
+
+	if (luaL_loadbuffer(L, run.data(), run.size(), "run_secure") != LUA_OK)
+	{
+		LogErr(lua_tostring(L, -1));
+		lua_pop(L, 1);
+		return 0;
+	}
+	if (lua_pcall(L, 0, LUA_MULTRET, 0) != LUA_OK)
+	{
+		LogErr(lua_tostring(L, -1));
+		lua_pop(L, 1);
+		return 0;
+	}
+	return lua_gettop(L);
+}
+
+// --- notify ---
+int l_notify(lua_State* L)
+{
+	const char* msg = luaL_optstring(L, 1, "");
+	const char* title = luaL_optstring(L, 2, "Script");
+	LuaExecutor::Log(LuaExecutor::LogLevel::Success, "[notify|%s] %s", title, msg);
+	return 0;
+}
+
+// --- getgamename (script runner also exposed it as getgetname) ---
+int l_getgamename(lua_State* L)
+{
+	if (g_Memory.IsValid(Globals::InstanceDataModel.address))
+		lua_pushstring(L, Globals::InstanceDataModel.GetName().c_str());
+	else
+		lua_pushstring(L, "");
+	return 1;
+}
+
+// --- getscripthash: FNV-1a 64 over the raw bytecode, hex string ---
+std::uint64_t fnv1a64(const std::string& s)
+{
+	std::uint64_t h = 14695981039346656037ULL;
+	for (unsigned char c : s)
+	{
+		h ^= c;
+		h *= 1099511628211ULL;
+	}
+	return h;
+}
+
+int l_getscripthash(lua_State* L)
+{
+	std::uint64_t addr = LuaBridge::CheckAddress(L, 1);
+	if (!g_Memory.IsValid(addr))
+	{
+		lua_pushstring(L, "0");
+		return 1;
+	}
+	Instance inst(addr);
+	const std::string cls = inst.GetClassName();
+	std::vector<std::uint8_t> raw;
+	if (!ScriptBytecode::ReadRaw(addr, cls, raw) || raw.empty())
+	{
+		lua_pushstring(L, "0");
+		return 1;
+	}
+	const std::string bytes(reinterpret_cast<const char*>(raw.data()), raw.size());
+	char buf[32];
+	std::snprintf(buf, sizeof(buf), "%016llx",
+		static_cast<unsigned long long>(fnv1a64(bytes)));
+	lua_pushstring(L, buf);
+	return 1;
+}
+
+// --- WorldToScreen ---
+int l_worldtoscreen(lua_State* L)
+{
+	Vector3 world{};
+	auto fail = [](lua_State* L) -> int {
+		LuaTypes::PushVector2(L, 0.f, 0.f);
+		lua_pushboolean(L, 0);
+		return 2;
+	};
+	if (!LuaTypes::ToVector3(L, 1, world))
+		return fail(L);
+	if (!Globals::Workspace || !g_Memory.IsValid(Globals::Workspace->address))
+		return fail(L);
+	std::shared_ptr<Instance> cam = Globals::Workspace->GetCurrentCamera();
+	if (!cam || !g_Memory.IsValid(cam->address))
+		return fail(L);
+
+	Cheat::Camera c(cam->address);
+	Vector2 scr{};
+	const bool on = c.WorldToScreen(world, scr);
+	LuaTypes::PushVector2(L, scr.x, scr.y);
+	lua_pushboolean(L, on ? 1 : 0);
+	return 2;
+}
+
+// --- input ---
+// The external is a separate process (not injected), so SendInput only reaches
+// Roblox when the game window is the foreground window. If the overlay/console is
+// foreground, Roblox never gets the input (reel bar doesn't move). Focus the game
+// before sending, but leave the foreground alone while the user drives the overlay.
+void focus_game()
+{
+	HWND game = Renderer::GetGameHwnd();
+	if (!game || !IsWindow(game))
+		return;
+	if (GetForegroundWindow() == game)
+		return;
+	ShowWindow(game, SW_RESTORE);
+	SetForegroundWindow(game);
+}
+
+void send_key(int vk, bool down)
+{
+	focus_game();
+	INPUT in{};
+	in.type = INPUT_KEYBOARD;
+	in.ki.wVk = static_cast<WORD>(vk);
+	in.ki.dwFlags = down ? 0 : KEYEVENTF_KEYUP;
+	SendInput(1, &in, sizeof(in));
+}
+
+void send_mouse(DWORD flags)
+{
+	focus_game();
+	INPUT in{};
+	in.type = INPUT_MOUSE;
+	in.mi.dwFlags = flags;
+	SendInput(1, &in, sizeof(in));
+}
+
+int l_setrobloxinput(lua_State* L)
+{
+	g_input_enabled = lua_toboolean(L, 1) != 0;
+	return 0;
+}
+
+int l_keypress(lua_State* L)
+{
+	if (g_input_enabled)
+		send_key(static_cast<int>(luaL_checkinteger(L, 1)), true);
+	lua_pushboolean(L, 1);
+	return 1;
+}
+
+int l_keyrelease(lua_State* L)
+{
+	if (g_input_enabled)
+		send_key(static_cast<int>(luaL_checkinteger(L, 1)), false);
+	lua_pushboolean(L, 1);
+	return 1;
+}
+
+int l_ismouse1pressed(lua_State* L)
+{
+	lua_pushboolean(L, (GetAsyncKeyState(VK_LBUTTON) & 0x8000) ? 1 : 0);
+	return 1;
+}
+
+int l_ismouse2pressed(lua_State* L)
+{
+	lua_pushboolean(L, (GetAsyncKeyState(VK_RBUTTON) & 0x8000) ? 1 : 0);
+	return 1;
+}
+
+int l_mouse1press(lua_State* L)
+{
+	if (g_input_enabled) send_mouse(MOUSEEVENTF_LEFTDOWN);
+	return 0;
+}
+
+int l_mouse1release(lua_State* L)
+{
+	if (g_input_enabled) send_mouse(MOUSEEVENTF_LEFTUP);
+	return 0;
+}
+
+int l_mouse1click(lua_State* L)
+{
+	if (g_input_enabled)
+	{
+		send_mouse(MOUSEEVENTF_LEFTDOWN);
+		send_mouse(MOUSEEVENTF_LEFTUP);
+	}
+	return 0;
+}
+
+int l_mouse2press(lua_State* L)
+{
+	if (g_input_enabled) send_mouse(MOUSEEVENTF_RIGHTDOWN);
+	return 0;
+}
+
+int l_mouse2release(lua_State* L)
+{
+	if (g_input_enabled) send_mouse(MOUSEEVENTF_RIGHTUP);
+	return 0;
+}
+
+int l_mouse2click(lua_State* L)
+{
+	if (g_input_enabled)
+	{
+		send_mouse(MOUSEEVENTF_RIGHTDOWN);
+		send_mouse(MOUSEEVENTF_RIGHTUP);
+	}
+	return 0;
+}
+
+int l_mousemoveabs(lua_State* L)
+{
+	POINT pt{ static_cast<LONG>(luaL_checkinteger(L, 1)),
+		static_cast<LONG>(luaL_checkinteger(L, 2)) };
+	if (HWND h = Renderer::GetHwnd())
+		ClientToScreen(h, &pt);
+	SetCursorPos(pt.x, pt.y);
+	return 0;
+}
+
+int l_mousemoverel(lua_State* L)
+{
+	const int dx = static_cast<int>(luaL_checkinteger(L, 1));
+	const int dy = static_cast<int>(luaL_checkinteger(L, 2));
+	mouse_event(MOUSEEVENTF_MOVE, dx, dy, 0, 0);
+	return 0;
+}
+
+int l_mousescroll(lua_State* L)
+{
+	const int amount = static_cast<int>(luaL_checkinteger(L, 1));
+	mouse_event(MOUSEEVENTF_WHEEL, 0, 0,
+		static_cast<DWORD>(amount) * static_cast<DWORD>(WHEEL_DELTA), 0);
+	return 0;
+}
+
+void RegisterCompatGlobals(lua_State* L)
+{
+	lua_pushcfunction(L, l_setclipboard);   lua_setglobal(L, "setclipboard");
+	lua_pushcfunction(L, l_getclipboard);   lua_setglobal(L, "getclipboard");
+	lua_pushcfunction(L, l_base64encode);   lua_setglobal(L, "base64encode");
+	lua_pushcfunction(L, l_base64decode);   lua_setglobal(L, "base64decode");
+	lua_pushcfunction(L, l_setfflag);       lua_setglobal(L, "setfflag");
+	lua_pushcfunction(L, l_getfflag);       lua_setglobal(L, "getfflag");
+	lua_pushcfunction(L, l_tick);           lua_setglobal(L, "tick");
+	lua_pushcfunction(L, l_typeof);         lua_setglobal(L, "typeof");
+	lua_pushcfunction(L, l_loadstring);     lua_setglobal(L, "loadstring");
+	lua_pushcfunction(L, l_load);           lua_setglobal(L, "load");
+	lua_pushcfunction(L, l_run_secure);     lua_setglobal(L, "run_secure");
+	lua_pushcfunction(L, l_notify);         lua_setglobal(L, "notify");
+	lua_pushcfunction(L, l_getgamename);    lua_setglobal(L, "getgamename");
+	lua_pushcfunction(L, l_getgamename);    lua_setglobal(L, "getgetname");
+	lua_pushcfunction(L, l_getscripthash);  lua_setglobal(L, "getscripthash");
+	lua_pushcfunction(L, l_worldtoscreen);  lua_setglobal(L, "WorldToScreen");
+
+	lua_pushcfunction(L, l_setrobloxinput); lua_setglobal(L, "setrobloxinput");
+	lua_pushcfunction(L, l_keypress);       lua_setglobal(L, "keypress");
+	lua_pushcfunction(L, l_keyrelease);     lua_setglobal(L, "keyrelease");
+	lua_pushcfunction(L, l_ismouse1pressed);lua_setglobal(L, "ismouse1pressed");
+	lua_pushcfunction(L, l_ismouse2pressed);lua_setglobal(L, "ismouse2pressed");
+	lua_pushcfunction(L, l_mouse1press);    lua_setglobal(L, "mouse1press");
+	lua_pushcfunction(L, l_mouse1release);  lua_setglobal(L, "mouse1release");
+	lua_pushcfunction(L, l_mouse1click);    lua_setglobal(L, "mouse1click");
+	lua_pushcfunction(L, l_mouse2press);    lua_setglobal(L, "mouse2press");
+	lua_pushcfunction(L, l_mouse2release);  lua_setglobal(L, "mouse2release");
+	lua_pushcfunction(L, l_mouse2click);    lua_setglobal(L, "mouse2click");
+	lua_pushcfunction(L, l_mousemoveabs);   lua_setglobal(L, "mousemoveabs");
+	lua_pushcfunction(L, l_mousemoverel);   lua_setglobal(L, "mousemoverel");
+	lua_pushcfunction(L, l_mousescroll);    lua_setglobal(L, "mousescroll");
+}
+
+std::unordered_set<const void*> g_ro_tables;
+
+// --- environment functions (ported from the old luavm env) ---
+int l_getgenv(lua_State* L)
+{
+	lua_settop(L, 0);
+	lua_pushglobaltable(L);
+	return 1;
+}
+
+int l_getrenv(lua_State* L)
+{
+	return l_getgenv(L);
+}
+
+int l_getfenv(lua_State* L)
+{
+	if (lua_isfunction(L, 1) && lua_getupvalue(L, 1, 1))
+		return 1;
+	lua_settop(L, 0);
+	lua_pushglobaltable(L);
+	return 1;
+}
+
+int l_setfenv(lua_State* L)
+{
+	if (!lua_isfunction(L, 1) || !lua_istable(L, 2))
+	{
+		lua_pushnil(L);
+		return 1;
+	}
+	lua_pushvalue(L, 2);
+	if (!lua_setupvalue(L, 1, 1))
+	{
+		lua_pushnil(L);
+		return 1;
+	}
+	lua_pushvalue(L, 1);
+	return 1;
+}
+
+int l_getrawmetatable(lua_State* L)
+{
+	if (!lua_getmetatable(L, 1))
+		lua_pushnil(L);
+	return 1;
+}
+
+int l_setrawmetatable(lua_State* L)
+{
+	lua_setmetatable(L, 1);
+	return 0;
+}
+
+int l_setreadonly(lua_State* L)
+{
+	luaL_checktype(L, 1, LUA_TTABLE);
+	if (lua_toboolean(L, 2))
+		g_ro_tables.insert(lua_topointer(L, 1));
+	else
+		g_ro_tables.erase(lua_topointer(L, 1));
+	return 0;
+}
+
+int l_isreadonly(lua_State* L)
+{
+	luaL_checktype(L, 1, LUA_TTABLE);
+	lua_pushboolean(L, g_ro_tables.count(lua_topointer(L, 1)) ? 1 : 0);
+	return 1;
+}
+
+int l_makereadonly(lua_State* L)
+{
+	luaL_checktype(L, 1, LUA_TTABLE);
+	g_ro_tables.insert(lua_topointer(L, 1));
+	return 0;
+}
+
+int l_makewriteable(lua_State* L)
+{
+	luaL_checktype(L, 1, LUA_TTABLE);
+	g_ro_tables.erase(lua_topointer(L, 1));
+	return 0;
+}
+
+int l_newcclosure(lua_State* L)
+{
+	luaL_checktype(L, 1, LUA_TFUNCTION);
+	lua_pushvalue(L, 1);
+	return 1;
+}
+
+int l_clonefunction(lua_State* L)
+{
+	luaL_checktype(L, 1, LUA_TFUNCTION);
+	lua_pushvalue(L, 1);
+	return 1;
+}
+
+int l_iscclosure(lua_State* L)
+{
+	lua_pushboolean(L, lua_iscfunction(L, 1) ? 1 : 0);
+	return 1;
+}
+
+int l_islclosure(lua_State* L)
+{
+	lua_pushboolean(L, (lua_isfunction(L, 1) && !lua_iscfunction(L, 1)) ? 1 : 0);
+	return 1;
+}
+
+int l_checkcaller(lua_State* L)
+{
+	(void)L;
+	lua_pushboolean(L, 1);
+	return 1;
+}
+
+int l_getexecutorname(lua_State* L)
+{
+	lua_pushstring(L, "Ardvark");
+	return 1;
+}
+
+int l_cloneref(lua_State* L)
+{
+	lua_pushvalue(L, 1);
+	return 1;
+}
+
+int l_gethui(lua_State* L)
+{
+	(void)L;
+	lua_pushnil(L);
+	return 1;
+}
+
+int l_getnamecallmethod(lua_State* L)
+{
+	(void)L;
+	lua_pushnil(L);
+	return 1;
+}
+
+int l_setnamecallmethod(lua_State* L)
+{
+	return 0;
+}
+
+void RegisterEnvGlobals(lua_State* L)
+{
+	lua_pushcfunction(L, l_getgenv);          lua_setglobal(L, "getgenv");
+	lua_pushcfunction(L, l_getrenv);          lua_setglobal(L, "getrenv");
+	lua_pushcfunction(L, l_getfenv);          lua_setglobal(L, "getfenv");
+	lua_pushcfunction(L, l_setfenv);          lua_setglobal(L, "setfenv");
+	lua_pushcfunction(L, l_getrawmetatable);  lua_setglobal(L, "getrawmetatable");
+	lua_pushcfunction(L, l_setrawmetatable);  lua_setglobal(L, "setrawmetatable");
+	lua_pushcfunction(L, l_setreadonly);      lua_setglobal(L, "setreadonly");
+	lua_pushcfunction(L, l_isreadonly);       lua_setglobal(L, "isreadonly");
+	lua_pushcfunction(L, l_makereadonly);     lua_setglobal(L, "makereadonly");
+	lua_pushcfunction(L, l_makewriteable);    lua_setglobal(L, "makewriteable");
+	lua_pushcfunction(L, l_newcclosure);      lua_setglobal(L, "newcclosure");
+	lua_pushcfunction(L, l_clonefunction);    lua_setglobal(L, "clonefunction");
+	lua_pushcfunction(L, l_iscclosure);       lua_setglobal(L, "iscclosure");
+	lua_pushcfunction(L, l_islclosure);       lua_setglobal(L, "islclosure");
+	lua_pushcfunction(L, l_checkcaller);      lua_setglobal(L, "checkcaller");
+	lua_pushcfunction(L, l_getexecutorname);  lua_setglobal(L, "getexecutorname");
+	lua_pushcfunction(L, l_cloneref);         lua_setglobal(L, "cloneref");
+	lua_pushcfunction(L, l_gethui);           lua_setglobal(L, "gethui");
+	lua_pushcfunction(L, l_getnamecallmethod);lua_setglobal(L, "getnamecallmethod");
+	lua_pushcfunction(L, l_setnamecallmethod);lua_setglobal(L, "setnamecallmethod");
 }
 
 void RegisterApi(lua_State* L)
@@ -1866,6 +2601,9 @@ void RegisterApi(lua_State* L)
 	lua_setglobal(L, "isrbxactive");
 	lua_pushcfunction(L, l_iskeypressed);
 	lua_setglobal(L, "iskeypressed");
+
+	RegisterCompatGlobals(L);
+	RegisterEnvGlobals(L);
 
 	luaL_newmetatable(L, "jewsploit.Task");
 	lua_pop(L, 1);
@@ -1888,6 +2626,7 @@ void RegisterApi(lua_State* L)
 	LuaScripts::Register(L);
 	LuaGc::Register(L);
 	LuaMem::Register(L);
+	LuaFiles::Register(L);
 	LuaBridge::Register(L);
 	RegisterRunService(L);
 	RegisterUserInputService(L);
@@ -1932,7 +2671,10 @@ void TickLoop()
 			dt = 0.1f;
 
 		Tick(dt);
-		Sleep(4);
+		int ms = (int)g_Settings.lua.ticks_ms;
+		if (ms < 1) ms = 1;
+		if (ms > 15) ms = 15;
+		Sleep(ms); // configurable: coroutine pump interval (15ms = ~60fps default)
 	}
 }
 
@@ -1948,7 +2690,7 @@ bool Initialize()
 	OpenSafeLibs(g_L);
 	RegisterApi(g_L);
 
-	// wait resume не на render — иначе hold/findgc душат esp
+	// wait resume Ð½Ðµ Ð½Ð° render â€” Ð¸Ð½Ð°Ñ‡Ðµ hold/findgc Ð´ÑƒÑˆÐ°Ñ‚ esp
 	if (!g_tick_run.load())
 	{
 		g_tick_run.store(true);
@@ -2041,7 +2783,7 @@ void wipe_script_signals()
 	if (!g_L)
 		return;
 
-	// каждый execute — иначе Connect копится и server_tick x3
+	// ÐºÐ°Ð¶Ð´Ñ‹Ð¹ execute â€” Ð¸Ð½Ð°Ñ‡Ðµ Connect ÐºÐ¾Ð¿Ð¸Ñ‚ÑÑ Ð¸ server_tick x3
 	for (auto& c : g_conns)
 	{
 		if (c.fn_ref != LUA_NOREF)
@@ -2060,8 +2802,8 @@ void wipe_script_signals()
 	}
 	g_sigwaits.clear();
 
-	// корутины прошлого запуска иначе живут вечно: их ref в реестре не даёт
-	// gc собрать тред, а тикер продолжает их крутить
+	// ÐºÐ¾Ñ€ÑƒÑ‚Ð¸Ð½Ñ‹ Ð¿Ñ€Ð¾ÑˆÐ»Ð¾Ð³Ð¾ Ð·Ð°Ð¿ÑƒÑÐºÐ° Ð¸Ð½Ð°Ñ‡Ðµ Ð¶Ð¸Ð²ÑƒÑ‚ Ð²ÐµÑ‡Ð½Ð¾: Ð¸Ñ… ref Ð² Ñ€ÐµÐµÑÑ‚Ñ€Ðµ Ð½Ðµ Ð´Ð°Ñ‘Ñ‚
+	// gc ÑÐ¾Ð±Ñ€Ð°Ñ‚ÑŒ Ñ‚Ñ€ÐµÐ´, Ð° Ñ‚Ð¸ÐºÐµÑ€ Ð¿Ñ€Ð¾Ð´Ð¾Ð»Ð¶Ð°ÐµÑ‚ Ð¸Ñ… ÐºÑ€ÑƒÑ‚Ð¸Ñ‚ÑŒ
 	for (auto& w : g_waits)
 	{
 		if (w.ref != LUA_NOREF)
@@ -2099,7 +2841,8 @@ void ExecuteLocked(const std::string& source, const std::string& name)
 	wipe_script_signals();
 	LuaBridge::RefreshGlobals(g_L);
 
-	if (luaL_loadbuffer(g_L, source.data(), source.size(), name.c_str()) != LUA_OK)
+	const std::string processed = LuaPreprocess::Preprocess(source);
+	if (LuaLoadBufferCatch(g_L, processed.data(), processed.size(), name.c_str()) != LUA_OK)
 	{
 		LogErr(lua_tostring(g_L, -1));
 		lua_pop(g_L, 1);
@@ -2112,7 +2855,7 @@ void ExecuteLocked(const std::string& source, const std::string& name)
 	lua_pop(g_L, 1);
 
 	int nres = 0;
-	const int status = lua_resume(co, g_L, 0, &nres);
+	const int status = LuaResumeCatch(co, g_L, 0, &nres);
 	if (status == LUA_OK)
 	{
 		lua_pop(g_L, 1);
@@ -2185,7 +2928,7 @@ void Tick(float dt)
 		fire_sig(0, 0, nullptr, 1);
 	}
 
-	// task.delay / defer — колбэк может звать task.delay, вектор переедет
+	// task.delay / defer â€” ÐºÐ¾Ð»Ð±ÑÐº Ð¼Ð¾Ð¶ÐµÑ‚ Ð·Ð²Ð°Ñ‚ÑŒ task.delay, Ð²ÐµÐºÑ‚Ð¾Ñ€ Ð¿ÐµÑ€ÐµÐµÐ´ÐµÑ‚
 	const size_t ndelay = g_delays.size();
 	for (size_t i = 0; i < ndelay && i < g_delays.size(); ++i)
 	{
@@ -2214,8 +2957,8 @@ void Tick(float dt)
 	// cap resumes/frame so wait(0) loops cannot freeze the UI thread
 	constexpr int k_max_resumes = 64;
 
-	// сначала выдёргиваем готовых, потом резюмим: resume внутри цикла
-	// добавляет новые wait'ы и ломает индексы
+	// ÑÐ½Ð°Ñ‡Ð°Ð»Ð° Ð²Ñ‹Ð´Ñ‘Ñ€Ð³Ð¸Ð²Ð°ÐµÐ¼ Ð³Ð¾Ñ‚Ð¾Ð²Ñ‹Ñ…, Ð¿Ð¾Ñ‚Ð¾Ð¼ Ñ€ÐµÐ·ÑŽÐ¼Ð¸Ð¼: resume Ð²Ð½ÑƒÑ‚Ñ€Ð¸ Ñ†Ð¸ÐºÐ»Ð°
+	// Ð´Ð¾Ð±Ð°Ð²Ð»ÑÐµÑ‚ Ð½Ð¾Ð²Ñ‹Ðµ wait'Ñ‹ Ð¸ Ð»Ð¾Ð¼Ð°ÐµÑ‚ Ð¸Ð½Ð´ÐµÐºÑÑ‹
 	static std::vector<int> ready;
 	ready.clear();
 
@@ -2252,7 +2995,7 @@ void Tick(float dt)
 		}
 
 		int nres = 0;
-		const int status = lua_resume(co, g_L, 0, &nres);
+		const int status = LuaResumeCatch(co, g_L, 0, &nres);
 		if (status == LUA_OK)
 		{
 			LuaExecutor::Log(LuaExecutor::LogLevel::Success, "ok");

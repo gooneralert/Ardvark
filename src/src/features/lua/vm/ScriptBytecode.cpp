@@ -676,7 +676,7 @@ std::string LiftProto(const ProtoView& proto, int enc_key, const std::vector<std
 std::string DecompileLuau(const std::vector<std::uint8_t>& bc, const char* name)
 {
 	std::ostringstream ss;
-	ss << "-- decompiled with jewsploit\n";
+	ss << "-- decompiled with Ardvark\n";
 	ss << "-- chunk: " << (name ? name : "script") << "\n";
 
 	if (!LooksLikeLuau(bc))

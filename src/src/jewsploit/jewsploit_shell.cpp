@@ -380,7 +380,7 @@ void menu::draw()
 
 		// лого слева
 		{
-			std::string logo_str = "jewsploit";
+			std::string logo_str = "Ardvark";
 			if (Cheat::Globals::InstanceDataModel.address)
 			{
 				auto pid = Cheat::Globals::InstanceDataModel.GetPlaceId();

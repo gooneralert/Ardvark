@@ -14,6 +14,7 @@ extern "C" {
 
 #include <cstdint>
 #include <cstring>
+#include <string>
 #include <type_traits>
 #include <vector>
 
@@ -32,6 +33,130 @@ std::uintptr_t Base()
 bool Plausible(std::uint64_t a)
 {
 	return a >= 0x10000 && a < 0x7FFFFFFFFFFFull;
+}
+
+// Matcha / script-runner memory API (type dispatch)
+int l_getbase(lua_State* L)
+{
+	lua_pushnumber(L, (lua_Number)Base());
+	return 1;
+}
+
+int l_memory_read(lua_State* L)
+{
+	const char* type = luaL_checkstring(L, 1);
+	const std::uint64_t a = (std::uint64_t)luaL_checkinteger(L, 2);
+	if (!Plausible(a))
+	{
+		lua_pushnil(L);
+		return 1;
+	}
+	const std::uintptr_t addr = (std::uintptr_t)a;
+
+	if (std::strcmp(type, "byte") == 0 || std::strcmp(type, "i8") == 0)
+	{
+		lua_pushinteger(L, g_Memory.Read<std::uint8_t>(addr));
+		return 1;
+	}
+	if (std::strcmp(type, "int") == 0 || std::strcmp(type, "i32") == 0)
+	{
+		lua_pushinteger(L, g_Memory.Read<std::int32_t>(addr));
+		return 1;
+	}
+	if (std::strcmp(type, "short") == 0 || std::strcmp(type, "i16") == 0)
+	{
+		lua_pushinteger(L, g_Memory.Read<std::int16_t>(addr));
+		return 1;
+	}
+	if (std::strcmp(type, "float") == 0 || std::strcmp(type, "f32") == 0)
+	{
+		lua_pushnumber(L, g_Memory.Read<float>(addr));
+		return 1;
+	}
+	if (std::strcmp(type, "double") == 0 || std::strcmp(type, "f64") == 0)
+	{
+		lua_pushnumber(L, g_Memory.Read<double>(addr));
+		return 1;
+	}
+	if (std::strcmp(type, "long") == 0 || std::strcmp(type, "i64") == 0)
+	{
+		lua_pushnumber(L, (lua_Number)g_Memory.Read<std::int64_t>(addr));
+		return 1;
+	}
+	if (std::strcmp(type, "uintptr_t") == 0 || std::strcmp(type, "pointer") == 0
+		|| std::strcmp(type, "ptr") == 0)
+	{
+		lua_pushnumber(L, (lua_Number)g_Memory.Read<std::uint64_t>(addr));
+		return 1;
+	}
+	if (std::strcmp(type, "bool") == 0)
+	{
+		lua_pushboolean(L, g_Memory.Read<bool>(addr) ? 1 : 0);
+		return 1;
+	}
+	if (std::strcmp(type, "string") == 0)
+	{
+		// until first non-printable (no length arg)
+		std::string s;
+		s.reserve(64);
+		for (int i = 0; i < 1024; ++i)
+		{
+			const std::uint8_t c = g_Memory.Read<std::uint8_t>(addr + i);
+			if (c == 0 || (c < 32 && c != '\t') || c > 126)
+				break;
+			s.push_back(static_cast<char>(c));
+		}
+		lua_pushlstring(L, s.data(), s.size());
+		return 1;
+	}
+
+	lua_pushnil(L);
+	return 1;
+}
+
+int l_memory_write(lua_State* L)
+{
+	const char* type = luaL_checkstring(L, 1);
+	const std::uint64_t a = (std::uint64_t)luaL_checkinteger(L, 2);
+	if (!Plausible(a))
+		return 0;
+	const std::uintptr_t addr = (std::uintptr_t)a;
+
+	if (std::strcmp(type, "byte") == 0 || std::strcmp(type, "i8") == 0)
+		g_Memory.Write(addr, (std::uint8_t)luaL_checkinteger(L, 3));
+
+	else if (std::strcmp(type, "int") == 0 || std::strcmp(type, "i32") == 0)
+		g_Memory.Write(addr, (std::int32_t)luaL_checkinteger(L, 3));
+
+	else if (std::strcmp(type, "short") == 0 || std::strcmp(type, "i16") == 0)
+		g_Memory.Write(addr, (std::int16_t)luaL_checkinteger(L, 3));
+
+	else if (std::strcmp(type, "float") == 0 || std::strcmp(type, "f32") == 0)
+		g_Memory.Write(addr, (float)luaL_checknumber(L, 3));
+
+	else if (std::strcmp(type, "double") == 0 || std::strcmp(type, "f64") == 0)
+		g_Memory.Write(addr, luaL_checknumber(L, 3));
+
+	else if (std::strcmp(type, "long") == 0 || std::strcmp(type, "i64") == 0)
+		g_Memory.Write(addr, (std::int64_t)luaL_checknumber(L, 3));
+
+	else if (std::strcmp(type, "uintptr_t") == 0 || std::strcmp(type, "pointer") == 0
+		|| std::strcmp(type, "ptr") == 0)
+		g_Memory.Write(addr, (std::uint64_t)luaL_checknumber(L, 3));
+
+	else if (std::strcmp(type, "bool") == 0)
+		g_Memory.Write(addr, lua_toboolean(L, 3) ? true : false);
+
+	else if (std::strcmp(type, "string") == 0)
+	{
+		size_t n = 0;
+		const char* s = luaL_checklstring(L, 3, &n);
+		if (n > 0)
+			g_Memory.WriteRaw(addr, s, n);
+		g_Memory.Write<std::uint8_t>(addr + n, 0);
+	}
+
+	return 0;
 }
 
 // адрес берём либо числом, либо из userdata инстанса
@@ -422,6 +547,11 @@ void Register(lua_State* L)
 
 	Set(L, "get_class", l_get_class);
 	Set(L, "get_name", l_get_name);
+
+	// Matcha / script-runner global memory API
+	Set(L, "getbase", l_getbase);
+	Set(L, "memory_read", l_memory_read);
+	Set(L, "memory_write", l_memory_write);
 
 	RegisterNamespace(L);
 }

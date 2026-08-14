@@ -9,6 +9,81 @@
 #include "renderer/Renderer.h"
 #include <thread>
 #include <chrono>
+#include <cstdio>
+#include <exception>
+
+// Log an unhandled exception (code + fault address) to %LOCALAPPDATA%\Ardvark\crash.txt
+// so a silent external crash can be diagnosed. Returns EXCEPTION_EXECUTE_HANDLER to
+// terminate normally (the process would die anyway), but we captured the details first.
+static void CrashAppend(const char* msg)
+{
+	char dir[MAX_PATH]; dir[0] = 0;
+	GetEnvironmentVariableA("LOCALAPPDATA", dir, MAX_PATH);
+	if (dir[0] == 0)
+		strcpy_s(dir, ".");
+
+	char sub[MAX_PATH];
+	snprintf(sub, sizeof(sub), "%s\\Ardvark", dir);
+	CreateDirectoryA(sub, nullptr);
+
+	char filepath[MAX_PATH];
+	snprintf(filepath, sizeof(filepath), "%s\\crash.txt", sub);
+
+	HANDLE h = CreateFileA(filepath, GENERIC_WRITE, FILE_SHARE_READ, nullptr,
+		OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+	if (h != INVALID_HANDLE_VALUE)
+	{
+		SetFilePointer(h, 0, nullptr, FILE_END);
+		DWORD w = 0;
+		WriteFile(h, msg, (DWORD)strlen(msg), &w, nullptr);
+		CloseHandle(h);
+	}
+}
+
+static LONG WINAPI CrashFilter(EXCEPTION_POINTERS* ep)
+{
+	char line[256];
+	const int n = snprintf(line, sizeof(line), "code=0x%08lX addr=0x%llX\n",
+		(unsigned long)(ep ? ep->ExceptionRecord->ExceptionCode : 0),
+		(unsigned long long)(ep ? (uintptr_t)ep->ExceptionRecord->ExceptionAddress : 0));
+	CrashAppend(line);
+	return EXCEPTION_EXECUTE_HANDLER;
+}
+
+static void TerminateLog()
+{
+	// unhandled C++ exception path (std::bad_alloc, length_error, ...)
+	CrashAppend("terminate: unhandled C++ exception\n");
+	abort();
+}
+
+static void HeartbeatThread()
+{
+	for (;;)
+	{
+		// heartbeat.txt is overwritten every second. If it stops updating, the
+		// process froze (deadlock) rather than crashed.
+		char dir[MAX_PATH]; dir[0] = 0;
+		GetEnvironmentVariableA("LOCALAPPDATA", dir, MAX_PATH);
+		if (dir[0] == 0)
+			strcpy_s(dir, ".");
+		char sub[MAX_PATH];
+		snprintf(sub, sizeof(sub), "%s\\Ardvark", dir);
+		CreateDirectoryA(sub, nullptr);
+		char filepath[MAX_PATH];
+		snprintf(filepath, sizeof(filepath), "%s\\heartbeat.txt", sub);
+		HANDLE h = CreateFileA(filepath, GENERIC_WRITE, 0, nullptr,
+			CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+		if (h != INVALID_HANDLE_VALUE)
+		{
+			const char* t = "tick\n";
+			DWORD w = 0;
+			WriteFile(h, t, (DWORD)strlen(t), &w, nullptr);
+			CloseHandle(h);
+		}
+		Sleep(1000);
+	}
+}
 
 // dx11 + меню в отдельном потоке
 void OverlayThread()
@@ -61,6 +136,9 @@ static void OnRobloxAttached(bool reattached)
 int main()
 {
     SetProcessDPIAware();
+    SetUnhandledExceptionFilter(CrashFilter);
+    std::set_terminate(TerminateLog);
+    std::thread(HeartbeatThread).detach();
 
     { /* setup overlay */
         std::thread(OverlayThread).detach();

@@ -142,7 +142,7 @@ namespace widgets
 			segs.emplace_back(buf);
 		}
 
-		std::string brand_str = "jewsploit";
+		std::string brand_str = "Ardvark";
 		if (Cheat::Globals::InstanceDataModel.address)
 		{
 			auto pid = Cheat::Globals::InstanceDataModel.GetPlaceId();

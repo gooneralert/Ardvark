@@ -15,6 +15,7 @@ extern "C" {
 #include "core/roblox/classes/Classes.h"
 #include "core/roblox/math/Math.h"
 #include "core/roblox/offsets/Offsets.h"
+#include "renderer/Renderer.h"
 
 #include <cmath>
 #include <cstdio>
@@ -902,6 +903,36 @@ int l_index(lua_State* L)
 			lua_pushnumber(L, Camera(ud->address).GetFieldOfView());
 			return 1;
 		}
+		if (std::strcmp(key, "ViewportSize") == 0)
+		{
+			const Vector2 v = Camera(ud->address).GetViewportSize();
+			LuaTypes::PushVector2(L, v.x, v.y);
+			return 1;
+		}
+	}
+
+	// GuiObject / GuiBase2D layout props (Fisch-style scripts read these for
+	// minigame UI detection/positioning)
+	if (IsGuiObjectClass(cls))
+	{
+		if (std::strcmp(key, "AbsolutePosition") == 0)
+		{
+			const Vector2 v = g_Memory.Read<Vector2>(ud->address + ::GuiBase2D::AbsolutePosition);
+			LuaTypes::PushVector2(L, v.x, v.y);
+			return 1;
+		}
+		if (std::strcmp(key, "AbsoluteSize") == 0)
+		{
+			const Vector2 v = g_Memory.Read<Vector2>(ud->address + ::GuiBase2D::AbsoluteSize);
+			LuaTypes::PushVector2(L, v.x, v.y);
+			return 1;
+		}
+		if (std::strcmp(key, "BackgroundColor3") == 0)
+		{
+			const Vector3 c = g_Memory.Read<Vector3>(ud->address + ::GuiObject::BackgroundColor3);
+			LuaTypes::PushColor3(L, c.x, c.y, c.z);
+			return 1;
+		}
 	}
 
 	if (IsBasePartClass(cls))
@@ -1588,6 +1619,80 @@ int l_Fire(lua_State* L)
 	return luaL_error(L, "Fire: temporarily disabled");
 }
 
+// --- Mouse (Player:GetMouse) ---
+constexpr const char* k_mouse_mt = "jewsploit.Mouse";
+
+struct LuaMouse
+{
+	int dummy{ 0 };
+};
+
+static HWND MouseHwnd()
+{
+	if (HWND h = Renderer::GetGameHwnd())
+		return h;
+	return Renderer::GetHwnd();
+}
+
+int l_mouse_index(lua_State* L)
+{
+	const char* key = luaL_checkstring(L, 2);
+
+	if (std::strcmp(key, "X") == 0 || std::strcmp(key, "Y") == 0)
+	{
+		POINT pt{};
+		GetCursorPos(&pt);
+		if (HWND h = MouseHwnd())
+			ScreenToClient(h, &pt);
+		lua_pushinteger(L, key[0] == 'X' ? static_cast<lua_Integer>(pt.x)
+			: static_cast<lua_Integer>(pt.y));
+		return 1;
+	}
+	if (std::strcmp(key, "Button1Down") == 0)
+	{
+		lua_pushboolean(L, (GetAsyncKeyState(VK_LBUTTON) & 0x8000) ? 1 : 0);
+		return 1;
+	}
+	if (std::strcmp(key, "Button2Down") == 0)
+	{
+		lua_pushboolean(L, (GetAsyncKeyState(VK_RBUTTON) & 0x8000) ? 1 : 0);
+		return 1;
+	}
+	if (std::strcmp(key, "Hit") == 0)
+	{
+		LuaTypes::PushVector3(L, Vector3(0.f, 0.f, 0.f)); // external: no raycast hit
+		return 1;
+	}
+	if (std::strcmp(key, "Target") == 0)
+	{
+		lua_pushnil(L);
+		return 1;
+	}
+
+	lua_pushnil(L);
+	return 1;
+}
+
+int l_GetMouse(lua_State* L)
+{
+	(void)L;
+	auto* m = static_cast<LuaMouse*>(lua_newuserdatauv(L, sizeof(LuaMouse), 0));
+	m->dummy = 0;
+	luaL_getmetatable(L, k_mouse_mt);
+	lua_setmetatable(L, -2);
+	return 1;
+}
+
+void CreateMouseMetatable(lua_State* L)
+{
+	if (luaL_newmetatable(L, k_mouse_mt))
+	{
+		lua_pushcfunction(L, l_mouse_index);
+		lua_setfield(L, -2, "__index");
+	}
+	lua_pop(L, 1);
+}
+
 void CreateMetatable(lua_State* L)
 {
 	if (luaL_newmetatable(L, k_mt))
@@ -1633,6 +1738,8 @@ void CreateMetatable(lua_State* L)
 		lua_setfield(L, -2, "GetPropertyChangedSignal");
 		lua_pushcfunction(L, l_Fire);
 		lua_setfield(L, -2, "Fire");
+		lua_pushcfunction(L, l_GetMouse);
+		lua_setfield(L, -2, "GetMouse");
 	}
 	lua_pop(L, 1);
 }
@@ -1674,6 +1781,7 @@ void RefreshGlobals(lua_State* L)
 void Register(lua_State* L)
 {
 	CreateMetatable(L);
+	CreateMouseMetatable(L);
 	RefreshGlobals(L);
 
 	lua_newtable(L);

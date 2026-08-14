@@ -518,6 +518,7 @@ namespace Cheat {
 
         struct {
             bool executor{ false }; // отдельное окно lua
+            float ticks_ms{ 15.f }; // lua coroutine ticker interval (1..15 ms, 60fps default)
         } lua;
 
         enum {
