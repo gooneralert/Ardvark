@@ -1,9 +1,10 @@
 # updater.ps1
-# Downloads two offset files, preserves namespaces + enums, merges them, and writes offsets.h
+# Downloads two offset files, preserves namespaces + enums, merges them, and writes the
+# offsets file the external actually uses: src\src\core\roblox\offsets\Offsets.h
 
 [CmdletBinding()]
 param(
-    [string]$OutputFile   = 'offsets.h',
+    [string]$OutputFile   = 'src\src\core\roblox\offsets\Offsets.h',
     [string]$PrimaryUrl   = 'https://dumper.jonah.cool/offsets.h',
     [string]$SecondaryUrl = 'https://offsets.imtheo.lol/offsets.hpp'
 )
