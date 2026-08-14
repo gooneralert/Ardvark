@@ -2,6 +2,7 @@
 #include "Misc.h"
 #include "features/movement/Fly.h"
 #include "features/movement/Speed.h"
+#include "features/movement/CharmMove.h"
 #include "core/globals/Globals.h"
 #include "core/memory/Memory.h"
 #include "core/roblox/offsets/Offsets.h"
@@ -10,6 +11,7 @@
 #include "features/local/LocalMods.h"
 #include "features/local/Btools.h"
 #include "features/local/ThirdPerson.h"
+#include "features/local/CharMods.h"
 #include "features/misc/HitboxExpander.h"
 #include "app/Settings.h"
 #include <Windows.h>
@@ -444,6 +446,9 @@ void Cheat::Features::Misc::Start()
 	g_misc_th = std::thread(misc_loop);
 	Speed::Start();
 	Fly::Start();
+	CharmMove::GravityStart();
+	CharmMove::TickrateStart();
+	CharMods::Start();
 	WorldEdit::Start();
 }
 
@@ -453,6 +458,9 @@ void Cheat::Features::Misc::Stop()
 	WorldEdit::Stop();
 	Speed::Stop();
 	Fly::Stop();
+	CharmMove::GravityStop();
+	CharmMove::TickrateStop();
+	CharMods::Stop();
 	if (g_misc_th.joinable())
 		g_misc_th.join();
 	ThirdPerson::Restore();

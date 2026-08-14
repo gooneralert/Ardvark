@@ -379,7 +379,6 @@ void AddCharacter(const Cheat::Instance& model, Cheat::PlayerCache&& cache,
     }
 
     cache.character = model.address;
-    cache.team_folder = Cheat::PlayerHandler::ResolveTeamFolder(model.address);
 
     const std::uint64_t player_addr = FindOwningPlayerAddress(model.address);
     cache.is_player = player_addr != 0;
@@ -392,6 +391,15 @@ void AddCharacter(const Cheat::Instance& model, Cheat::PlayerCache&& cache,
         if (!pdn.empty() && pdn != "Unknown")
             cache.displayName = pdn;
     }
+
+    // teamcheck: prefer the standard Roblox Player.Team instance (works in
+    // team games where characters live directly in Workspace); fall back to
+    // the character-parent heuristic (Folder/Model under the char).
+    cache.team_folder = 0;
+    if (player_addr)
+        cache.team_folder = Cheat::Player(player_addr).GetTeam();
+    if (!cache.team_folder)
+        cache.team_folder = Cheat::PlayerHandler::ResolveTeamFolder(model.address);
 
     target[model.address] = std::move(cache);
 }
@@ -734,6 +742,20 @@ std::uint64_t Cheat::PlayerHandler::LocalTeamFolder()
         if (pf)
             return pf;
     }
+
+    // prefer the standard Roblox Player.Team instance
+    if (Cheat::Globals::Players && g_Memory.IsValid(Cheat::Globals::Players->address))
+    {
+        const std::uint64_t local = g_Memory.Read<std::uint64_t>(
+            Cheat::Globals::Players->address + ::Player::LocalPlayer);
+        if (g_Memory.IsValid(local))
+        {
+            const std::uint64_t t = Cheat::Player(local).GetTeam();
+            if (t)
+                return t;
+        }
+    }
+
     return ResolveTeamFolder(LocalCharacterAddress());
 }
 

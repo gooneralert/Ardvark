@@ -1,4 +1,4 @@
-#include "pch.h"
+﻿#include "pch.h"
 #include "Fly.h"
 #include "FlyHelpers.h"
 
@@ -19,45 +19,41 @@ using clock = std::chrono::steady_clock;
 using namespace Cheat::Features::Fly::helpers;
 
 std::atomic<bool> g_fly_run{ false };
-std::atomic<bool> g_grav_run{ false };
-std::atomic<bool> g_fly_on{ false };
 std::thread g_fly_th;
-std::thread g_grav_th;
 
-// velocity луп, гравитация в другом треде
+// Faithful port of FoulzExternal flight.cs:
+//   method 0 = "Position" -> accumulate position, write Position + zero velocity
+//   method 1 = "Velocity" -> write AssemblyLinearVelocity (full 3D camera basis)
 void fly_loop()
 {
-	bool was_on = false;
-	Vector3 cur_vel{};
-
+	Vector3 fly_pos{};
+	bool has_fly_pos = false;
 	bool tog = false;
 	bool was_key = false;
 
 	fly_snap cached{};
 	auto last_res = clock::now() - std::chrono::seconds(1);
+	const auto clock0 = clock::now();
+	double prev = 0.0;
+
+	auto elapsed_s = [&]() -> double
+	{
+		return std::chrono::duration<double>(clock::now() - clock0).count();
+	};
 
 	while (g_fly_run.load(std::memory_order_relaxed))
 	{
-		auto now = clock::now();
-
 		if (!Cheat::g_Settings.misc.fly)
 		{
 			tog = false;
 			was_key = false;
-			if (was_on && cached.prim)
-			{
-				zero_vel(cached.prim);
-				cur_vel = {};
-			}
-			g_fly_on.store(false, std::memory_order_relaxed);
-			was_on = false;
+			has_fly_pos = false;
 			std::this_thread::sleep_for(std::chrono::milliseconds(50));
 			continue;
 		}
 
-		bool focus = roblox_focused();
-		bool can_tog = focus || Cheat::g_Settings.misc.fly_key == 0;
-
+		const bool focus = roblox_focused();
+		const bool can_tog = focus || Cheat::g_Settings.misc.fly_key == 0;
 		bool key_on = false;
 		if (can_tog)
 		{
@@ -68,6 +64,15 @@ void fly_loop()
 				was_key);
 		}
 
+		if (!key_on)
+		{
+			prev = elapsed_s();
+			has_fly_pos = false;
+			std::this_thread::sleep_for(std::chrono::milliseconds(5));
+			continue;
+		}
+
+		const auto now = clock::now();
 		if (!cached.hrp || !cached.cam)
 		{
 			if ((now - last_res) > std::chrono::milliseconds(50))
@@ -76,133 +81,137 @@ void fly_loop()
 				last_res = now;
 			}
 		}
-
 		else if ((now - last_res) > std::chrono::milliseconds(250))
 		{
 			touch_ptrs(cached);
 			last_res = now;
 		}
 
-		bool flying = Cheat::g_Settings.misc.fly && key_on;
-		bool idle = !flying;
-		g_fly_on.store(flying, std::memory_order_relaxed);
-
 		if (cached.address == 0 || !cached.prim || !cached.cam)
 		{
-			if (was_on && cached.prim)
-			{
-				zero_vel(cached.prim);
-				cur_vel = {};
-			}
-
-			g_fly_on.store(false, std::memory_order_relaxed);
-			was_on = false;
-
-			if (idle)
-				std::this_thread::sleep_for(std::chrono::milliseconds(8));
+			prev = elapsed_s();
+			has_fly_pos = false;
+			std::this_thread::sleep_for(std::chrono::milliseconds(2));
 			continue;
 		}
+
+		// timing (Math.Clamp like flight.cs)
+		double now_s = elapsed_s();
+		float dt = (float)(now_s - prev);
+		if (dt < 0.0001f) dt = 0.0001f;
+		if (dt > 0.05f) dt = 0.05f;
+		prev = now_s;
 
 		mat3 rot{};
 		if (!raw_read(cached.cam + ::Camera::Rotation, &rot, sizeof(rot)))
 		{
-			if (was_on && cached.prim)
-			{
-				zero_vel(cached.prim);
-				cur_vel = {};
-			}
-			g_fly_on.store(false, std::memory_order_relaxed);
-			was_on = false;
-			if (idle)
-				std::this_thread::sleep_for(std::chrono::milliseconds(8));
+			prev = elapsed_s();
+			std::this_thread::sleep_for(std::chrono::milliseconds(2));
 			continue;
 		}
 
-		Vector3 fwd, right;
-		// ── match external flight.cs ──────────────────────────────
-		// Horizontal movement uses the camera YAW projected onto the XZ
-		// plane (safe when looking straight up/down); vertical is separate
-		// (Space up / Shift down). Mirrors the working FoulzExternal impl.
-		const float lookX = -rot._13;              // -r02
-		const float lookZ = -rot._33;              // -r22
+		// camera look projected onto the XZ plane (yaw only)
+		const float lookX = -rot._13;   // -r02
+		const float lookZ = -rot._33;   // -r22
 		const float yawLen = std::sqrt(lookX * lookX + lookZ * lookZ);
 
+		Vector3 forward, right;
 		if (yawLen > 0.001f)
 		{
-			fwd = Vector3(lookX / yawLen, 0.0f, lookZ / yawLen);
-			right = Vector3(-fwd.z, 0.0f, fwd.x);  // right = forward cross worldUp
+			forward = Vector3(lookX / yawLen, 0.0f, lookZ / yawLen);
+			right = Vector3(-forward.z, 0.0f, forward.x);
 		}
 		else
 		{
-			fwd = Vector3(0.0f, 0.0f, -1.0f);
+			forward = Vector3(0.0f, 0.0f, -1.0f);
 			right = Vector3(1.0f, 0.0f, 0.0f);
 		}
 		const Vector3 worldUp(0.0f, 1.0f, 0.0f);
 
-		if (!flying)
+		if (!has_fly_pos)
 		{
-			if (was_on)
-			{
-				zero_vel(cached.prim);
-				cur_vel = {};
-			}
-
-			was_on = false;
-
-			if (idle)
-				std::this_thread::sleep_for(std::chrono::milliseconds(8));
-			continue;
+			fly_pos = peek<Vector3>(cached.prim + ::Primitive::Position);
+			has_fly_pos = true;
 		}
 
-		was_on = true;
-
-		kb_layout lay = detect_layout(Cheat::Renderer::GetGameHwnd());
-		int fwd_vk = lay == kb_layout::azerty ? 'Z' : 'W';
-		int left_vk = lay == kb_layout::azerty ? 'Q' : 'A';
-
+		const float speed = Cheat::g_Settings.misc.fly_speed;
 		auto held = [](int vk) -> bool
 		{
 			return (GetAsyncKeyState(vk) & 0x8000) != 0;
 		};
 
 		Vector3 moveDir{};
-		float spd = Cheat::g_Settings.misc.fly_speed;
-		if (spd < 0.f) spd = 0.f;
-
-		if (focus || Cheat::g_Settings.misc.fly_key == 0)
+		if (focus)
 		{
-			if (held(fwd_vk))    moveDir += fwd;               // W  forward
-			if (held('S'))       moveDir -= fwd;               // S  backward
-			if (held(left_vk))   moveDir -= right;             // A  strafe left
-			if (held('D'))       moveDir += right;             // D  strafe right
-			if (held(VK_SPACE))  moveDir += worldUp;           // Space  up
-			if (held(VK_LSHIFT)) moveDir -= worldUp;           // Shift  down
+			if (held(0x57)) moveDir += forward;   // W
+			if (held(0x53)) moveDir -= forward;   // S
+			if (held(0x41)) moveDir -= right;     // A
+			if (held(0x44)) moveDir += right;     // D
+			if (held(0x20)) moveDir += worldUp;   // Space
+			if (held(0xA0)) moveDir -= worldUp;   // LShift
 		}
 
-		Vector3 want{};
-		if (moveDir.LengthSquared() > 1e-6f)
+		const bool moving = moveDir.Length() > 0.001f;
+		const int method = Cheat::g_Settings.misc.fly_method;
+
+		if (method == 0)
 		{
-			moveDir.Normalize();
-			want = moveDir * spd;
+			// Position-based (accumulate position)
+			if (moving)
+			{
+				moveDir.Normalize();
+				fly_pos = fly_pos + moveDir * speed * dt;
+			}
+			poke(cached.prim + ::Primitive::Position, fly_pos);
+			Vector3 zero{};
+			poke(cached.prim + ::Primitive::AssemblyLinearVelocity, zero);
+		}
+		else
+		{
+			// Velocity-based
+			Vector3 velocity{};
+			if (moving)
+			{
+				moveDir.Normalize();
+				velocity = moveDir * speed;
+			}
+			poke(cached.prim + ::Primitive::AssemblyLinearVelocity, velocity);
+
+			// full 3D camera direction override so WASD works when looking up/down
+			Vector3 fullForward(-rot._13, -rot._23, -rot._33);
+			Vector3 fullRight(rot._11, rot._21, rot._31);
+			Vector3 fullUp(rot._12, rot._22, rot._32);
+			Vector3 vel3d{};
+			if (focus)
+			{
+				if (held(0x57)) vel3d += fullForward;   // W
+				if (held(0x53)) vel3d -= fullForward;   // S
+				if (held(0x41)) vel3d -= fullRight;     // A
+				if (held(0x44)) vel3d += fullRight;     // D
+				if (held(0x20)) vel3d += fullUp;        // Space
+				if (held(0xA0)) vel3d -= fullUp;        // Shift
+			}
+			if (vel3d.Length() > 0.001f)
+			{
+				vel3d.Normalize();
+				poke(cached.prim + ::Primitive::AssemblyLinearVelocity, vel3d * speed);
+			}
 		}
 
-		cur_vel = want;
-		set_vel(cached.prim, cur_vel); // linear velocity + zero angular
+		Vector3 zero{};
+		poke(cached.prim + ::Primitive::AssemblyAngularVelocity, zero);
 
-		// ── fake shift lock: rotate char to face camera yaw ────────
-		// Removes the dependency on real shift lock, so flight is smooth
-		// both in AND out of shift lock (matches external flight.cs).
+		// fake shift lock: rotate character to face camera yaw
 		if (yawLen > 0.001f)
 		{
 			mat3 cr;
-			cr._11 = -fwd.z; cr._12 = 0.0f; cr._13 = -fwd.x;
-			cr._21 = 0.0f;   cr._22 = 1.0f; cr._23 = 0.0f;
-			cr._31 =  fwd.x; cr._32 = 0.0f; cr._33 = -fwd.z;
+			cr._11 = -forward.z; cr._12 = 0.0f; cr._13 = -forward.x;
+			cr._21 = 0.0f;        cr._22 = 1.0f; cr._23 = 0.0f;
+			cr._31 =  forward.x;  cr._32 = 0.0f; cr._33 = -forward.z;
 			poke(cached.prim + ::Primitive::Rotation, cr);
 		}
 
-		// ── noclip while flying: clear CanCollide so the physics engine
-		// doesn't damp the velocity against the floor / geometry. ──
+		// noclip while flying
 		{
 			std::uint8_t flags = peek<std::uint8_t>(cached.prim + ::Primitive::Flags);
 			std::uint8_t clean = (std::uint8_t)(flags & ~(std::uint8_t)::PrimitiveFlags::CanCollide);
@@ -218,104 +227,21 @@ void fly_loop()
 		if (s.address != 0 && s.prim)
 			zero_vel(s.prim);
 	}
-	g_fly_on.store(false, std::memory_order_relaxed);
 }
 
-// гравитацию в ноль пока летаем
-void grav_loop()
-{
-	bool overriden = false;
-	float backup = 0.0f;
-
-	while (g_grav_run.load(std::memory_order_relaxed))
-	{
-		if (!Cheat::g_Settings.misc.fly)
-		{
-			if (overriden &&
-				Cheat::Globals::Workspace &&
-				Cheat::Globals::Workspace->address)
-			{
-				auto world = peek<std::uint64_t>(
-					Cheat::Globals::Workspace->address + ::Workspace::World);
-				if (world)
-					poke(world + ::World::Gravity, backup);
-				overriden = false;
-			}
-			std::this_thread::sleep_for(std::chrono::milliseconds(50));
-			continue;
-		}
-
-		bool flying = g_fly_on.load(std::memory_order_relaxed);
-		bool can =
-			Cheat::Globals::Workspace &&
-			Cheat::Globals::Workspace->address;
-
-		if (flying && can)
-		{
-			auto world = peek<std::uint64_t>(
-				Cheat::Globals::Workspace->address + ::Workspace::World);
-			if (world)
-			{
-				if (!overriden)
-				{
-					backup = peek<float>(world + ::World::Gravity);
-					overriden = true;
-				}
-				float z = 0.0f;
-				poke(world + ::World::Gravity, z);
-			}
-		}
-
-		else if (!flying && overriden && can)
-		{
-			auto world = peek<std::uint64_t>(
-				Cheat::Globals::Workspace->address + ::Workspace::World);
-			if (world)
-				poke(world + ::World::Gravity, backup);
-			overriden = false;
-		}
-
-		if (flying)
-			std::this_thread::sleep_for(std::chrono::milliseconds(1));
-
-		else
-			std::this_thread::sleep_for(std::chrono::milliseconds(8));
-	}
-
-	if (overriden &&
-		Cheat::Globals::Workspace &&
-		Cheat::Globals::Workspace->address)
-	{
-		auto world = peek<std::uint64_t>(
-			Cheat::Globals::Workspace->address + ::Workspace::World);
-		if (world)
-			poke(world + ::World::Gravity, backup);
-	}
-}
-
-}
+} // anonymous namespace
 
 void Cheat::Features::Fly::Start()
 {
-	if (!g_fly_run.load(std::memory_order_relaxed))
-	{
-		g_fly_run = true;
-		g_fly_th = std::thread(fly_loop);
-	}
-
-	if (!g_grav_run.load(std::memory_order_relaxed))
-	{
-		g_grav_run = true;
-		g_grav_th = std::thread(grav_loop);
-	}
+	if (g_fly_run.load())
+		return;
+	g_fly_run.store(true);
+	g_fly_th = std::thread(fly_loop);
 }
 
 void Cheat::Features::Fly::Stop()
 {
-	g_fly_run.store(false, std::memory_order_relaxed);
-	g_grav_run.store(false, std::memory_order_relaxed);
+	g_fly_run.store(false);
 	if (g_fly_th.joinable())
 		g_fly_th.join();
-	if (g_grav_th.joinable())
-		g_grav_th.join();
 }

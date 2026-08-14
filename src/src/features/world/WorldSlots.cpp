@@ -80,6 +80,34 @@ std::string skybox_url(std::uint64_t id)
 	return "rbxassetid://" + std::to_string(id);
 }
 
+// charm's raw std::string write: buffer @+0, length @+0x10, capacity @+0x18.
+// Also stamps the Content wrapper (kind=1, scheme=0) right before the string
+// so the engine re-parses the new asset url instead of using cached scheme.
+void write_skybox_str(std::uint64_t addr, const std::string& val)
+{
+	if (!addr || !g_Memory.IsValid(addr) || val.empty())
+		return;
+
+	const auto current_len = g_Memory.Read<std::int64_t>(addr + 0x18);
+	std::uint64_t buf = current_len >= 16
+		? g_Memory.Read<std::uint64_t>(addr)
+		: addr;
+	if (!buf || !g_Memory.IsValid(buf))
+		return;
+
+	for (size_t i = 0; i < val.size() && i < 200; i++)
+		g_Memory.Write<char>(buf + i, val[i]);
+	g_Memory.Write<char>(buf + val.size(), '\0');
+	g_Memory.Write<std::int64_t>(addr + 0x10, static_cast<std::int64_t>(val.size()));
+
+	// Content = { int32 kind; int16 scheme; std::string uri } -> kind=1,
+	// scheme=0 so the engine re-parses the new rbxassetid:// url.
+	const std::uint64_t content = addr - 0x10;
+	g_Memory.Write<std::int32_t>(content, 1);
+	g_Memory.Write<std::int16_t>(content + 0x08, 0);
+}
+
+
 void write_mat_rgb(std::uint64_t base, std::uintptr_t off, const float c[4])
 {
 	if (!g_Memory.IsValid(base))
@@ -1097,25 +1125,32 @@ void TickSkyboxChanger(std::uint64_t lighting, bool force_off)
 
 		// движок забирает текстуры в момент, когда Sky попадает в Lighting,
 		// поэтому пишем грани, пока он снаружи, и парентим обратно в конце
+		const SkyboxPreset& p = k_skybox_presets[preset];
+
+		// The engine grabs the skybox textures when Sky is added to Lighting,
+		// so we unparent first, write the 6 face strings in place (charm's raw
+		// string write), then reparent so the new content is re-read.
 		Cheat::Features::InstanceCreate::SetParent(sky, 0);
 
-		const SkyboxPreset& p = k_skybox_presets[preset];
-		bool ok = true;
-		ok &= Cheat::Features::InstanceCreate::SetContent(sky + ::Sky::SkyboxBk, skybox_url(p.bk).c_str());
-		ok &= Cheat::Features::InstanceCreate::SetContent(sky + ::Sky::SkyboxDn, skybox_url(p.dn).c_str());
-		ok &= Cheat::Features::InstanceCreate::SetContent(sky + ::Sky::SkyboxFt, skybox_url(p.ft).c_str());
-		ok &= Cheat::Features::InstanceCreate::SetContent(sky + ::Sky::SkyboxLf, skybox_url(p.lf).c_str());
-		ok &= Cheat::Features::InstanceCreate::SetContent(sky + ::Sky::SkyboxRt, skybox_url(p.rt).c_str());
-		ok &= Cheat::Features::InstanceCreate::SetContent(sky + ::Sky::SkyboxUp, skybox_url(p.up).c_str());
+		write_skybox_str(sky + ::Sky::SkyboxBk, skybox_url(p.bk));
+		write_skybox_str(sky + ::Sky::SkyboxDn, skybox_url(p.dn));
+		write_skybox_str(sky + ::Sky::SkyboxFt, skybox_url(p.ft));
+		write_skybox_str(sky + ::Sky::SkyboxLf, skybox_url(p.lf));
+		write_skybox_str(sky + ::Sky::SkyboxRt, skybox_url(p.rt));
+		write_skybox_str(sky + ::Sky::SkyboxUp, skybox_url(p.up));
 
+		// make sure the Sky is parented back to Lighting
 		Cheat::Features::InstanceCreate::SetParent(sky, lighting);
 
-		if (ok)
+		// force the renderer to reload the skybox textures
+		if (std::uint64_t rv = LightingInvalidate::render_view())
 		{
-			applied_preset = preset;
-			applied_mode = w.skybox_mode;
-			invalidate_sky();
+			g_Memory.Write<std::uint8_t>(rv + ::RenderView::LightingValid, 0);
+			g_Memory.Write<std::uint8_t>(rv + ::RenderView::SkyboxValid, 0);
 		}
+
+		applied_preset = preset;
+		applied_mode = w.skybox_mode;
 	}
 
 	else if (was)

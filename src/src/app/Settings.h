@@ -489,6 +489,20 @@ namespace Cheat {
             float fly_speed{ 60.f };
             int   fly_key{ 0 };
             int   fly_key_mode{ 0 };
+            int   fly_method{ 0 }; // 0 = fly (position), 1 = velocity
+
+            bool  gravity{ false };
+            float gravity_value{ 196.2f };
+
+            bool  tickrate{ false };
+            float tickrate_value{ 60.f };
+
+            bool  anim_changer{ false };
+            int   anim_pack{ 0 };
+            bool  fake_headless{ false };
+            bool  reset_fake_headless{ false };
+            bool  korblox{ false };
+            bool  reset_korblox{ false };
 
             bool  explorer{ false };
             bool  esp_preview{ false };

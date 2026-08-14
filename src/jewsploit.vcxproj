@@ -223,6 +223,8 @@
     <ClInclude Include="src\features\local\LocalMods.h" />
     <ClInclude Include="src\features\local\Btools.h" />
     <ClInclude Include="src\features\local\ThirdPerson.h" />
+    <ClInclude Include="src\features\local\CharMods.h" />
+    <ClInclude Include="src\features\local\AnimPacks.h" />
     <ClInclude Include="src\features\misc\Misc.h" />
     <ClInclude Include="src\features\misc\HitboxExpander.h" />
     <ClInclude Include="src\features\misc\HitSounds.h" />
@@ -230,6 +232,7 @@
     <ClInclude Include="assets\hitsounds\hitsounds_res.h" />
     <ClInclude Include="src\features\movement\Fly.h" />
     <ClInclude Include="src\features\movement\Speed.h" />
+    <ClInclude Include="src\features\movement\CharmMove.h" />
     <ClInclude Include="src\features\explorer\Explorer.h" />
     <ClInclude Include="src\features\mcp\McpBridge.h" />
     <ClInclude Include="src\features\lua\LuaExecutor.h" />
@@ -345,6 +348,7 @@
     <ClCompile Include="src\features\local\LocalMods.cpp" />
     <ClCompile Include="src\features\local\Btools.cpp" />
     <ClCompile Include="src\features\local\ThirdPerson.cpp" />
+    <ClCompile Include="src\features\local\CharMods.cpp" />
     <ClCompile Include="src\features\misc\Misc.cpp" />
     <ClCompile Include="src\features\misc\HitboxExpander.cpp" />
     <ClCompile Include="src\features\misc\HitSounds.cpp" />
@@ -356,6 +360,7 @@
     </ClCompile>
     <ClCompile Include="src\features\movement\Fly.cpp" />
     <ClCompile Include="src\features\movement\Speed.cpp" />
+    <ClCompile Include="src\features\movement\CharmMove.cpp" />
     <ClCompile Include="src\features\explorer\Explorer.cpp" />
     <ClCompile Include="src\features\mcp\McpBridge.cpp" />
     <ClInclude Include="src\features\lua\vm\LuaVM.h" />
