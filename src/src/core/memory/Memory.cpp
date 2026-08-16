@@ -132,6 +132,108 @@ SIZE_T Memory::WriteRaw(uintptr_t address, const void* buf, SIZE_T bytes) const
     return wrote;
 }
 
+// ---------------------------------------------------------------------
+// Direct-syscall trampolines.
+//
+// Why: WriteProcessMemory / ReadProcessMemory go through kernel32 -> ntdll
+// user-mode wrappers that anti-cheat / AV hook. A raw "syscall" bypasses the
+// whole user-mode chain and calls the kernel directly.
+//
+// Windows x64 has no inline asm in MSVC, so these ship exactly like the exe
+// does: as raw hand-written machine-code bytes called through a function
+// pointer.
+//
+//   Luck_ReadVirtualMemory :  mov r10, rcx; mov eax, 3Fh; syscall; ret  (NtReadVirtualMemory)
+//   Luck_WriteVirtualMemory:  mov r10, rcx; mov eax, 3Ah; syscall; ret  (NtWriteVirtualMemory)
+//
+// Windows x64 syscall numbers are stable across Win10/Win11 for these two.
+// ---------------------------------------------------------------------
+namespace {
+
+#ifdef _WIN64
+// NTSTATUS is a typedef for LONG; use LONG directly to avoid needing
+// <winternl.h>. The kernel returns NTSTATUS, but we only test >= 0.
+using ReadVirtMem  = LONG(NTAPI*)(HANDLE, PVOID, PVOID, SIZE_T, PSIZE_T);
+using WriteVirtMem = LONG(NTAPI*)(HANDLE, PVOID, const VOID*, SIZE_T, PSIZE_T);
+
+// mov r10, rcx | mov eax, <sys#> | syscall | ret
+// NtReadVirtualMemory  (0x3F)
+static const std::uint8_t kReadSyscall[]  = { 0x4C, 0x8B, 0xD1, 0xB8, 0x3F, 0x00, 0x00, 0x00, 0x0F, 0x05, 0xC3 };
+// NtWriteVirtualMemory (0x3A)
+static const std::uint8_t kWriteSyscall[] = { 0x4C, 0x8B, 0xD1, 0xB8, 0x3A, 0x00, 0x00, 0x00, 0x0F, 0x05, 0xC3 };
+
+ReadVirtMem  get_read_syscall()
+{
+    static auto* fn = []() -> ReadVirtMem {
+        // Allocate an executable page for the stub. RWX so it can be written
+        // before it is executed (and kept writable for lifetime of the process).
+        void* p = VirtualAlloc(nullptr, sizeof(kReadSyscall),
+            MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
+        if (!p)
+            return nullptr;
+        std::memcpy(p, kReadSyscall, sizeof(kReadSyscall));
+        FlushInstructionCache(GetCurrentProcess(), p, sizeof(kReadSyscall));
+        return reinterpret_cast<ReadVirtMem>(p);
+    }();
+    return fn;
+}
+
+WriteVirtMem get_write_syscall()
+{
+    static auto* fn = []() -> WriteVirtMem {
+        void* p = VirtualAlloc(nullptr, sizeof(kWriteSyscall),
+            MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
+        if (!p)
+            return nullptr;
+        std::memcpy(p, kWriteSyscall, sizeof(kWriteSyscall));
+        FlushInstructionCache(GetCurrentProcess(), p, sizeof(kWriteSyscall));
+        return reinterpret_cast<WriteVirtMem>(p);
+    }();
+    return fn;
+}
+#endif // _WIN64
+
+} // namespace
+
+// ---------------------------------------------------------------------
+// Raw-syscall backed R/W.  Tries the direct syscall first; if it fails
+// (e.g. STATUS_INVALID_HANDLE) it falls back to the WinAPI exactly like
+// the original ReadRaw/WriteRaw.
+// ---------------------------------------------------------------------
+SIZE_T Memory::ReadRawDirect(uintptr_t address, void* buf, SIZE_T bytes) const
+{
+    if (!m_handle || !address || !buf || !bytes)
+        return 0;
+
+#ifdef _WIN64
+    if (auto fn = get_read_syscall())
+    {
+        if (fn(m_handle, (PVOID)address, buf, bytes, nullptr) >= 0)
+            return bytes;
+    }
+#endif
+
+    return ReadRaw(address, buf, bytes);      // fallback: ReadProcessMemory
+}
+
+SIZE_T Memory::WriteRawDirect(uintptr_t address, const void* buf, SIZE_T bytes) const
+{
+    if (!m_handle || !address || !buf || !bytes)
+        return 0;
+
+#ifdef _WIN64
+    if (auto fn = get_write_syscall())
+    {
+        if (fn(m_handle, (PVOID)address, buf, bytes, nullptr) >= 0)
+            return bytes;
+    }
+#endif
+
+    SIZE_T wrote = 0;
+    WriteProcessMemory(m_handle, (LPVOID)address, buf, bytes, &wrote);
+    return wrote;                             // fallback: WriteProcessMemory
+}
+
 uintptr_t Memory::Alloc(SIZE_T size, DWORD protect) const
 {
     if (!m_handle || size == 0)

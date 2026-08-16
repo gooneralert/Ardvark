@@ -158,7 +158,14 @@ void write_velocity(std::uint64_t primitive, const Vector3& velocity)
 
     const std::uint64_t addr = primitive + ::Primitive::AssemblyLinearVelocity;
     for (int i = 0; i < 256; ++i)
+    {
+        // The character can be freed/destroyed mid-burst (respawn, R15 swap).
+        // Re-check each write so we never keep hammering freed memory, which
+        // corrupts Roblox's heap and crashes the game a few minutes later.
+        if (!g_Memory.IsValid(primitive))
+            break;
         g_Memory.Write<Vector3>(addr, velocity);
+    }
 }
 
 void restore_gravity_robust(bool& overridden, float original)

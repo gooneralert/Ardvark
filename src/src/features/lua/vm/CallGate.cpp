@@ -47,10 +47,16 @@ struct Gate
 	std::string   method;
 };
 
-// движок зовёт их из скриптов чаще всего; порядок = ожидаемая горячесть
+// движок зовёт их из скриптов чаще всего; порядок = ожидаемая горячесть.
+// ВАЖНО: create (Instance.new) нельзя исполнять внутри метода, который уже
+// держит блокировку DataModel/аллокатора (FindFirstChild, GetChildren, Clone
+// гуляют по children и держат read-lock) — create хочет write-lock и тот же
+// поток встаёт в deadlock (наблюдали: 27k hits, done так и не выставился).
+// Поэтому спереди чистые read-only геттеры (IsA, GetAttribute): они не берут
+// детей и не аллоцируют, и create внутри них доезжает до конца.
 const char* const k_candidates[] = {
-	"IsA", "FindFirstChild", "GetChildren", "WaitForChild",
-	"FindFirstChildOfClass", "GetDescendants", "GetAttribute", "Clone",
+	"IsA", "GetAttribute", "FindFirstChild", "GetChildren",
+	"FindFirstChildOfClass", "WaitForChild", "GetDescendants", "Clone",
 };
 
 constexpr std::size_t k_candidate_count =
@@ -458,58 +464,69 @@ static bool install_impl(const char* method_name, std::size_t from)
 	// list for each candidate and hook FunctionDescriptor::Function (+0x80).
 	std::uintptr_t instance_desc = 0;
 
-	for (std::size_t i = from; i < k_candidate_count; ++i)
+	// Два прохода: если все кандидаты разом «замёрзли» (ни одного вызова за
+	// ожидание), чёрный список сбрасываем и пробуем ещё раз — иначе гейт
+	// заклинивает навсегда и каждый Instance.new вечно сыпет fail (2).
+	bool found_slot = false;
+	for (int pass = 0; pass < 2 && !found_slot; ++pass)
 	{
-		if (!forced && g_cold[i])
-			continue;
+		if (pass == 1)
+			std::memset(g_cold, 0, sizeof(g_cold));
 
-		const char* try_name = forced ? method_name : k_candidates[i];
-
-		if (!instance_desc)
+		for (std::size_t i = from; i < k_candidate_count; ++i)
 		{
-			// Prefer the Workspace (WorldRoot) descriptor — the same source
-			// Reflect::RaycastSlot uses and that's proven to resolve. Roblox class
-			// descriptors include inherited members, so the Instance methods
-			// (IsA, GetChildren, ...) are listed here too.
-			const auto ws = Cheat::Globals::Workspace;
-			if (ws && g_Memory.IsValid(ws->address))
-				instance_desc = g_Memory.Read<std::uint64_t>(
-					ws->address + ::Instance::ClassDescriptor);
-			// Fallback: Instance's own descriptor from the Creators map.
+			if (!forced && g_cold[i])
+				continue;
+
+			const char* try_name = forced ? method_name : k_candidates[i];
+
 			if (!instance_desc)
-				instance_desc = Reflect::ClassDescriptorByName(base, "Instance");
-		}
-		// Class-list gives us this method's interned name pointer; then scan .data
-		// for the actual BoundFuncDesc the engine dispatches through (original path).
-		const std::uintptr_t func_desc = instance_desc
-			? Reflect::FindFunction(instance_desc, try_name) : 0;
-		const std::uint64_t name_ptr = func_desc
-			? g_Memory.Read<std::uint64_t>(
-				(std::uintptr_t)func_desc + ::Descriptor::Name) : 0;
-		const std::uintptr_t desc = name_ptr ? find_bound_desc(base, size, name_ptr) : 0;
-		if (desc)
-		{
-			const std::uintptr_t s = desc + ::FunctionDescriptor::Function;
-			auto fn = g_Memory.Read<std::uint64_t>(s);
-
-			// указатель наружу модуля = слот уже подменён. если это наш
-			// собственный stub, достаём из него оригинал и садимся заново,
-			// иначе слот чужой и трогать его нельзя
-			if (fn < base || fn >= base + size)
-				fn = unwrap_stale(fn, base, size);
-
-			if (fn)
 			{
-				method = try_name;
-				slot = s;
-				orig = fn;
-				picked = i;
-				break;
+				// Prefer the Workspace (WorldRoot) descriptor — the same source
+				// Reflect::RaycastSlot uses and that's proven to resolve. Roblox class
+				// descriptors include inherited members, so the Instance methods
+				// (IsA, GetChildren, ...) are listed here too.
+				const auto ws = Cheat::Globals::Workspace;
+				if (ws && g_Memory.IsValid(ws->address))
+					instance_desc = g_Memory.Read<std::uint64_t>(
+						ws->address + ::Instance::ClassDescriptor);
+				// Fallback: Instance's own descriptor from the Creators map.
+				if (!instance_desc)
+					instance_desc = Reflect::ClassDescriptorByName(base, "Instance");
 			}
-		}
+			// Class-list gives us this method's interned name pointer; then scan .data
+			// for the actual BoundFuncDesc the engine dispatches through (original path).
+			const std::uintptr_t func_desc = instance_desc
+				? Reflect::FindFunction(instance_desc, try_name) : 0;
+			const std::uint64_t name_ptr = func_desc
+				? g_Memory.Read<std::uint64_t>(
+					(std::uintptr_t)func_desc + ::Descriptor::Name) : 0;
+			const std::uintptr_t desc = name_ptr ? find_bound_desc(base, size, name_ptr) : 0;
+			if (desc)
+			{
+				const std::uintptr_t s = desc + ::FunctionDescriptor::Function;
+				auto fn = g_Memory.Read<std::uint64_t>(s);
 
-		if (forced)
-			break;
+				// указатель наружу модуля = слот уже подменён. если это наш
+				// собственный stub, достаём из него оригинал и садимся заново,
+				// иначе слот чужой и трогать его нельзя
+				if (fn < base || fn >= base + size)
+					fn = unwrap_stale(fn, base, size);
+
+				if (fn)
+				{
+					method = try_name;
+					slot = s;
+					orig = fn;
+					picked = i;
+					found_slot = true;
+					break;
+				}
+			}
+
+			if (forced)
+				break;
+		}
 	}
 
 	if (!slot || !orig)
@@ -592,11 +609,10 @@ void Remove()
 	if (!g_gate.installed)
 		return;
 
+	// снимаем хук, но состояние и стаб НЕ фризим: движок может прямо сейчас
+	// исполнять старый cave-stub, который читает state-страницу. освобождение
+	// памяти под живым стабом = UAF-краш. лучше утечка, чем AV (как в kids).
 	g_Memory.Write<std::uint64_t>(g_gate.slot, (std::uint64_t)g_gate.orig);
-	if (!g_gate.stub_is_cave && g_gate.stub)
-		g_Memory.Free(g_gate.stub);
-	if (g_gate.state)
-		g_Memory.Free(g_gate.state);
 
 	g_gate = Gate{};
 }

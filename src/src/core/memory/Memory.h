@@ -53,6 +53,12 @@ public:
 
     SIZE_T WriteRaw(uintptr_t address, const void* buf, SIZE_T bytes) const;
 
+    // Direct raw-syscall backed I/O. These attempt a raw NT syscall first
+    // (bypassing user-mode hooks of WriteProcessMemory/ReadProcessMemory which
+    // break silent aim on Windows 10), then fall back to the WinAPI above.
+    SIZE_T ReadRawDirect(uintptr_t address, void* buf, SIZE_T bytes) const;
+    SIZE_T WriteRawDirect(uintptr_t address, const void* buf, SIZE_T bytes) const;
+
     bool IsValid(uintptr_t address) const;
     bool IsWritable(uintptr_t address, SIZE_T size = 8) const;
     std::string ReadString(std::uint64_t address) const;
