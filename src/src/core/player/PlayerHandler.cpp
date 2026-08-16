@@ -392,14 +392,14 @@ void AddCharacter(const Cheat::Instance& model, Cheat::PlayerCache&& cache,
             cache.displayName = pdn;
     }
 
-    // teamcheck: prefer the standard Roblox Player.Team instance (works in
-    // team games where characters live directly in Workspace); fall back to
-    // the character-parent heuristic (Folder/Model under the char).
+    // teamcheck: the universal check is a plain comparison of Player.Team instances
+    // (the same method proven in other externals). We deliberately do NOT use
+    // TeamColor or character-parent heuristics here — in games like Arsenal,
+    // TeamColor is left neutral/white for everyone, which makes *every* player
+    // look like a friend and hides both teams' ESP.
     cache.team_folder = 0;
     if (player_addr)
         cache.team_folder = Cheat::Player(player_addr).GetTeam();
-    if (!cache.team_folder)
-        cache.team_folder = Cheat::PlayerHandler::ResolveTeamFolder(model.address);
 
     target[model.address] = std::move(cache);
 }
@@ -756,7 +756,7 @@ std::uint64_t Cheat::PlayerHandler::LocalTeamFolder()
         }
     }
 
-    return ResolveTeamFolder(LocalCharacterAddress());
+    return 0;
 }
 
 bool Cheat::PlayerHandler::IsTeammate(const PlayerCache& cache, std::uint64_t local_team_folder)
@@ -764,11 +764,13 @@ bool Cheat::PlayerHandler::IsTeammate(const PlayerCache& cache, std::uint64_t lo
     if (Games::PhantomForces::IsActivePlace())
         return Games::PhantomForces::IsTeammate(cache, local_team_folder);
 
-    if (!local_team_folder || !cache.team_folder)
-        return false;
+    // universal check: same team only if both Player.Team instances are set and
+    // match. If either is unset we return NOT-a-teammate — this never hides the
+    // enemy team and never hides both teams.
     if (!cache.is_player)
         return false;
-    return cache.team_folder == local_team_folder;
+    return local_team_folder && cache.team_folder &&
+           local_team_folder == cache.team_folder;
 }
 
 void Cheat::PlayerHandler::UpdateCache(const Instance& player,
@@ -788,7 +790,7 @@ void Cheat::PlayerHandler::UpdateCache(const Instance& player,
         return;
 
     cache.character = char_addr;
-    cache.team_folder = ResolveTeamFolder(char_addr);
+    cache.team_folder = Player(player.address).GetTeam();
     cache.player_address = player.address;
     cache.user_id = Player(player.address).GetUserId();
     cache.is_player = true;

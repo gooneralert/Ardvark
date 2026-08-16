@@ -1,4 +1,5 @@
 #include "jewsploit_shell.h"
+#include "features/games/PhantomForces.h"
 #include "animation/animation.h"
 #include "colors/colors.h"
 #include "widgets/checkbox.h"
@@ -385,7 +386,7 @@ void menu::draw()
 			{
 				auto pid = Cheat::Globals::InstanceDataModel.GetPlaceId();
 				std::string title;
-				if (pid == 292439477ull || pid == 286090429ull)
+				if (Cheat::Games::PhantomForces::IsActivePlace())
 					title = "Phantom Forces";
 				else if (pid == 863266079ull)
 					title = "Apocalypse Rising 2";

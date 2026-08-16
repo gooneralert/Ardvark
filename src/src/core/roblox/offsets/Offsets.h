@@ -44,7 +44,7 @@ namespace ByteCode {
 }
 
 namespace CachedItem {
-    constexpr uintptr_t FileMeshData = 0x40;
+    constexpr uintptr_t FileMeshData = 0x28;
 }
 
 namespace Camera {
@@ -114,6 +114,10 @@ namespace FileMeshData {
     constexpr uintptr_t VerticesEnd = 0x8;
 }
 
+namespace Fire {
+    constexpr uintptr_t FireProximityPrompt = 0x4F12630;
+}
+
 namespace FunctionDescriptor {
     constexpr uintptr_t Function = 0x80;
 }
@@ -141,7 +145,7 @@ namespace GuiBase2D {
 
 namespace GuiObject {
     constexpr uintptr_t Active = 0x5A8;
-    constexpr uintptr_t AnchorPoint = 0x558;
+    constexpr uintptr_t AnchorPoint = 0x510;
     constexpr uintptr_t AutomaticSize = 0x560;
     constexpr uintptr_t BackgroundColor3 = 0x540;
     constexpr uintptr_t BackgroundTransparency = 0x564;
@@ -219,7 +223,7 @@ namespace Humanoid {
     constexpr uintptr_t MoveToPart = 0x118;
     constexpr uintptr_t MoveToPoint = 0x164;
     constexpr uintptr_t PlatformStand = 0xc5;
-    constexpr uintptr_t PlatformStatePointer = 0x770f4e0e;
+    constexpr uintptr_t PlatformStatePointer = 0x0;
     constexpr uintptr_t WalkTimer = 0x408;
 }
 
@@ -283,7 +287,7 @@ namespace LightingParameters {
 
 namespace LocalScript {
     constexpr uintptr_t Bytecode = 0x190;
-    constexpr uintptr_t Hash = 0x1A0;
+    constexpr uintptr_t Hash = 0xD0;
     constexpr uintptr_t GUID = 0xd0;
 }
 
@@ -292,7 +296,7 @@ namespace LruHolder {
 }
 
 namespace LruNode {
-    constexpr uintptr_t CachedItem = 0x40;
+    constexpr uintptr_t CachedItem = 0x38;
     constexpr uintptr_t MeshId = 0x10;
     constexpr uintptr_t Next = 0x0;
 }
@@ -423,9 +427,9 @@ namespace ProximityPrompt {
 }
 
 namespace RenderView {
+    constexpr uintptr_t DeviceD3D11 = 0x8;
     constexpr uintptr_t LightingValid = 0x228;
     constexpr uintptr_t SkyboxValid = 0x28D;
-    constexpr uintptr_t DeviceD3D11 = 0x8;
     constexpr uintptr_t SkyValid = 0x28d;
     constexpr uintptr_t VisualEngine = 0x10;
 }
@@ -585,7 +589,7 @@ namespace World {
 
 namespace enums {
     enum class ReflectionType : int {
-        Void = 0x0,
+        Null = 0x0,
         Bool = 0x1,
         Int = 0x2,
         Int64 = 0x3,
@@ -598,9 +602,9 @@ namespace enums {
         Ray = 0xA,
         Vector2 = 0xB,
         Vector3 = 0xC,
-        Vector2Int16 = 0xD,
-        Vector3Int16 = 0xE,
-        Rect2d = 0xF,
+        Vector2int16 = 0xD,
+        Vector3int16 = 0xE,
+        Rect2D = 0xF,
         CoordinateFrame = 0x10,
         Color3 = 0x11,
         Color3uint8 = 0x12,
@@ -609,7 +613,7 @@ namespace enums {
         Faces = 0x15,
         Axes = 0x16,
         Region3 = 0x17,
-        Region3Int16 = 0x18,
+        Region3int16 = 0x18,
         CellId = 0x19,
         GuidData = 0x1A,
         PhysicalProperties = 0x1B,
@@ -617,49 +621,76 @@ namespace enums {
         SystemAddress = 0x1D,
         BinaryString = 0x1E,
         Surface = 0x1F,
-        Enum = 0x20,
-        Property = 0x21,
-        Tuple = 0x22,
-        ValueArray = 0x23,
-        ValueTable = 0x24,
-        ValueMap = 0x25,
-        Variant = 0x26,
-        GenericFunction = 0x27,
-        WeakFunctionRef = 0x28,
-        ColorSequence = 0x29,
-        ColorSequenceKeypoint = 0x2A,
-        NumberRange = 0x2B,
-        NumberSequence = 0x2C,
-        NumberSequenceKeypoint = 0x2D,
-        InputObject = 0x2E,
-        Connection = 0x2F,
-        ContentId = 0x30,
-        DescribedBase = 0x31,
-        RefType = 0x32,
-        QFont = 0x33,
-        QDir = 0x34,
-        EventInstance = 0x35,
-        TweenInfo = 0x36,
-        DockWidgetPluginGuiInfo = 0x37,
-        PluginDrag = 0x38,
-        Random = 0x39,
-        PathWaypoint = 0x3A,
-        FloatCurveKey = 0x3B,
-        RotationCurveKey = 0x3C,
-        SharedString = 0x3D,
-        DateTime = 0x3E,
-        RaycastParams = 0x3F,
-        RaycastResult = 0x40,
-        OverlapParams = 0x41,
-        LazyTable = 0x42,
-        DebugTable = 0x43,
-        CatalogSearchParams = 0x44,
-        OptionalCoordinateFrame = 0x45,
-        CSGPropertyData = 0x46,
-        UniqueId = 0x47,
-        Font = 0x48,
-        Blackboard = 0x49,
-        Max = 0x4A,
+        CollectionHandle = 0x20,
+        Enum = 0x21,
+        Property = 0x22,
+        Tuple = 0x23,
+        Array = 0x24,
+        Dictionary = 0x25,
+        Map = 0x26,
+        Variant = 0x27,
+        GenericFunction = 0x28,
+        Function = 0x29,
+        ColorSequence = 0x2A,
+        ColorSequenceKeypoint = 0x2B,
+        NumberRange = 0x2C,
+        NumberSequence = 0x2D,
+        NumberSequenceKeypoint = 0x2E,
+        Connection = 0x30,
+        ContentId = 0x31,
+        DescribedBase = 0x32,
+        RefType = 0x33,
+        EventInstance = 0x36,
+        TweenInfo = 0x37,
+        DockWidgetPluginGuiInfo = 0x38,
+        PluginDrag = 0x39,
+        Random = 0x3A,
+        PathWaypoint = 0x3B,
+        FloatCurveKey = 0x3C,
+        RotationCurveKey = 0x3D,
+        ValueCurveKey = 0x3E,
+        SharedString = 0x3F,
+        DateTime = 0x40,
+        RaycastParams = 0x41,
+        RaycastResult = 0x42,
+        OverlapParams = 0x43,
+        LazyTable = 0x44,
+        DebugTable = 0x45,
+        CatalogSearchParams = 0x46,
+        OptionalCoordinateFrame = 0x47,
+        CSGPropertyData = 0x48,
+        UniqueId = 0x49,
+        Font = 0x4A,
+        SharedTable = 0x4B,
+        SharedTableIterator = 0x4C,
+        AnimationMask = 0x4D,
+        AnimationPose = 0x4E,
+        ClipEvaluator = 0x4F,
+        OpenCloudModel = 0x50,
+        InstanceRef = 0x51,
+        SecurityCapabilities = 0x52,
+        ArticulatedJoint = 0x53,
+        AnimationContext = 0x54,
+        Secret = 0x55,
+        Buffer = 0x56,
+        Integer = 0x57,
+        Path2DControlPoint = 0x58,
+        ReplicationPV = 0x59,
+        FacsReplicationData = 0x5A,
+        AnimationMaskModifier = 0x5B,
+        Content = 0x5C,
+        NetAssetHandle = 0x5D,
+        NetAssetRef = 0x5E,
+        Object = 0x5F,
+        AdReward = 0x60,
+        AssetContentMap = 0x61,
+        SlimReplicationData = 0x62,
+        User = 0x63,
+        WebViewParams = 0x64,
+        AnimTrackPlayState = 0x65,
+        AnimTrackMetadata = 0x66,
+        AnimTrackWeight = 0x67,
+        ScopedInstanceIdentity = 0x68,
     };
 
 }

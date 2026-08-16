@@ -91,7 +91,7 @@ inline void WriteMisc(std::ostringstream& out, const Settings& s)
     PutFloat(out, "misc.fly_speed", s.misc.fly_speed);
     PutInt(out, "misc.fly_key", s.misc.fly_key);
     PutInt(out, "misc.fly_key_mode", s.misc.fly_key_mode);
-    PutInt(out, "misc.fly_method", s.misc.fly_method);
+    PutBool(out, "misc.fly_gravity", s.misc.fly_gravity);
     PutBool(out, "misc.gravity", s.misc.gravity);
     PutFloat(out, "misc.gravity_value", s.misc.gravity_value);
     PutBool(out, "misc.tickrate", s.misc.tickrate);
@@ -132,7 +132,7 @@ inline void ReadMisc(const KV& kv, Settings& s)
     GetFloat(kv, "misc.fly_speed", s.misc.fly_speed);
     GetInt(kv, "misc.fly_key", s.misc.fly_key);
     GetInt(kv, "misc.fly_key_mode", s.misc.fly_key_mode);
-    GetInt(kv, "misc.fly_method", s.misc.fly_method);
+    GetBool(kv, "misc.fly_gravity", s.misc.fly_gravity);
     GetBool(kv, "misc.gravity", s.misc.gravity);
     GetFloat(kv, "misc.gravity_value", s.misc.gravity_value);
     GetBool(kv, "misc.tickrate", s.misc.tickrate);

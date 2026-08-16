@@ -489,7 +489,7 @@ namespace Cheat {
             float fly_speed{ 60.f };
             int   fly_key{ 0 };
             int   fly_key_mode{ 0 };
-            int   fly_method{ 0 }; // 0 = fly (position), 1 = velocity
+            bool  fly_gravity{ true };  // fly zeroes workspace gravity while engaged
 
             bool  gravity{ false };
             float gravity_value{ 196.2f };

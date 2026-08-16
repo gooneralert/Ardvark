@@ -432,10 +432,7 @@ namespace AimTarget {
 
 				if (g_Settings.misc.teamcheck)
 				{
-					if (Games::PhantomForces::IsActivePlace())
-						s.local_team_folder = PlayerHandler::LocalTeamFolder();
-					else
-						s.local_team_folder = PlayerHandler::ResolveTeamFolder(s.local_char);
+					s.local_team_folder = PlayerHandler::LocalTeamFolder();
 				}
 			}
 		}

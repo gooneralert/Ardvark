@@ -203,6 +203,8 @@ void ng_tabs::draw_misc_tab()
 	gap();
 	row_keybind("fly key", "fly key", &Cheat::g_Settings.misc.fly_key, &Cheat::g_Settings.misc.fly_key_mode);
 	gap();
+	ng::checkbox("fly gravity", &Cheat::g_Settings.misc.fly_gravity);
+	gap();
 	row_slider("fly speed", "fly speed", &Cheat::g_Settings.misc.fly_speed, 5.f, 1000.f, true);
 	gap();
 	row_keybind("freecam", "freecam", &Cheat::g_Settings.misc.freecam_key, &Cheat::g_Settings.misc.freecam_mode);

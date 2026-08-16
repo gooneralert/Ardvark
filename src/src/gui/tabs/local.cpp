@@ -20,7 +20,6 @@ void ng_tabs::draw_local_tab()
 	begin_columns(&left_w, &right_w, &h);
 
 	static const std::vector<const char*> ws_modes = { "position", "humanoid" };
-	static const std::vector<const char*> fly_methods = { "Position", "Velocity" };
 	static const std::vector<const char*> anim_pack_names(
 		Features::CharMods::AnimPackNames(),
 		Features::CharMods::AnimPackNames() + Features::CharMods::AnimPackCount());
@@ -43,7 +42,7 @@ void ng_tabs::draw_local_tab()
 		if (m.fly)
 		{
 			row_keybind("##fly_kb", "fly key", &m.fly_key, &m.fly_key_mode);
-			row_combo("fly method", &m.fly_method, fly_methods);
+			row_checkbox("fly gravity", &m.fly_gravity);
 			row_slider_f("fly speed", &m.fly_speed, 5.f, 1000.f, "%.0f");
 		}
 

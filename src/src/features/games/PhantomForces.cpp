@@ -628,6 +628,37 @@ std::uint64_t ResolveTeamFolderForSide(TeamSide side, std::uint64_t ws_players)
     return 0;
 }
 
+// PF shares its place-id offset with other games, but the offset read can be
+// stale and report 292439477 in *any* game (e.g. Arsenal). PF is unmistakable by
+// structure though: every player lives under a Workspace.Players folder that
+// holds team folders. Verify that so non-PF games are never treated as PF.
+bool HasPfWorkspaceStructure()
+{
+    static std::uint64_t s_last_ms = 0;
+    static bool s_result = false;
+
+    const std::uint64_t now = GetTickCount64();
+    if (s_last_ms != 0 && (now - s_last_ms) < 500)
+        return s_result;
+    s_last_ms = now;
+
+    s_result = false;
+    const std::uint64_t ws_players = FindWorkspacePlayersFolder();
+    if (g_Memory.IsValid(ws_players))
+    {
+        for (const auto& child : Instance(ws_players).GetChildren())
+        {
+            if (!g_Memory.IsValid(child.address))
+                continue;
+            if (Instance(child.address).GetClassName() == "Folder")
+            {
+                s_result = true;
+                break;
+            }
+        }
+    }
+    return s_result;
+}
 } // namespace
 
 bool IsActivePlace()
@@ -636,7 +667,12 @@ bool IsActivePlace()
         return false;
     if (!g_Memory.IsValid(Globals::InstanceDataModel.address))
         return false;
-    const bool on = Globals::InstanceDataModel.GetPlaceId() == kPlaceId;
+    // A single hardcoded place-id read is not enough: if that offset is stale it
+    // can report 292439477 in *any* game (e.g. Arsenal). Also require the
+    // distinctive PF structure (Workspace.Players folder-of-team-folders), so
+    // only real Phantom Forces is ever treated as PF.
+    const bool id_match = Globals::InstanceDataModel.GetPlaceId() == kPlaceId;
+    const bool on = id_match && HasPfWorkspaceStructure();
     static bool s_was_on = false;
     if (on && !s_was_on)
         g_Settings.misc.teamcheck = true;

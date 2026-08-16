@@ -10,6 +10,7 @@
 #include "core/memory/Memory.h"
 #include "core/roblox/classes/Classes.h"
 #include "core/roblox/offsets/Offsets.h"
+#include "features/games/PhantomForces.h"
 
 #undef GetClassName
 
@@ -147,7 +148,7 @@ namespace widgets
 		{
 			auto pid = Cheat::Globals::InstanceDataModel.GetPlaceId();
 			std::string title;
-			if (pid == 292439477ull || pid == 286090429ull)
+			if (Cheat::Games::PhantomForces::IsActivePlace())
 				title = "Phantom Forces";
 			else if (pid == 863266079ull)
 				title = "Apocalypse Rising 2";

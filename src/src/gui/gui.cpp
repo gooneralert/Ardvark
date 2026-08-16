@@ -12,6 +12,7 @@
 #include "app/Settings.h"
 #include "core/globals/Globals.h"
 #include "core/roblox/classes/Classes.h"
+#include "features/games/PhantomForces.h"
 #include "imgui.h"
 #include "imgui_internal.h"
 #include "widgets/widgets.h"
@@ -514,7 +515,7 @@ namespace gui
         {
             auto pid = Cheat::Globals::InstanceDataModel.GetPlaceId();
             std::string title;
-            if (pid == 292439477ull || pid == 286090429ull)
+            if (Cheat::Games::PhantomForces::IsActivePlace())
                 title = "Phantom Forces";
             else if (pid == 863266079ull)
                 title = "Apocalypse Rising 2";

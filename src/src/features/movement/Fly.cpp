@@ -1,7 +1,11 @@
-﻿#include "pch.h"
+#include "pch.h"
 #include "Fly.h"
-#include "FlyHelpers.h"
 
+#include "core/globals/Globals.h"
+#include "core/memory/Memory.h"
+#include "core/roblox/offsets/Offsets.h"
+#include "core/roblox/classes/Classes.h"
+#include "renderer/Renderer.h"
 #include "app/Settings.h"
 
 #include <Windows.h>
@@ -15,233 +19,266 @@
 
 namespace {
 
-using clock = std::chrono::steady_clock;
-using namespace Cheat::Features::Fly::helpers;
+using namespace Cheat;
 
-std::atomic<bool> g_fly_run{ false };
-std::thread g_fly_th;
+// Ported verbatim from charm-main's movement module:
+//   * `fly`                     (movement.cpp, ~line 3973)
+//   * `get_camera_fly_basis`    (movement.cpp, ~line 1153)
+//   * `fly_direction_from_keys` (movement.cpp, ~line 1225)
+//   * `write_velocity_stable`   (movement.cpp, ~line 1181)
+//
+// Velocity-based flight: while the bind is engaged the workspace gravity is
+// hidden and the local HumanoidRootPart primitive is pushed along the camera
+// basis scaled by (max(0.1, fly_speed) * kMoveSpeedMultiplier).
 
-// Faithful port of FoulzExternal flight.cs:
-//   method 0 = "Position" -> accumulate position, write Position + zero velocity
-//   method 1 = "Velocity" -> write AssemblyLinearVelocity (full 3D camera basis)
-void fly_loop()
+constexpr float kMoveSpeedMultiplier = 2.5f;   // charm kMovementSpeedMultiplier
+constexpr float kFallbackGravity     = 192.2f; // fallback workspace gravity
+
+std::atomic<bool> g_run{ false };
+std::thread       g_th;
+
+bool key_down(int vk)
 {
-	Vector3 fly_pos{};
-	bool has_fly_pos = false;
-	bool tog = false;
-	bool was_key = false;
-
-	fly_snap cached{};
-	auto last_res = clock::now() - std::chrono::seconds(1);
-	const auto clock0 = clock::now();
-	double prev = 0.0;
-
-	auto elapsed_s = [&]() -> double
-	{
-		return std::chrono::duration<double>(clock::now() - clock0).count();
-	};
-
-	while (g_fly_run.load(std::memory_order_relaxed))
-	{
-		if (!Cheat::g_Settings.misc.fly)
-		{
-			tog = false;
-			was_key = false;
-			has_fly_pos = false;
-			std::this_thread::sleep_for(std::chrono::milliseconds(50));
-			continue;
-		}
-
-		const bool focus = roblox_focused();
-		const bool can_tog = focus || Cheat::g_Settings.misc.fly_key == 0;
-		bool key_on = false;
-		if (can_tog)
-		{
-			key_on = key_gate(
-				Cheat::g_Settings.misc.fly_key,
-				Cheat::g_Settings.misc.fly_key_mode,
-				tog,
-				was_key);
-		}
-
-		if (!key_on)
-		{
-			prev = elapsed_s();
-			has_fly_pos = false;
-			std::this_thread::sleep_for(std::chrono::milliseconds(5));
-			continue;
-		}
-
-		const auto now = clock::now();
-		if (!cached.hrp || !cached.cam)
-		{
-			if ((now - last_res) > std::chrono::milliseconds(50))
-			{
-				cached = grab_local();
-				last_res = now;
-			}
-		}
-		else if ((now - last_res) > std::chrono::milliseconds(250))
-		{
-			touch_ptrs(cached);
-			last_res = now;
-		}
-
-		if (cached.address == 0 || !cached.prim || !cached.cam)
-		{
-			prev = elapsed_s();
-			has_fly_pos = false;
-			std::this_thread::sleep_for(std::chrono::milliseconds(2));
-			continue;
-		}
-
-		// timing (Math.Clamp like flight.cs)
-		double now_s = elapsed_s();
-		float dt = (float)(now_s - prev);
-		if (dt < 0.0001f) dt = 0.0001f;
-		if (dt > 0.05f) dt = 0.05f;
-		prev = now_s;
-
-		mat3 rot{};
-		if (!raw_read(cached.cam + ::Camera::Rotation, &rot, sizeof(rot)))
-		{
-			prev = elapsed_s();
-			std::this_thread::sleep_for(std::chrono::milliseconds(2));
-			continue;
-		}
-
-		// camera look projected onto the XZ plane (yaw only)
-		const float lookX = -rot._13;   // -r02
-		const float lookZ = -rot._33;   // -r22
-		const float yawLen = std::sqrt(lookX * lookX + lookZ * lookZ);
-
-		Vector3 forward, right;
-		if (yawLen > 0.001f)
-		{
-			forward = Vector3(lookX / yawLen, 0.0f, lookZ / yawLen);
-			right = Vector3(-forward.z, 0.0f, forward.x);
-		}
-		else
-		{
-			forward = Vector3(0.0f, 0.0f, -1.0f);
-			right = Vector3(1.0f, 0.0f, 0.0f);
-		}
-		const Vector3 worldUp(0.0f, 1.0f, 0.0f);
-
-		if (!has_fly_pos)
-		{
-			fly_pos = peek<Vector3>(cached.prim + ::Primitive::Position);
-			has_fly_pos = true;
-		}
-
-		const float speed = Cheat::g_Settings.misc.fly_speed;
-		auto held = [](int vk) -> bool
-		{
-			return (GetAsyncKeyState(vk) & 0x8000) != 0;
-		};
-
-		Vector3 moveDir{};
-		if (focus)
-		{
-			if (held(0x57)) moveDir += forward;   // W
-			if (held(0x53)) moveDir -= forward;   // S
-			if (held(0x41)) moveDir -= right;     // A
-			if (held(0x44)) moveDir += right;     // D
-			if (held(0x20)) moveDir += worldUp;   // Space
-			if (held(0xA0)) moveDir -= worldUp;   // LShift
-		}
-
-		const bool moving = moveDir.Length() > 0.001f;
-		const int method = Cheat::g_Settings.misc.fly_method;
-
-		if (method == 0)
-		{
-			// Position-based (accumulate position)
-			if (moving)
-			{
-				moveDir.Normalize();
-				fly_pos = fly_pos + moveDir * speed * dt;
-			}
-			poke(cached.prim + ::Primitive::Position, fly_pos);
-			Vector3 zero{};
-			poke(cached.prim + ::Primitive::AssemblyLinearVelocity, zero);
-		}
-		else
-		{
-			// Velocity-based
-			Vector3 velocity{};
-			if (moving)
-			{
-				moveDir.Normalize();
-				velocity = moveDir * speed;
-			}
-			poke(cached.prim + ::Primitive::AssemblyLinearVelocity, velocity);
-
-			// full 3D camera direction override so WASD works when looking up/down
-			Vector3 fullForward(-rot._13, -rot._23, -rot._33);
-			Vector3 fullRight(rot._11, rot._21, rot._31);
-			Vector3 fullUp(rot._12, rot._22, rot._32);
-			Vector3 vel3d{};
-			if (focus)
-			{
-				if (held(0x57)) vel3d += fullForward;   // W
-				if (held(0x53)) vel3d -= fullForward;   // S
-				if (held(0x41)) vel3d -= fullRight;     // A
-				if (held(0x44)) vel3d += fullRight;     // D
-				if (held(0x20)) vel3d += fullUp;        // Space
-				if (held(0xA0)) vel3d -= fullUp;        // Shift
-			}
-			if (vel3d.Length() > 0.001f)
-			{
-				vel3d.Normalize();
-				poke(cached.prim + ::Primitive::AssemblyLinearVelocity, vel3d * speed);
-			}
-		}
-
-		Vector3 zero{};
-		poke(cached.prim + ::Primitive::AssemblyAngularVelocity, zero);
-
-		// fake shift lock: rotate character to face camera yaw
-		if (yawLen > 0.001f)
-		{
-			mat3 cr;
-			cr._11 = -forward.z; cr._12 = 0.0f; cr._13 = -forward.x;
-			cr._21 = 0.0f;        cr._22 = 1.0f; cr._23 = 0.0f;
-			cr._31 =  forward.x;  cr._32 = 0.0f; cr._33 = -forward.z;
-			poke(cached.prim + ::Primitive::Rotation, cr);
-		}
-
-		// noclip while flying
-		{
-			std::uint8_t flags = peek<std::uint8_t>(cached.prim + ::Primitive::Flags);
-			std::uint8_t clean = (std::uint8_t)(flags & ~(std::uint8_t)::PrimitiveFlags::CanCollide);
-			if (flags != clean)
-				poke<std::uint8_t>(cached.prim + ::Primitive::Flags, clean);
-		}
-
-		std::this_thread::sleep_for(std::chrono::milliseconds(1));
-	}
-
-	{
-		auto s = grab_local();
-		if (s.address != 0 && s.prim)
-			zero_vel(s.prim);
-	}
+    return (GetAsyncKeyState(vk) & 0x8000) != 0;
 }
 
-} // anonymous namespace
+// key modes: 0 = hold, 1 = toggle, 2 = always (mirrors the fly UI / Speed)
+bool key_gate(int key, int mode, bool& tog, bool& was)
+{
+    if (mode == 2 || key == 0)
+        return true;
+
+    const bool down = key_down(key);
+    if (mode == 1)
+    {
+        if (down && !was)
+            tog = !tog;
+        was = down;
+        return tog;
+    }
+
+    was = down;
+    return down;
+}
+
+// charm workspace.SetWorkspaceGravity() pointer chain (Workspace::World).
+std::uint64_t world_instance()
+{
+    if (!Globals::Workspace || !g_Memory.IsValid(Globals::Workspace->address))
+        return 0;
+    return g_Memory.Read<std::uint64_t>(Globals::Workspace->address + ::Workspace::World);
+}
+
+// charm: Players().GetLocalPlayer().GetCharacter().FindFirstChild("HumanoidRootPart")
+// resolved down to its primitive (SetPartVelocity writes to the primitive).
+std::uint64_t local_root_primitive()
+{
+    if (!Globals::Players || !g_Memory.IsValid(Globals::Players->address))
+        return 0;
+
+    const std::uint64_t lp = g_Memory.Read<std::uint64_t>(Globals::Players->address + ::Players::LocalPlayer);
+    if (!g_Memory.IsValid(lp))
+        return 0;
+
+    const std::uint64_t character = g_Memory.Read<std::uint64_t>(lp + ::Player::ModelInstance);
+    if (!g_Memory.IsValid(character))
+        return 0;
+
+    std::uint64_t hrp = 0;
+    auto hum = Cheat::Instance(character).FindFirstChild("Humanoid");
+    if (hum && g_Memory.IsValid(hum->address))
+        hrp = Cheat::Humanoid(hum->address).GetRootPartAddress();
+
+    if (!g_Memory.IsValid(hrp))
+    {
+        auto root = Cheat::Instance(character).FindFirstChild("HumanoidRootPart");
+        if (root)
+            hrp = root->address;
+    }
+
+    if (!g_Memory.IsValid(hrp))
+        return 0;
+
+    return g_Memory.Read<std::uint64_t>(hrp + ::BasePart::Primitive);
+}
+
+Vector3 normalize_or(Vector3 v, const Vector3& fallback)
+{
+    const float len_sq = v.LengthSquared();
+    if (len_sq > 1e-6f && std::isfinite(len_sq))
+        return v.Normalized();
+    return fallback;
+}
+
+// charm get_camera_fly_basis(): columns of the camera's 3x3 rotation.
+void camera_fly_basis(std::uint64_t cam, Vector3& forward, Vector3& right, Vector3& up)
+{
+    if (!g_Memory.IsValid(cam))
+    {
+        forward = { 0.0f, 0.0f, -1.0f };
+        right   = { 1.0f, 0.0f, 0.0f };
+        up      = { 0.0f, 1.0f, 0.0f };
+        return;
+    }
+
+    float rot[9]{};
+    g_Memory.ReadRaw(cam + ::Camera::Rotation, rot, sizeof(rot));
+
+    right   = normalize_or(Vector3(rot[0], rot[3], rot[6]), Vector3(1.0f, 0.0f, 0.0f));
+    up      = normalize_or(Vector3(rot[1], rot[4], rot[7]), Vector3(0.0f, 1.0f, 0.0f));
+    forward = normalize_or(Vector3(rot[2], rot[5], rot[8]), Vector3(0.0f, 0.0f, 1.0f));
+}
+
+// charm fly_direction_from_keys() — W/S/A/D + Space/Ctrl/Shift.
+Vector3 fly_direction_from_keys(const Vector3& forward, const Vector3& right, const Vector3& up)
+{
+    Vector3 dir(0.0f, 0.0f, 0.0f);
+
+    if (key_down('W')) dir = dir - forward;
+    if (key_down('S')) dir = dir + forward;
+    if (key_down('A')) dir = dir - right;
+    if (key_down('D')) dir = dir + right;
+    if (key_down(VK_SPACE)) dir = dir + up;
+    if (key_down(VK_CONTROL) || key_down(VK_LSHIFT) || key_down(VK_SHIFT))
+        dir = dir - up;
+
+    return dir;
+}
+
+// Writes the velocity as a short, dense burst (no ~1 ms wall-clock throttle).
+// The previous hammer blocked the loop for up to 1 ms, so a direction change
+// wasn't sampled until that hammer finished — that was the last bit of delay
+// felt when not in shiftlock. A fixed burst returns in microseconds, so the
+// main loop re-reads keys/camera almost immediately, while still writing far
+// more often than a physics tick so the direction can't get overridden.
+void write_velocity(std::uint64_t primitive, const Vector3& velocity)
+{
+    if (!g_Memory.IsValid(primitive))
+        return;
+
+    const std::uint64_t addr = primitive + ::Primitive::AssemblyLinearVelocity;
+    for (int i = 0; i < 256; ++i)
+        g_Memory.Write<Vector3>(addr, velocity);
+}
+
+void restore_gravity_robust(bool& overridden, float original)
+{
+    if (!overridden)
+        return;
+
+    const std::uint64_t world = world_instance();
+    if (!world)
+    {
+        overridden = false;
+        return;
+    }
+
+    // A single write sometimes doesn't stick (the game keeps gravity at 0),
+    // so write the original value back three times, ~0.1s apart.
+    for (int i = 0; i < 3; ++i)
+    {
+        g_Memory.Write<float>(world + ::World::Gravity, original);
+        if (i < 2)
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
+    overridden = false;
+}
+
+void fly_loop()
+{
+    bool  gravity_overridden = false;
+    float original_gravity   = kFallbackGravity;
+    bool  fly_active         = false;
+    bool  fly_was            = false;
+
+    while (g_run.load(std::memory_order_relaxed))
+    {
+        const auto& s = g_Settings.misc;
+
+        if (!s.fly)
+        {
+            restore_gravity_robust(gravity_overridden, original_gravity);
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            continue;
+        }
+
+        const bool engaged = key_gate(s.fly_key, s.fly_key_mode, fly_active, fly_was);
+        if (!engaged)
+        {
+            restore_gravity_robust(gravity_overridden, original_gravity);
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            continue;
+        }
+
+        const std::uint64_t primitive = local_root_primitive();
+        if (!primitive)
+        {
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            continue;
+        }
+
+        const std::uint64_t world = world_instance();
+        if (s.fly_gravity)
+        {
+            // toggle ON: zero the workspace gravity while engaged (charm behaviour)
+            if (!gravity_overridden && world)
+            {
+                original_gravity   = g_Memory.Read<float>(world + ::World::Gravity);
+                g_Memory.Write<float>(world + ::World::Gravity, 0.0f);
+                gravity_overridden = true;
+            }
+        }
+        else
+        {
+            // toggle OFF: leave gravity completely untouched
+            restore_gravity_robust(gravity_overridden, original_gravity);
+        }
+
+        std::uint64_t cam = 0;
+        if (Globals::Workspace && g_Memory.IsValid(Globals::Workspace->address))
+            cam = g_Memory.Read<std::uint64_t>(Globals::Workspace->address + ::Workspace::CurrentCamera);
+
+        Vector3 forward, right, up;
+        camera_fly_basis(cam, forward, right, up);
+
+        const Vector3 direction = fly_direction_from_keys(forward, right, up);
+
+        if (direction.LengthSquared() > 1e-6f)
+        {
+            const Vector3 norm   = direction.Normalized();
+            const float   speed  = (s.fly_speed > 0.1f ? s.fly_speed : 0.1f) * kMoveSpeedMultiplier;
+            write_velocity(primitive,
+                Vector3(norm.x * speed, norm.y * speed, norm.z * speed));
+        }
+        else
+        {
+            write_velocity(primitive, Vector3(0.0f, 0.0f, 0.0f));
+        }
+
+        // No sleep here: keep writing the velocity continuously so the
+        // humanoid/physics never get a gap in which to override the direction
+        // (this is what caused the "delayed direction" feel out of shiftlock).
+        // write_velocity() already hammers for ~1ms per pass, so the loop still
+        // cycles at its natural minimum rate without a dead band.
+        std::this_thread::yield();
+    }
+
+    restore_gravity_robust(gravity_overridden, original_gravity);
+}
+
+} // namespace
 
 void Cheat::Features::Fly::Start()
 {
-	if (g_fly_run.load())
-		return;
-	g_fly_run.store(true);
-	g_fly_th = std::thread(fly_loop);
+    if (g_run.load())
+        return;
+    g_run.store(true);
+    g_th = std::thread(fly_loop);
 }
 
 void Cheat::Features::Fly::Stop()
 {
-	g_fly_run.store(false);
-	if (g_fly_th.joinable())
-		g_fly_th.join();
+    g_run.store(false);
+    if (g_th.joinable())
+        g_th.join();
 }

@@ -593,6 +593,7 @@ bool Save(const std::string& name)
     PutBool(out, "misc.fly", s.misc.fly);
     PutFloat(out, "misc.fly_speed", s.misc.fly_speed);
     PutInt(out, "misc.fly_key", s.misc.fly_key);
+    PutBool(out, "misc.fly_gravity", s.misc.fly_gravity);
     PutBool(out, "misc.third_person", s.misc.third_person);
     PutInt(out, "misc.third_person_key", s.misc.third_person_key);
     PutInt(out, "misc.third_person_mode", s.misc.third_person_mode);
@@ -976,6 +977,7 @@ bool Load(const std::string& name)
     GetBool(kv, "misc.fly", s.misc.fly);
     GetFloat(kv, "misc.fly_speed", s.misc.fly_speed);
     GetInt(kv, "misc.fly_key", s.misc.fly_key);
+    GetBool(kv, "misc.fly_gravity", s.misc.fly_gravity);
     GetBool(kv, "misc.third_person", s.misc.third_person);
     GetInt(kv, "misc.third_person_key", s.misc.third_person_key);
     GetInt(kv, "misc.third_person_mode", s.misc.third_person_mode);
