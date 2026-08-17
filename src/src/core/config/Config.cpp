@@ -380,6 +380,7 @@ bool Save(const std::string& name)
     PutInt(out, "esp.mesh_chams_style", s.esp.mesh_chams_style);
     PutInt(out, "esp.mesh_chams_dx_mode_v3", s.esp.mesh_chams_dx_mode);
     PutBool(out, "esp.mesh_chams_occlusion", s.esp.mesh_chams_occlusion);
+    PutBool(out, "esp.occluded_chams", s.esp.occluded_chams);
     PutInt(out, "esp.mesh_chams_occluded_dx_mode_v3", s.esp.mesh_chams_occluded_dx_mode);
     PutF4(out, "esp.mesh_chams_occluded_color", s.esp.mesh_chams_occluded_color);
     PutF4(out, "esp.mesh_chams_occluded_outline_color", s.esp.mesh_chams_occluded_outline_color);
@@ -709,6 +710,7 @@ bool Load(const std::string& name)
     GetInt(kv, "esp.mesh_chams_style", s.esp.mesh_chams_style);
     LoadMeshDxMode(kv, s.esp.mesh_chams_dx_mode);
     GetBool(kv, "esp.mesh_chams_occlusion", s.esp.mesh_chams_occlusion);
+    GetBool(kv, "esp.occluded_chams", s.esp.occluded_chams);
     LoadMeshDxOccludedMode(kv, s.esp.mesh_chams_occluded_dx_mode);
     GetF4(kv, "esp.mesh_chams_occluded_color", s.esp.mesh_chams_occluded_color);
     GetF4(kv, "esp.mesh_chams_occluded_outline_color", s.esp.mesh_chams_occluded_outline_color);

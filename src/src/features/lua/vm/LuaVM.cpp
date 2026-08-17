@@ -50,6 +50,9 @@ std::mutex g_lua_mu;
 std::atomic<bool> g_busy{ false };
 std::atomic<bool> g_tick_run{ false };
 std::thread g_tick_th;
+// set from the UI thread when a restart is requested while the VM lock is busy;
+// the tick thread applies it once it can take the lock (next script yield).
+std::atomic<bool> g_restart_pending{ false };
 
 // SEH guard around lua_resume (POD-only function so __try is allowed). A fault
 // inside the Lua VM becomes LUA_ERRRUN instead of killing the whole external.
@@ -1947,6 +1950,12 @@ void RegisterHttp(lua_State* L)
 std::unordered_map<std::string, std::string> g_fflags;
 bool g_input_enabled = true;
 
+// How long to hold a synthesized mouse button between press and release so
+// Roblox actually registers a click. Back-to-back SendInput DOWN+UP events can
+// be coalesced/dropped by the game loop, which reads as "the script never
+// clicks" on an external (non-injected) executor. A few ms of hold fixes that.
+constexpr DWORD kClickHoldMs = 15;
+
 // --- clipboard ---
 int l_setclipboard(lua_State* L)
 {
@@ -2271,6 +2280,23 @@ void send_mouse(DWORD flags)
 	SendInput(1, &in, sizeof(in));
 }
 
+// Translates a point given in the Roblox viewport's coordinate space (origin
+// top-left, same space as WorldToScreen / Camera.ViewportSize) into real screen
+// coordinates for SetCursorPos. The viewport fills the game window's client
+// rect, so map through that window (fall back to the overlay hwnd if the game
+// window isn't available yet), mirroring the aim/esp modules.
+void viewport_to_screen(LONG& x, LONG& y)
+{
+	POINT pt{ x, y };
+	HWND hwnd = Renderer::GetGameHwnd();
+	if (!hwnd || !IsWindow(hwnd))
+		hwnd = Renderer::GetHwnd();
+	if (hwnd && IsWindow(hwnd))
+		ClientToScreen(hwnd, &pt);
+	x = pt.x;
+	y = pt.y;
+}
+
 int l_setrobloxinput(lua_State* L)
 {
 	g_input_enabled = lua_toboolean(L, 1) != 0;
@@ -2322,6 +2348,7 @@ int l_mouse1click(lua_State* L)
 	if (g_input_enabled)
 	{
 		send_mouse(MOUSEEVENTF_LEFTDOWN);
+		Sleep(kClickHoldMs);
 		send_mouse(MOUSEEVENTF_LEFTUP);
 	}
 	return 0;
@@ -2344,6 +2371,7 @@ int l_mouse2click(lua_State* L)
 	if (g_input_enabled)
 	{
 		send_mouse(MOUSEEVENTF_RIGHTDOWN);
+		Sleep(kClickHoldMs);
 		send_mouse(MOUSEEVENTF_RIGHTUP);
 	}
 	return 0;
@@ -2351,11 +2379,14 @@ int l_mouse2click(lua_State* L)
 
 int l_mousemoveabs(lua_State* L)
 {
-	POINT pt{ static_cast<LONG>(luaL_checkinteger(L, 1)),
-		static_cast<LONG>(luaL_checkinteger(L, 2)) };
-	if (HWND h = Renderer::GetHwnd())
-		ClientToScreen(h, &pt);
-	SetCursorPos(pt.x, pt.y);
+	// matcha: mousemoveabs takes Roblox viewport pixels (top-left origin, same
+	// space as WorldToScreen / Camera.ViewportSize) — a WorldToScreen result can
+	// be fed straight in. Convert those viewport coords to real screen coords
+	// through the game window's client rect before warping the cursor.
+	LONG x = static_cast<LONG>(luaL_checkinteger(L, 1));
+	LONG y = static_cast<LONG>(luaL_checkinteger(L, 2));
+	viewport_to_screen(x, y);
+	SetCursorPos(x, y);
 	return 0;
 }
 
@@ -2830,6 +2861,45 @@ void wipe_script_signals()
 	lua_gc(g_L, LUA_GCCOLLECT, 0);
 }
 
+// Called with g_lua_mu held. Stops every running/yielded script thread, drops
+// all Drawing objects, and resets the per-execution poll caches so the VM is
+// a clean slate for the next script.
+void ResetLocked()
+{
+	if (!g_L)
+		return;
+
+	// waits/conns/sigwaits/delays + snapshot/bus caches + a gc collect
+	wipe_script_signals();
+
+	// drop on-screen drawings (fish bar / debug boxes esp.)
+	LuaDrawing::Clear();
+
+	// reset poll "seed"/seen caches so the new script re-fires signals cleanly
+	g_plr_seeded = false;
+	g_seen_plr.clear();
+	g_seen_char.clear();
+	g_input_seeded = false;
+	std::memset(g_key_down, 0, sizeof(g_key_down));
+	g_poll_tick = 0;
+}
+
+void Restart()
+{
+	std::unique_lock<std::mutex> lock(g_lua_mu, std::try_to_lock);
+	if (lock.owns_lock())
+	{
+		ResetLocked();
+		LogInfo("[Executor] Restarted — ready for a new script");
+	}
+	else
+	{
+		// a script is mid-run on the execute thread: apply on its next yield
+		g_restart_pending.store(true);
+		LogInfo("[Executor] Next script still running — Restart will apply when it yields");
+	}
+}
+
 void ExecuteLocked(const std::string& source, const std::string& name)
 {
 	if (!g_L)
@@ -2912,6 +2982,12 @@ void Tick(float dt)
 
 	if (!g_L)
 		return;
+
+	if (g_restart_pending.exchange(false))
+	{
+		ResetLocked();
+		LogInfo("[Executor] Restart applied");
+	}
 
 	++g_poll_tick;
 

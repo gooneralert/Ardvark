@@ -156,19 +156,26 @@ void ng_tabs::draw_esp_tab()
 					row_slider_f("outline fade", &g_Settings.esp.mesh_chams_outline_fade,
 					             0.35f, 3.0f, "%.2f");
 				}
-
-				row_checkbox_color("occluded", &g_Settings.esp.mesh_chams_occlusion,
-				                   g_Settings.esp.mesh_chams_occluded_color);
-
-				if (g_Settings.esp.mesh_chams_occlusion)
-				{
-					row_combo("occluded shader", &g_Settings.esp.mesh_chams_occluded_dx_mode,
-					          names_vec(Visuals::MeshDxShader::ModeNames(),
-					                    Visuals::MeshDxShader::ModeNameCount()));
-					clamp_i(&g_Settings.esp.mesh_chams_occluded_dx_mode, 0,
-					        Visuals::MeshDxShader::ModeNameCount() - 1);
-				}
 			}
+		}
+
+		// occluded chams — master switch, always visible; turns on mesh + occlusion
+		row_checkbox_color("occluded chams", &g_Settings.esp.occluded_chams,
+		                   g_Settings.esp.mesh_chams_occluded_color);
+		if (g_Settings.esp.occluded_chams)
+		{
+			// когда мастер вкл — выставляем зависимые настройки
+			g_Settings.esp.chams = true;
+			g_Settings.esp.chams_mode = 4;
+			g_Settings.esp.mesh_chams_occlusion = true;
+			// occlusion needs the raycast occluder cache
+			g_Settings.misc.raycast_engine = true;
+
+			row_combo("occluded shader", &g_Settings.esp.mesh_chams_occluded_dx_mode,
+			          names_vec(Visuals::MeshDxShader::ModeNames(),
+			                    Visuals::MeshDxShader::ModeNameCount()));
+			clamp_i(&g_Settings.esp.mesh_chams_occluded_dx_mode, 0,
+			        Visuals::MeshDxShader::ModeNameCount() - 1);
 		}
 
 		row_checkbox("engine chams", &g_Settings.esp.engine_chams);

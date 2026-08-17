@@ -874,6 +874,16 @@ void Cheat::Visuals::ESP::Render()
     // flags вырезаны — старый конфиг не вернёт
     Cheat::g_Settings.esp.flags = false;
     Cheat::g_Settings.esp.bot_esp[Cheat::Settings::BOT_FLAGS] = false;
+
+    // «occluded chams» master switch — всегда показывает себя; включает mesh + occlusion
+    if (Cheat::g_Settings.esp.occluded_chams)
+    {
+        Cheat::g_Settings.esp.chams = true;
+        Cheat::g_Settings.esp.chams_mode = 4;              // mesh
+        Cheat::g_Settings.esp.mesh_chams_occlusion = true; // raycast/depth occlusion
+        Cheat::g_Settings.misc.raycast_engine = true;      // occlusion needs the occluder cache
+    }
+
     if (!Cheat::Globals::Workspace || !Cheat::Globals::InstanceDataModel.address) return;
 
     auto camera_ptr = Cheat::Globals::Workspace->GetCurrentCamera();

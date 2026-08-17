@@ -14,6 +14,11 @@ void Shutdown();
 // true = ok; ошибка уже в output executor
 bool Execute(const std::string& source, const char* chunk_name = "script");
 
+// stop all running/yielded script threads, drop drawings, reset poll state so
+// the VM is ready to run a fresh script (non-blocking: if a script is mid-run
+// it applies when that script next yields).
+void Restart();
+
 lua_State* State();
 bool Ready();
 

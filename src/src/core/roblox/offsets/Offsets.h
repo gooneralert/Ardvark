@@ -138,7 +138,7 @@ namespace Functions {
 }
 
 namespace GuiBase2D {
-    constexpr uintptr_t AbsolutePosition = 0x108;
+    constexpr uintptr_t AbsolutePosition = 0x10c;
     constexpr uintptr_t AbsoluteRotation = 0xE8;
     constexpr uintptr_t AbsoluteSize = 0x114;
 }

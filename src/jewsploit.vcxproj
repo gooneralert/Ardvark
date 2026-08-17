@@ -84,6 +84,9 @@
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
     </ClCompile>
     <Link>
+      <!-- Prebuilt freetype.lib was built with the static CRT and references a freetype.pdb that is not shipped;
+           drop its LIBCMT defaultlib (MSVCRT provides the same CRT symbols) and suppress LNK4099 (missing PDB). -->
+      <AdditionalOptions>/NODEFAULTLIB:LIBCMT /ignore:4099 %(AdditionalOptions)</AdditionalOptions>
       <SubSystem>Console</SubSystem>
       <StackReserveSize>8388608</StackReserveSize>
       <GenerateDebugInformation>true</GenerateDebugInformation>
@@ -110,6 +113,9 @@
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
     </ClCompile>
     <Link>
+      <!-- Prebuilt freetype.lib was built with the static CRT and references a freetype.pdb that is not shipped;
+           drop its LIBCMT defaultlib (MSVCRT provides the same CRT symbols) and suppress LNK4099 (missing PDB). -->
+      <AdditionalOptions>/NODEFAULTLIB:LIBCMT /ignore:4099 %(AdditionalOptions)</AdditionalOptions>
       <SubSystem>Console</SubSystem>
       <StackReserveSize>8388608</StackReserveSize>
       <GenerateDebugInformation>true</GenerateDebugInformation>
@@ -136,6 +142,9 @@
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
     </ClCompile>
     <Link>
+      <!-- Prebuilt freetype.lib was built with the static CRT and references a freetype.pdb that is not shipped;
+           drop its LIBCMT defaultlib (MSVCRT provides the same CRT symbols) and suppress LNK4099 (missing PDB). -->
+      <AdditionalOptions>/NODEFAULTLIB:LIBCMT /ignore:4099 %(AdditionalOptions)</AdditionalOptions>
       <SubSystem>Console</SubSystem>
       <StackReserveSize>8388608</StackReserveSize>
       <GenerateDebugInformation>true</GenerateDebugInformation>
@@ -162,6 +171,9 @@
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
     </ClCompile>
     <Link>
+      <!-- Prebuilt freetype.lib was built with the static CRT and references a freetype.pdb that is not shipped;
+           drop its LIBCMT defaultlib (MSVCRT provides the same CRT symbols) and suppress LNK4099 (missing PDB). -->
+      <AdditionalOptions>/NODEFAULTLIB:LIBCMT /ignore:4099 %(AdditionalOptions)</AdditionalOptions>
       <SubSystem>Console</SubSystem>
       <StackReserveSize>8388608</StackReserveSize>
       <GenerateDebugInformation>true</GenerateDebugInformation>

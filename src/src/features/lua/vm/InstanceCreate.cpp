@@ -7,8 +7,6 @@
 #include "core/roblox/offsets/Offsets.h"
 
 #include <cstring>
-#include <string>
-#include <unordered_map>
 
 namespace Cheat {
 namespace Features {
@@ -17,10 +15,6 @@ namespace {
 
 int g_last_fail = 0;
 
-// isCreatable (ICreator vtable slot 0x10) — кешируем, ответ по классу не меняется
-std::unordered_map<std::string, bool> g_creatable;
-std::uintptr_t g_creatable_base = 0;
-
 } // namespace
 
 int LastFail()
@@ -28,8 +22,15 @@ int LastFail()
 	return g_last_fail;
 }
 
-// вся резолвка — чтения, но create обязан идти на потоке движка:
-// внутри учётный аллокатор и flyweight-таблица имён под мьютексом
+// Резолвка — чтения. Сама create идёт через CallGate: аsm-стаб исполняет
+// create(this, result, 0) на потоке движка. Это guide-метод:
+//
+//   create(this, result*, creator_role)
+//     this          = ICreator (class_desc + ClassDescriptor::Creator)
+//     result        = 16-байтный буфер под shared_ptr<Instance>
+//     creator_role  = 0
+//
+// Экземпляр — первые 8 байт буфера (raw Instance*).
 bool New(const char* className, std::uint64_t parent, std::uint64_t* out_addr)
 {
 	if (out_addr)
@@ -48,7 +49,7 @@ bool New(const char* className, std::uint64_t parent, std::uint64_t* out_addr)
 		return false;
 	}
 
-	// migrated: scan the Creators DenseHashMap (class name -> ClassDescriptor -> ICreator)
+	// scan the Creators DenseHashMap (class name -> ClassDescriptor -> ICreator)
 	const std::uint64_t creator = Reflect::CreatorByName(base, className);
 	if (!creator)
 	{
@@ -57,19 +58,16 @@ bool New(const char* className, std::uint64_t parent, std::uint64_t* out_addr)
 	}
 
 	const auto vt = g_Memory.Read<std::uint64_t>((std::uintptr_t)creator);
-	if (!vt)
+	if (!vt || !g_Memory.IsValid((std::uintptr_t)vt))
 	{
 		g_last_fail = 4;
 		return false;
 	}
 
+	// ICreator::Create = vtable[0]
 	const auto create_fn = g_Memory.Read<std::uint64_t>(
 		(std::uintptr_t)vt + ICreator::Create);
-	// ICreator vtable IsCreatable slot — 0x10 (original method).
-	const std::uintptr_t k_creator_isCreatable = 0x10;
-	const auto creatable_fn = g_Memory.Read<std::uint64_t>(
-		(std::uintptr_t)vt + k_creator_isCreatable);
-	if (!create_fn || !creatable_fn)
+	if (!create_fn || !g_Memory.IsValid((std::uintptr_t)create_fn))
 	{
 		g_last_fail = 5;
 		return false;
@@ -88,31 +86,8 @@ bool New(const char* className, std::uint64_t parent, std::uint64_t* out_addr)
 		return false;
 	}
 
-	// сервисы и абстрактные классы создавать нельзя — движок бросит (original flow)
-	if (g_creatable_base != base)
-	{
-		g_creatable.clear();
-		g_creatable_base = base;
-	}
-
-	auto cached = g_creatable.find(className);
-	if (cached == g_creatable.end())
-	{
-		std::uint64_t ok = 0;
-		if (!CallGate::Invoke(creatable_fn, creator, 0, 0, 0, &ok))
-		{
-			g_last_fail = 8;
-			return false;
-		}
-		cached = g_creatable.emplace(className, (ok & 0xFF) != 0).first;
-	}
-
-	if (!cached->second)
-	{
-		g_last_fail = 9;
-		return false;
-	}
-
+	// result = 16-байтный буфер shared_ptr; обнуляем перед вызовом, чтобы при
+	// неудаче отличать пустой результат от мусора.
 	const std::uint8_t zero[16]{};
 	g_Memory.WriteRaw((std::uintptr_t)scratch, zero, sizeof(zero));
 
@@ -123,6 +98,8 @@ bool New(const char* className, std::uint64_t parent, std::uint64_t* out_addr)
 		return false;
 	}
 
+	// shared_ptr: первые 8 байт — raw Instance*. Буфер не перезаписывается,
+	// чтобы shared_ptr держал ссылку и экземпляр не собрался GC.
 	const auto inst = g_Memory.Read<std::uint64_t>((std::uintptr_t)scratch);
 	if (!inst || !g_Memory.IsValid((std::uintptr_t)inst))
 	{

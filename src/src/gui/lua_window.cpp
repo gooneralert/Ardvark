@@ -649,8 +649,8 @@ namespace gui
 
         float btn_y = ws.y - margin - btn_h;
         float total_w = ws.x - margin * 2.f;
-        const char* labels[] = { "Run", "Save", "Clear", "Clear Out", "Copy Out", "Folder" };
-        constexpr int btn_count = 6;
+        const char* labels[] = { "Run", "Restart", "Save", "Clear", "Clear Out", "Copy Out", "Folder" };
+        constexpr int btn_count = 7;
         float bw = (total_w - gap * (btn_count - 1)) / (float)btn_count;
 
         for (int i = 0; i < btn_count; ++i)
@@ -668,21 +668,27 @@ namespace gui
                     Cheat::Features::LuaVM::Execute(src, tabs[active_tab].name.c_str());
                     sync_output_from_log();
                 }
-                else if (i == 1 && has_active)
+                else if (i == 1)
+                {
+                    // stop all running scripts + drop drawings, ready for a new one
+                    Cheat::Features::LuaVM::Restart();
+                    sync_output_from_log();
+                }
+                else if (i == 2 && has_active)
                 {
                     save_script(tabs[active_tab].ed, tabs[active_tab].name);
                     scripts = list_scripts();
                 }
-                else if (i == 2 && has_active)
+                else if (i == 3 && has_active)
                     tabs[active_tab].ed.set_text("");
-                else if (i == 3)
+                else if (i == 4)
                 {
                     Cheat::Features::LuaExecutor::ClearOutput();
                     lua_set_output_ok();
                 }
-                else if (i == 4)
-                    ImGui::SetClipboardText(err_ed.get_text().c_str());
                 else if (i == 5)
+                    ImGui::SetClipboardText(err_ed.get_text().c_str());
+                else if (i == 6)
                 {
                     ensure_scripts();
                     ShellExecuteA(nullptr, "open", scripts_dir().c_str(), nullptr, nullptr, SW_SHOWNORMAL);

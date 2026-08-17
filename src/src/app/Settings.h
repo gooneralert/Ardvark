@@ -75,11 +75,13 @@ namespace Cheat {
             int  mesh_chams_dx_mode{ 4 };
             // world-depth occluded (отдельный чекбокс)
             bool  mesh_chams_occlusion{ false };
+            // master "always visible" toggle — forces mesh + occlusion on
+            bool  occluded_chams{ false };
             // тот же список mode, что mesh_chams_dx_mode
             int   mesh_chams_occluded_dx_mode{ 0 };
             // перезаписывают шейдер: fill + outline/fresnel
-            float mesh_chams_occluded_color[4]{ 1.f, 1.f, 1.f, 1.f };
-            float mesh_chams_occluded_outline_color[4]{ 1.f, 1.f, 1.f, 1.f };
+            float mesh_chams_occluded_color[4]{ 1.f, 0.f, 0.f, 1.f };       // red
+            float mesh_chams_occluded_outline_color[4]{ 1.f, 0.f, 0.f, 1.f }; // red
             // контур-силуэт (faded glow) поверх mesh chams
             bool  mesh_chams_outline{ false };
             // 0 soft fade 1 pulse 2 flow 3 neon wave

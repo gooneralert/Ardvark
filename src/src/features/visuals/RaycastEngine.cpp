@@ -854,6 +854,12 @@ Result IsPlayerVisible(const PlayerCache& player, const Vector3& camera_pos)
     if (!std::isfinite(camera_pos.x) || !std::isfinite(camera_pos.y) || !std::isfinite(camera_pos.z))
         return Result{};
 
+    // no occluders in the world yet -> nothing can hide the player; bail early
+    // so we never run the heavy OBB raycast against an empty/half-built cache.
+    auto occluders = get_occluder_cache();
+    if (!occluders || occluders->parts.empty() || !occluders->complete)
+        return Result{};
+
     struct smoothed_state
     {
         float smoothed = 1.0f;
@@ -872,10 +878,6 @@ Result IsPlayerVisible(const PlayerCache& player, const Vector3& camera_pos)
     // не долбим каждый кадр
     if (state.last_query_time != 0.0 && (now - state.last_query_time) < 0.015)
         return state.last_result;
-
-    auto occluders = get_occluder_cache();
-    if (!occluders)
-        return Result{};
 
     float coverage = 1.0f;
     bool visible_raw = is_visible_impl(player, camera_pos, *occluders, coverage);

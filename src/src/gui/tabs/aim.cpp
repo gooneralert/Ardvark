@@ -68,6 +68,9 @@ namespace
 		}
 
 		row_checkbox("visible only", &cfg.visible_only);
+		// visible check requires the raycast engine — auto-enable it
+		if (cfg.visible_only)
+			Cheat::g_Settings.misc.raycast_engine = true;
 		row_checkbox("dead check", &cfg.dead_check);
 
 		if (show_hitchance)
