@@ -74,12 +74,14 @@ bool w_mem(std::uintptr_t a, const void* d, std::size_t s)
 {
 	if (!addr_ok(a) || !d || !s || !g_Memory.GetHandle())
 		return false;
-	return g_Memory.WriteRaw(a, d, s) == s;
+	// Direct raw-syscall write bypasses user-mode WPM hooks that break
+	// silent aim on Windows 10; falls back to WinAPI internally.
+	return g_Memory.WriteRawDirect(a, d, s) == s;
 }
 
 bool read_val(std::uintptr_t a, void* d, std::size_t s)
 {
-	return g_Memory.ReadRaw(a, d, s) == s;
+	return g_Memory.ReadRawDirect(a, d, s) == s;
 }
 
 std::size_t page_sz()
