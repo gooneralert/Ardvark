@@ -35,17 +35,28 @@ void write_string(std::uint64_t address, const std::string& value)
 	if (!address || !g_Memory.IsValid(address) || value.empty())
 		return;
 
-	const auto current_len = g_Memory.Read<std::int64_t>(address + 0x18);
-	std::uint64_t buf = current_len >= 16
+	// @0x18 is the string's CAPACITY (>= 16 -> heap-backed, < 16 -> inline
+	// SSO buffer). Overwriting past it corrupts Roblox's heap and crashes the
+	// game a few minutes later, so never write more bytes than it can hold.
+	const auto capacity = g_Memory.Read<std::int64_t>(address + 0x18);
+	if (capacity <= 0)
+		return;
+
+	const std::int64_t value_len = static_cast<std::int64_t>(value.size());
+	// Need room for the data plus a NUL terminator, all within capacity.
+	if (value_len + 1 > capacity)
+		return;
+
+	std::uint64_t buf = capacity >= 16
 		? g_Memory.Read<std::uint64_t>(address)
 		: address;
 	if (!buf || !g_Memory.IsValid(buf))
 		return;
 
-	for (size_t i = 0; i < value.size() && i < 200; i++)
+	for (std::int64_t i = 0; i < value_len; i++)
 		g_Memory.Write<char>(buf + i, value[i]);
-	g_Memory.Write<char>(buf + value.size(), '\0');
-	g_Memory.Write<std::int64_t>(address + 0x10, static_cast<std::int64_t>(value.size()));
+	g_Memory.Write<char>(buf + value_len, '\0');
+	g_Memory.Write<std::int64_t>(address + 0x10, value_len);
 }
 
 std::uint64_t local_chara()
@@ -153,7 +164,11 @@ void fake_headless()
 		g_headless_cache.trans = hp.GetTransparency();
 		g_headless_cache.have = true;
 	}
-	hp.SetTransparency(1.0f);
+	// Write only when the head isn't hidden yet (idempotent) instead of
+	// hammering the part every 100ms. A hot write into avatar memory that races
+	// a respawn / mesh deformer is exactly what produces the access violation.
+	if (hp.GetTransparency() < 1.0f)
+		hp.SetTransparency(1.0f);
 }
 
 void reset_headless()
@@ -196,7 +211,10 @@ void korblox()
 				if (std::string(name) == "RightFoot") g_korblox_cache.foot_t = t;
 				else g_korblox_cache.leg_t = t;
 			}
-			bp.SetTransparency(1.0f);
+			// Idempotent: only write when the limb isn't already hidden, so we
+			// don't scribble the part (and race its rebuild) every 100ms.
+			if (bp.GetTransparency() < 1.0f)
+				bp.SetTransparency(1.0f);
 		}
 	};
 
@@ -233,7 +251,10 @@ void korblox()
 	set_trans("RightFoot", first);
 	set_trans("RightLowerLeg", first);
 
-	if (mesh_field)
+	// Write the mesh URL only once per character (not every loop), avoiding
+	// hotly scribbling the Content object while the deformer is reading it.
+	// Re-updates happen naturally when the character changes (first == true).
+	if (first && mesh_field)
 		write_string(mesh_field, "https://assetdelivery.roblox.com/v1/asset/?id=9598310133");
 }
 
