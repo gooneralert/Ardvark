@@ -1472,6 +1472,44 @@ int l_bit_replace(lua_State* L)
 	return 1;
 }
 
+int l_bit_tohex(lua_State* L)
+{
+	std::uint32_t x = bit_to_u32(L, 1);
+	int n = static_cast<int>(luaL_optinteger(L, 2, 8));
+	if (n < 1) n = 1;
+	if (n > 8) n = 8;
+	char buf[16];
+	std::snprintf(buf, sizeof(buf), "%0*X", n, x);
+	for (char* p = buf; *p; ++p)
+		*p = static_cast<char>((*p >= 'A' && *p <= 'Z') ? *p - 'A' + 'a' : *p);
+	lua_pushstring(L, buf);
+	return 1;
+}
+
+int l_bit_fromhex(lua_State* L)
+{
+	size_t n = 0;
+	const char* s = luaL_checklstring(L, 1, &n);
+	if (n >= 2 && s[0] == '0' && (s[1] == 'x' || s[1] == 'X'))
+	{
+		s += 2;
+		n -= 2;
+	}
+	std::uint64_t v = 0;
+	for (size_t i = 0; i < n; ++i)
+	{
+		const char c = s[i];
+		int d;
+		if (c >= '0' && c <= '9')      d = c - '0';
+		else if (c >= 'a' && c <= 'f') d = c - 'a' + 10;
+		else if (c >= 'A' && c <= 'F') d = c - 'A' + 10;
+		else return luaL_error(L, "fromHex: invalid hexadecimal string");
+		v = (v << 4) | static_cast<std::uint64_t>(d);
+	}
+	lua_pushinteger(L, static_cast<lua_Integer>(v));
+	return 1;
+}
+
 void RegisterBit32(lua_State* L)
 {
 	lua_newtable(L);
@@ -1486,7 +1524,14 @@ void RegisterBit32(lua_State* L)
 	lua_pushcfunction(L, l_bit_rrotate); lua_setfield(L, -2, "rrotate");
 	lua_pushcfunction(L, l_bit_extract); lua_setfield(L, -2, "extract");
 	lua_pushcfunction(L, l_bit_replace); lua_setfield(L, -2, "replace");
+	lua_pushcfunction(L, l_bit_tohex);   lua_setfield(L, -2, "toHex");
+	lua_pushcfunction(L, l_bit_tohex);   lua_setfield(L, -2, "tohex");
+	lua_pushcfunction(L, l_bit_fromhex); lua_setfield(L, -2, "fromHex");
+	lua_pushcfunction(L, l_bit_fromhex); lua_setfield(L, -2, "fromhex");
 	lua_setglobal(L, "bit32");
+	// LuaJIT-style alias so `bit.fromHex(...)` / `bit.toHex(...)` also work
+	lua_getglobal(L, "bit32");
+	lua_setglobal(L, "bit");
 }
 
 // --- tween noop ---
@@ -1725,36 +1770,29 @@ int l_request(lua_State* L)
 	return 1;
 }
 
-int l_httpget(lua_State* L)
+int http_call_arg(lua_State* L)
 {
-	const char* url = luaL_checkstring(L, 1);
-	int status = 0;
-	{
-		// lua ÑÐ¾Ð±Ñ€Ð°Ð½ ÐºÐ°Ðº C: luaL_error Ð´ÐµÐ»Ð°ÐµÑ‚ longjmp Ð¼Ð¸Ð¼Ð¾ Ð´ÐµÑÑ‚Ñ€ÑƒÐºÑ‚Ð¾Ñ€Ð¾Ð²,
-		// Ð¿Ð¾ÑÑ‚Ð¾Ð¼Ñƒ Ñ‚ÐµÐ»Ð¾ Ð´Ð¾Ð»Ð¶Ð½Ð¾ ÑƒÐ¼ÐµÑ€ÐµÑ‚ÑŒ Ð´Ð¾ Ð¾ÑˆÐ¸Ð±ÐºÐ¸
-		std::string out;
-		if (http_request_raw("GET", url, {}, {}, out, status)
-			&& status >= 200 && status < 300)
-		{
-			lua_pushlstring(L, out.data(), out.size());
-			return 1;
-		}
-	}
-	return luaL_error(L, "HttpGet failed (%d)", status);
+	// httpget/httppost support both plain calls and method-style `self` calls:
+	//   httpget(url, headers)             — global
+	//   game:HttpGet(url, headers)        — self is an Instance userdata
+	//   HttpService:HttpGet(url, headers) — self is a table
+	// A leading non-string argument is the self from `:` syntax.
+	if (lua_gettop(L) >= 2 && (lua_istable(L, 1) || lua_isuserdata(L, 1)))
+		return 2;
+	return 1;
 }
 
-int l_httppost(lua_State* L)
+int l_httpget(lua_State* L)
 {
-	const char* url = luaL_checkstring(L, 1);
-	size_t bn = 0;
-	const char* body = luaL_optlstring(L, 2, "", &bn);
-	const char* ctype = luaL_optstring(L, 3, "application/json");
+	const int i = http_call_arg(L);
+	const char* url = luaL_checkstring(L, i);
 
-	std::string hdrs = std::string("Content-Type: ") + ctype + "\r\n";
-	if (lua_istable(L, 4))
+	// optional headers table -> "Key: value\r\n" string
+	std::string hdrs;
+	if (lua_istable(L, i + 1))
 	{
 		lua_pushnil(L);
-		while (lua_next(L, 4))
+		while (lua_next(L, i + 1))
 		{
 			if (lua_type(L, -2) == LUA_TSTRING && lua_type(L, -1) == LUA_TSTRING)
 			{
@@ -1770,11 +1808,44 @@ int l_httppost(lua_State* L)
 
 	std::string out;
 	int status = 0;
-	if (http_request_raw("POST", url, std::string(body, bn), hdrs, out, status))
+	// Synchronous and never raises: an HTTP error status (e.g. 404) returns the
+	// server response body, a connection failure returns an empty string.
+	http_request_raw("GET", url, {}, hdrs, out, status);
+	lua_pushlstring(L, out.data(), out.size());
+	return 1;
+}
+
+int l_httppost(lua_State* L)
+{
+	const int i = http_call_arg(L);
+	const char* url = luaL_checkstring(L, i);
+	size_t bn = 0;
+	const char* body = luaL_optlstring(L, i + 1, "", &bn);
+	const char* ctype = luaL_optstring(L, i + 2, "application/json");
+
+	std::string hdrs = std::string("Content-Type: ") + ctype + "\r\n";
+	if (lua_istable(L, i + 3))
 	{
-		lua_pushlstring(L, out.data(), out.size());
-		return 1;
+		lua_pushnil(L);
+		while (lua_next(L, i + 3))
+		{
+			if (lua_type(L, -2) == LUA_TSTRING && lua_type(L, -1) == LUA_TSTRING)
+			{
+				hdrs += lua_tostring(L, -2);
+				hdrs += ": ";
+				hdrs += lua_tostring(L, -1);
+				hdrs += "\r\n";
+			}
+			lua_pop(L, 1);
+		}
+		lua_pop(L, 1);
 	}
+
+	std::string out;
+	int status = 0;
+	// Synchronous and never raises: an HTTP error status (e.g. 404) returns the
+	// server's response body, a connection failure returns an empty string.
+	http_request_raw("POST", url, std::string(body, bn), hdrs, out, status);
 	lua_pushlstring(L, out.data(), out.size());
 	return 1;
 }
@@ -1933,9 +2004,24 @@ void RegisterHttp(lua_State* L)
 	lua_pushcfunction(L, l_httppost);  lua_setglobal(L, "HttpPost");
 	lua_pushcfunction(L, l_httppost);  lua_setglobal(L, "httppost");
 
+	// game:HttpGet / game:HttpPost — DataModel methods (plus lowercase aliases)
+	luaL_getmetatable(L, "jewsploit.Instance");
+	if (!lua_isnil(L, -1))
+	{
+		lua_pushcfunction(L, l_httpget);   lua_setfield(L, -2, "HttpGet");
+		lua_pushcfunction(L, l_httpget);   lua_setfield(L, -2, "httpget");
+		lua_pushcfunction(L, l_httppost);  lua_setfield(L, -2, "HttpPost");
+		lua_pushcfunction(L, l_httppost);  lua_setfield(L, -2, "httppost");
+	}
+	lua_pop(L, 1);
+
 	lua_newtable(L);
 	lua_pushcfunction(L, l_httpservice_getasync);   lua_setfield(L, -2, "GetAsync");
 	lua_pushcfunction(L, l_httpservice_requestasync); lua_setfield(L, -2, "RequestAsync");
+	lua_pushcfunction(L, l_httpget);                lua_setfield(L, -2, "HttpGet");
+	lua_pushcfunction(L, l_httpget);                lua_setfield(L, -2, "httpget");
+	lua_pushcfunction(L, l_httppost);               lua_setfield(L, -2, "HttpPost");
+	lua_pushcfunction(L, l_httppost);               lua_setfield(L, -2, "httppost");
 	lua_pushcfunction(L, l_json_encode);             lua_setfield(L, -2, "JSONEncode");
 	lua_pushcfunction(L, l_json_decode);             lua_setfield(L, -2, "JSONDecode");
 	lua_pushcfunction(L, l_guid);                    lua_setfield(L, -2, "GenerateGUID");
