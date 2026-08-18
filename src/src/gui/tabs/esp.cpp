@@ -364,13 +364,17 @@ void ng_tabs::draw_esp_tab()
 				"bottom", "center", "mouse", "top"
 			};
 			row_combo("tracer origin", &g_Settings.esp.tracer_origin, k_tracer_origin);
+
+			static const std::vector<const char*> k_tracer_type = {
+				"line", "spider"
+			};
+			row_combo("tracer type", &g_Settings.esp.tracer_type, k_tracer_type);
 		}
 
 		row_checkbox_color("china hat", &g_Settings.esp.china_hat, g_Settings.esp.china_hat_color);
 		if (g_Settings.esp.china_hat)
 		{
-			row_slider_f("hat height", &g_Settings.esp.china_hat_height, 0.3f, 3.0f, "%.2f");
-			row_slider_f("hat radius", &g_Settings.esp.china_hat_radius, 0.4f, 3.5f, "%.2f");
+			row_checkbox("hat target only", &g_Settings.esp.china_hat_target_only);
 		}
 
 		row_checkbox_color("hit chams", &g_Settings.esp.hit_chams, g_Settings.esp.hit_chams_color);

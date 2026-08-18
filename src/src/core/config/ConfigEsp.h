@@ -46,10 +46,10 @@ inline void WriteEsp(std::ostringstream& out, const Settings& s)
     PutBool(out, "esp.flags", s.esp.flags);
     PutBool(out, "esp.tracer", s.esp.tracer);
     PutInt(out, "esp.tracer_origin", s.esp.tracer_origin);
+    PutInt(out, "esp.tracer_type", s.esp.tracer_type);
     PutBool(out, "esp.china_hat", s.esp.china_hat);
+    PutBool(out, "esp.china_hat_target_only", s.esp.china_hat_target_only);
     PutF4(out, "esp.china_hat_color", s.esp.china_hat_color);
-    PutFloat(out, "esp.china_hat_height", s.esp.china_hat_height);
-    PutFloat(out, "esp.china_hat_radius", s.esp.china_hat_radius);
     PutBool(out, "esp.hit_chams", s.esp.hit_chams);
     PutF4(out, "esp.hit_chams_color", s.esp.hit_chams_color);
     PutFloat(out, "esp.hit_chams_duration", s.esp.hit_chams_duration);
@@ -205,10 +205,12 @@ inline void ReadEsp(const KV& kv, Settings& s)
     GetBool(kv, "esp.flags", s.esp.flags);
     GetBool(kv, "esp.tracer", s.esp.tracer);
     GetInt(kv, "esp.tracer_origin", s.esp.tracer_origin);
+    GetInt(kv, "esp.tracer_type", s.esp.tracer_type);
+    if (s.esp.tracer_type < 0) s.esp.tracer_type = 0;
+    if (s.esp.tracer_type > 1) s.esp.tracer_type = 1;
     GetBool(kv, "esp.china_hat", s.esp.china_hat);
+    GetBool(kv, "esp.china_hat_target_only", s.esp.china_hat_target_only);
     GetF4(kv, "esp.china_hat_color", s.esp.china_hat_color);
-    GetFloat(kv, "esp.china_hat_height", s.esp.china_hat_height);
-    GetFloat(kv, "esp.china_hat_radius", s.esp.china_hat_radius);
     GetBool(kv, "esp.hit_chams", s.esp.hit_chams);
     GetF4(kv, "esp.hit_chams_color", s.esp.hit_chams_color);
     GetFloat(kv, "esp.hit_chams_duration", s.esp.hit_chams_duration);

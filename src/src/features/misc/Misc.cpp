@@ -20,8 +20,12 @@
 #include <atomic>
 #include <chrono>
 #include <cmath>
+#include <string>
+#include <tlhelp32.h>
+#include <Psapi.h>
 
 #pragma comment(lib, "winmm.lib")
+#pragma comment(lib, "Psapi.lib")
 
 #undef GetClassName
 
@@ -402,6 +406,125 @@ namespace {
     std::thread g_misc_th;
     std::atomic<bool> g_misc_run{ false };
 
+    // --- layuh desync (firewall block) ---
+    std::thread g_desync_th;
+    std::atomic<bool> g_desync_run{ false };
+    std::atomic<bool> g_desync_active{ false };
+    std::string g_roblox_path;
+    float g_desync_timer = 0.0f;
+    constexpr const char* k_desync_rule = "Ardvark_Desync_OUT";
+    constexpr float k_desync_max_time = 15.0f;
+
+    std::string find_roblox_path()
+    {
+        HANDLE hProcessSnap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+        if (hProcessSnap == INVALID_HANDLE_VALUE)
+            return "";
+
+        PROCESSENTRY32W pe32{};
+        pe32.dwSize = sizeof(PROCESSENTRY32W);
+        std::string exePath;
+        if (Process32FirstW(hProcessSnap, &pe32))
+        {
+            do
+            {
+                if (_wcsicmp(pe32.szExeFile, L"RobloxPlayerBeta.exe") == 0)
+                {
+                    HANDLE hProc = OpenProcess(
+                        PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, FALSE,
+                        pe32.th32ProcessID);
+                    if (hProc)
+                    {
+                        char buffer[MAX_PATH];
+                        if (GetModuleFileNameExA(hProc, NULL, buffer, MAX_PATH))
+                            exePath = buffer;
+                        CloseHandle(hProc);
+                    }
+                    break;
+                }
+            } while (Process32NextW(hProcessSnap, &pe32));
+        }
+        CloseHandle(hProcessSnap);
+        return exePath;
+    }
+
+    void desync_block()
+    {
+        if (g_roblox_path.empty())
+            return;
+        const std::string cmd =
+            "netsh advfirewall firewall add rule name=\"" +
+            std::string(k_desync_rule) +
+            "\" dir=out program=\"" + g_roblox_path +
+            "\" action=block enable=yes";
+        system(cmd.c_str());
+    }
+
+    void desync_unblock()
+    {
+        const std::string cmd =
+            "netsh advfirewall firewall delete rule name=\"" +
+            std::string(k_desync_rule) + "\"";
+        system(cmd.c_str());
+    }
+
+    void desync_loop()
+    {
+        g_roblox_path = find_roblox_path();
+        while (g_desync_run.load())
+        {
+            std::this_thread::sleep_for(std::chrono::milliseconds(50));
+
+            const bool want = Cheat::g_Settings.misc.desync;
+            if (want && !g_desync_active.load())
+            {
+                desync_block();
+                g_desync_active.store(true);
+                g_desync_timer = 0.0f;
+            }
+            else if (!want && g_desync_active.load())
+            {
+                desync_unblock();
+                g_desync_active.store(false);
+                g_desync_timer = 0.0f;
+            }
+
+            // авто-стоп через 15 секунд (как в layuh) — выключает фичу целиком
+            if (g_desync_active.load())
+            {
+                g_desync_timer += 0.05f;
+                if (g_desync_timer >= k_desync_max_time)
+                {
+                    desync_unblock();
+                    g_desync_active.store(false);
+                    g_desync_timer = 0.0f;
+                    Cheat::g_Settings.misc.desync = false;
+                }
+            }
+        }
+        desync_unblock();
+    }
+
+    // Arsenal place id 286090429: авто-включение arsenal flick fix
+    void arsenal_tick()
+    {
+        static bool s_arsenal_was = false;
+        bool arsenal = false;
+        if (Cheat::Globals::InstanceDataModel.address &&
+            g_Memory.IsValid(Cheat::Globals::InstanceDataModel.address))
+        {
+            arsenal =
+                Cheat::Globals::InstanceDataModel.GetPlaceId() == 286090429ull;
+        }
+        if (arsenal && !s_arsenal_was)
+        {
+            Cheat::g_Settings.misc.arsenal_flick_fix = true;
+            // дефолтный режим аимбота в Arsenal — камера, а не мышь (0=mouse, 1=camera)
+            Cheat::g_Settings.aim.type = 1;
+        }
+        s_arsenal_was = arsenal;
+    }
+
     void misc_loop()
     {
 		LARGE_INTEGER freq{}, prev{};
@@ -418,6 +541,8 @@ namespace {
 			prev = now;
 			if (dt <= 0.0f || dt > 0.1f)
 				dt = 0.002f;
+
+			arsenal_tick();
 
 			const auto& m = Cheat::g_Settings.misc;
 			bool busy =
@@ -444,6 +569,14 @@ void Cheat::Features::Misc::Start()
 
 	g_misc_run.store(true);
 	g_misc_th = std::thread(misc_loop);
+
+	// layuh desync thread
+	if (!g_desync_run.load())
+	{
+		g_desync_run.store(true);
+		g_desync_th = std::thread(desync_loop);
+	}
+
 	Speed::Start();
 	Fly::Start();
 	CharmMove::GravityStart();
@@ -455,12 +588,15 @@ void Cheat::Features::Misc::Start()
 void Cheat::Features::Misc::Stop()
 {
 	g_misc_run.store(false);
+	g_desync_run.store(false);
 	WorldEdit::Stop();
 	Speed::Stop();
 	Fly::Stop();
 	CharmMove::GravityStop();
 	CharmMove::TickrateStop();
 	CharMods::Stop();
+	if (g_desync_th.joinable())
+		g_desync_th.join();
 	if (g_misc_th.joinable())
 		g_misc_th.join();
 	ThirdPerson::Restore();

@@ -46,6 +46,116 @@ namespace Cheat {
             Vector3 s_aim_point{};
             std::uint32_t s_rng = 0xA341316Cu;
 
+            // --- layuh mouselock helpers ---
+            struct MouseSettings {
+                float baseDPI = 800.0f;
+                float currentDPI = 800.0f;
+                float dpiScaleFactor = 1.0f;
+                bool dpiAutoDetected = false;
+
+                void updateDPIScale() {
+                    dpiScaleFactor = baseDPI / currentDPI;
+                }
+
+                float getDPIAdjustedSensitivity() const {
+                    return dpiScaleFactor;
+                }
+            } s_mouse_settings;
+
+            bool detect_mouse_dpi()
+            {
+                HWND robloxWindow = FindWindowA(nullptr, "Roblox");
+                if (!robloxWindow)
+                    return false;
+
+                HDC hdc = GetDC(robloxWindow);
+                const int dpiX = GetDeviceCaps(hdc, LOGPIXELSX);
+                const int dpiY = GetDeviceCaps(hdc, LOGPIXELSY);
+                ReleaseDC(robloxWindow, hdc);
+
+                HKEY hkey;
+                DWORD sensitivity = 10;
+                DWORD size = sizeof(DWORD);
+                if (RegOpenKeyExA(HKEY_CURRENT_USER, "Control Panel\\Mouse", 0,
+                                  KEY_READ, &hkey) == ERROR_SUCCESS)
+                {
+                    RegQueryValueExA(hkey, "MouseSensitivity", nullptr, nullptr,
+                                     (LPBYTE)&sensitivity, &size);
+                    RegCloseKey(hkey);
+                }
+
+                const float estimatedDPI =
+                    800.0f * (sensitivity / 10.0f) * (dpiX / 96.0f);
+                s_mouse_settings.currentDPI =
+                    std::max(400.0f, std::min(3200.0f, estimatedDPI));
+                s_mouse_settings.updateDPIScale();
+                s_mouse_settings.dpiAutoDetected = true;
+                return true;
+            }
+
+            // easing из layuh aimbot (linear по умолчанию)
+            static float apply_easing(float t, int style)
+            {
+                if (t < 0.0f) t = 0.0f;
+                if (t > 1.0f) t = 1.0f;
+                switch (style)
+                {
+                case 2:  return t * t;                                                              // EaseInQuad
+                case 3:  return t * (2.0f - t);                                                     // EaseOutQuad
+                case 4:  return (t < 0.5f) ? (2.0f * t * t) : (1.0f - std::pow(-2.0f * t + 2.0f, 2.0f) / 2.0f);
+                case 5:  return t * t * t;                                                          // EaseInCubic
+                case 6:  return 1.0f - std::pow(1.0f - t, 3.0f);                                    // EaseOutCubic
+                case 7:  return (t < 0.5f) ? (4.0f * t * t * t) : (1.0f - std::pow(-2.0f * t + 2.0f, 3.0f) / 2.0f);
+                case 8:  return 1.0f - std::cos((t * 3.14159265f) / 2.0f);                          // EaseInSine
+                case 9:  return std::sin((t * 3.14159265f) / 2.0f);                                 // EaseOutSine
+                case 10: return -(std::cos(3.14159265f * t) - 1.0f) / 2.0f;                         // EaseInOutSine
+                default: return t;                                                                  // None/Linear
+                }
+            }
+
+            // --- arsenal flick fix state (layuh) ---
+            bool          s_flick_has_baseline = false;
+            Matrix4x4     s_flick_baseline_rot{};
+            POINT         s_flick_baseline_cursor{ 0, 0 };
+            Matrix4x4     s_flick_last_good_rot{};
+            bool          s_flick_has_last_good = false;
+            Vector3       s_flick_last_world{};
+            bool          s_flick_has_last_world = false;
+            std::uint64_t s_flick_last_ms = 0;
+            std::uint64_t s_flick_target = 0;
+
+            // объявлено раньше apply_mouse — используется в select_target (якорь по курсору)
+            bool current_cursor_overlay(float& out_x, float& out_y);
+
+            // restore курсор на baseline (для mouse)
+            void flick_restore_cursor()
+            {
+                if (!s_flick_has_baseline)
+                    return;
+                POINT cur{};
+                if (!GetCursorPos(&cur))
+                    return;
+                const LONG dx = s_flick_baseline_cursor.x - cur.x;
+                const LONG dy = s_flick_baseline_cursor.y - cur.y;
+                if (dx == 0 && dy == 0)
+                    return;
+                INPUT in{};
+                in.type = INPUT_MOUSE;
+                in.mi.dx = dx;
+                in.mi.dy = dy;
+                in.mi.dwFlags = MOUSEEVENTF_MOVE;
+                SendInput(1, &in, sizeof(in));
+            }
+
+            void flick_reset_state()
+            {
+                s_flick_has_baseline = false;
+                s_flick_has_last_good = false;
+                s_flick_has_last_world = false;
+                s_flick_last_ms = 0;
+                s_flick_target = 0;
+            }
+
             const Instance* part_instance(const PlayerCache& c, int part)
             {
                 if (part == Settings::AIM_HEAD)
@@ -642,6 +752,31 @@ namespace Cheat {
                         continue;
                     }
 
+                    // layuh: worldtoscreen возвращает (-1,-1) вне экрана, и такие точки
+                    // не попадают в выбор. У нас проекция отдаёт сырые координаты даже
+                    // за границами экрана (взрывные значения у краёв фрустума) — режем их,
+                    // иначе мышь «улетает»
+                    {
+                        float bw = sc.viewport.x;
+                        float bh = sc.viewport.y;
+                        HWND oh = Renderer::GetHwnd();
+                        if (oh)
+                        {
+                            RECT ocr{};
+                            if (GetClientRect(oh, &ocr) &&
+                                (ocr.right - ocr.left) > 1 && (ocr.bottom - ocr.top) > 1)
+                            {
+                                bw = (float)(ocr.right - ocr.left);
+                                bh = (float)(ocr.bottom - ocr.top);
+                            }
+                        }
+                        if (screen.x < -1.f || screen.y < -1.f ||
+                            screen.x > bw + 1.f || screen.y > bh + 1.f)
+                        {
+                            continue;
+                        }
+                    }
+
                     float dx = screen.x - anchor_v.x;
                     float dy = screen.y - anchor_v.y;
                     PartSample& s = out[out_n++];
@@ -695,7 +830,17 @@ namespace Cheat {
             bool select_target(const Config& cfg, const Scene& sc,
                                Vector3& out_world, Vector2& out_screen)
             {
-                ImVec2 anchor = fov_anchor(cfg);
+                // стабильный якорь по fov-центру (оверлей/центр экрана) — в лок-центр
+                // играх курсор и так в центре, а в свободных — не «прыгает» за курсором
+                // для маус-аима якорь = реальный курсор (layuh gettargetclosesttomouse)
+                ImVec2 anchor;
+                {
+                    float acx, acy;
+                    if (g_Settings.aim.type == 0 && current_cursor_overlay(acx, acy))
+                        anchor = ImVec2(acx, acy);
+                    else
+                        anchor = fov_anchor(cfg);
+                }
                 Vector2 anchor_v(anchor.x, anchor.y);
 
                 float fov_r = 1e9f;
@@ -863,66 +1008,74 @@ namespace Cheat {
                 return commit(best_addr, best_pick);
             }
 
+            // layuh: GetCursorPos + ScreenToClient. target_screen у нас в координатах
+            // оверлея, поэтому конвертим курсор в те же координаты (оверлей покрывает
+            // клиентскую область игры 1:1 — это то же самое пространство, что layuh).
+            bool current_cursor_overlay(float& out_x, float& out_y)
+            {
+                POINT p{};
+                if (!GetCursorPos(&p))
+                    return false;
+                HWND oh = Renderer::GetHwnd();
+                if (!oh || !ScreenToClient(oh, &p))
+                    return false;
+                out_x = (float)p.x;
+                out_y = (float)p.y;
+                return true;
+            }
+
+            // layuh performMouseAimbot — точный порт
             void apply_mouse(const Config& cfg, const Vector2& target_screen)
             {
-                lock_cursor_to_game();
+                if (!s_mouse_settings.dpiAutoDetected)
+                    detect_mouse_dpi();
 
-                ImVec2 cur = fov_anchor(cfg);
-
-                float sx = cfg.smooth_x;
-                float sy = cfg.smooth_y;
-                if (sx < 0.1f) sx = 0.1f;
-                if (sy < 0.1f) sy = 0.1f;
-
-                float dx = (target_screen.x - cur.x) / sx;
-                float dy = (target_screen.y - cur.y) / sy;
-
-                // без этого мышь улетает
-                if (dx > 80.f) dx = 80.f;
-                if (dx < -80.f) dx = -80.f;
-                if (dy > 80.f) dy = 80.f;
-                if (dy < -80.f) dy = -80.f;
-
-                int mx = (int)std::lround(dx);
-                int my = (int)std::lround(dy);
-                if (mx == 0 && my == 0)
-                {
+                float cursorX, cursorY;
+                if (!current_cursor_overlay(cursorX, cursorY))
                     return;
-                }
 
-                POINT screen{};
-                RECT bounds{};
-                if (GetCursorPos(&screen) && game_client_screen_rect(bounds))
+                float deltaX = target_screen.x - cursorX;
+                float deltaY = target_screen.y - cursorY;
+
+                if (cfg.smooth_enabled)
                 {
-                    LONG pad = 2;
-                    LONG left = bounds.left + pad;
-                    LONG top = bounds.top + pad;
-                    LONG right = bounds.right - pad - 1;
-                    LONG bottom = bounds.bottom - pad - 1;
-                    if (right < left) right = left;
-                    if (bottom < top) bottom = top;
+                    // layuh: 1/(smooth*0.05) → наш слайдер 0.1..5 = layuh 1..50
+                    float baseX = std::clamp(1.0f / (cfg.smooth_x * 0.5f), 0.01f, 1.0f);
+                    float baseY = std::clamp(1.0f / (cfg.smooth_y * 0.5f), 0.01f, 1.0f);
+                    float easedX = apply_easing(baseX, 1); // linear (layuh default style)
+                    float easedY = apply_easing(baseY, 1);
 
-                    LONG nx = screen.x + mx;
-                    LONG ny = screen.y + my;
-                    if (nx < left) nx = left;
-                    if (nx > right) nx = right;
-                    if (ny < top) ny = top;
-                    if (ny > bottom) ny = bottom;
+                    const float dpi = s_mouse_settings.getDPIAdjustedSensitivity();
+                    const float userSens = 1.0f; // layuh mouse_sensitivity default
+                    easedX = std::clamp(easedX * dpi * userSens, 0.0f, 1.0f);
+                    easedY = std::clamp(easedY * dpi * userSens, 0.0f, 1.0f);
 
-                    mx = (int)(nx - screen.x);
-                    my = (int)(ny - screen.y);
-                    if (mx == 0 && my == 0)
-                    {
-                        return;
-                    }
+                    deltaX *= easedX;
+                    deltaY *= easedY;
                 }
+                // else: smoothing выключен — сырой инстант-двиг, как в layuh
 
-                INPUT in{};
-                in.type = INPUT_MOUSE;
-                in.mi.dx = mx;
-                in.mi.dy = my;
-                in.mi.dwFlags = MOUSEEVENTF_MOVE;
-                SendInput(1, &in, sizeof(in));
+                // жёсткий предохранитель на один кадр, чтобы мышь не «улетала»
+                const float maxMovePerFrame = 80.0f;
+                if (deltaX >  maxMovePerFrame) deltaX =  maxMovePerFrame;
+                if (deltaX < -maxMovePerFrame) deltaX = -maxMovePerFrame;
+                if (deltaY >  maxMovePerFrame) deltaY =  maxMovePerFrame;
+                if (deltaY < -maxMovePerFrame) deltaY = -maxMovePerFrame;
+
+                // минимальный порог — без микро-джиттера
+                const float minMovementThreshold = 0.5f;
+                if (!std::isfinite(deltaX) || !std::isfinite(deltaY))
+                    return;
+                if (fabsf(deltaX) <= minMovementThreshold &&
+                    fabsf(deltaY) <= minMovementThreshold)
+                    return;
+
+                INPUT input{ 0 };
+                input.type = INPUT_MOUSE;
+                input.mi.dx = static_cast<LONG>(deltaX);
+                input.mi.dy = static_cast<LONG>(deltaY);
+                input.mi.dwFlags = MOUSEEVENTF_MOVE;
+                SendInput(1, &input, sizeof(input));
             }
 
             void apply_camera(const Config& cfg, const Scene& sc, const Vector3& target_world)
@@ -1113,6 +1266,7 @@ namespace Cheat {
                 MagicBullet::SetActive(false);
                 clear_silents();
                 release_cursor_clip();
+                flick_reset_state();
                 return;
             }
 
@@ -1124,6 +1278,7 @@ namespace Cheat {
                 MagicBullet::SetActive(false);
                 clear_silents();
                 release_cursor_clip();
+                flick_reset_state();
                 return;
             }
 
@@ -1139,6 +1294,7 @@ namespace Cheat {
                 MagicBullet::SetActive(false);
                 clear_silents();
                 release_cursor_clip();
+                flick_reset_state();
                 return;
             }
 
@@ -1156,12 +1312,83 @@ namespace Cheat {
 				return;
 			}
 
-			if (aim_fire && g_Settings.aim.type == 0)
+			// layuh arsenal flick fix: при резком рывке цели не дёргаем прицел
+			bool flick_skip = false;
+			if (g_Settings.misc.arsenal_flick_fix && aim_fire)
+			{
+				const std::uint64_t now_ms = GetTickCount64();
+
+				// кулдаун после флика — 200мс не применяем аим
+				if (s_flick_last_ms != 0 && now_ms - s_flick_last_ms < 200)
+				{
+					flick_skip = true;
+				}
+				else
+				{
+					// Guard 1: screen y сильно за экраном — мусорный кадр
+					bool bad_frame = false;
+					const float vh = sc.viewport.y;
+					if (screen.y < -200.0f || screen.y > vh + 200.0f)
+						bad_frame = true;
+
+					// Guard 2: желаемый взгляд слишком круто вниз (пол-флик)
+					Vector3 want_dir = world - sc.cam_pos;
+					if (!bad_frame && want_dir.LengthSquared() > 1e-6f)
+					{
+						want_dir.Normalize();
+						if (want_dir.y < -0.9f)
+							bad_frame = true;
+					}
+
+					// Guard 3: цель телепортнулась за один тик
+					if (!bad_frame && s_flick_has_last_world &&
+					    (world - s_flick_last_world).Length() > 500.0f)
+						bad_frame = true;
+
+					if (bad_frame)
+					{
+						if (g_Memory.IsValid(sc.camera.address))
+						{
+							if (s_flick_has_baseline)
+								sc.camera.SetRotation(s_flick_baseline_rot);
+							else if (s_flick_has_last_good)
+								sc.camera.SetRotation(s_flick_last_good_rot);
+						}
+						if (g_Settings.aim.type == 0)
+							flick_restore_cursor();
+						flick_skip = true;
+						s_flick_last_ms = now_ms;
+						s_flick_last_world = world;
+						s_flick_has_last_world = true;
+						// как в layuh: сбрасываем лок цели (foundTarget=false), после
+						// кулдауна перевыбор свежего таргета
+						s_target = 0;
+						s_pending = 0;
+					}
+				}
+			}
+
+			// захват baseline при первом локе новой цели
+			if (aim_fire && !flick_skip)
+			{
+				const std::uint64_t cur_target = s_target;
+				if (!s_flick_has_baseline || s_flick_target != cur_target)
+				{
+					s_flick_has_baseline = true;
+					s_flick_target = cur_target;
+					s_flick_has_last_world = false;
+					if (g_Memory.IsValid(sc.camera.address))
+						s_flick_baseline_rot = sc.camera.GetRotation();
+					GetCursorPos(&s_flick_baseline_cursor);
+				}
+			}
+
+			if (aim_fire && !flick_skip && g_Settings.aim.type == 0)
 			{
 				apply_mouse(aim_cfg, screen);
 			}
 
-			else if (aim_fire && g_Settings.aim.type == 1)
+			else if (aim_fire && !flick_skip && g_Settings.aim.type == 1)
 			{
 				release_cursor_clip();
 				apply_camera(aim_cfg, sc, world);
@@ -1170,6 +1397,16 @@ namespace Cheat {
 			else if (!aim_fire)
 			{
 				release_cursor_clip();
+			}
+
+			// успешный кадр аима — кэшируем last-good и позицию цели
+			if (aim_fire && !flick_skip)
+			{
+				s_flick_last_world = world;
+				s_flick_has_last_world = true;
+				if (g_Settings.aim.type == 1 &&
+				    g_Memory.IsValid(sc.camera.address))
+					s_flick_last_good_rot = sc.camera.GetRotation();
 			}
 
             if (silent_fire &&

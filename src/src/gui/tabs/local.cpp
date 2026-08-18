@@ -74,6 +74,8 @@ void ng_tabs::draw_local_tab()
 			static const std::vector<const char*> btools_tools = { "hammer", "grab", "clone" };
 			row_combo("btool", &m.bToolsTool, btools_tools);
 		}
+
+		row_checkbox("desync", &m.desync);
 	}
 	end_panel();
 

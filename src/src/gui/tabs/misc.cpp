@@ -38,6 +38,7 @@ void ng_tabs::draw_misc_tab()
 	begin_panel("##misc_world", left_w, h);
 	{
 		row_checkbox("teamcheck", &m.teamcheck);
+		row_checkbox("arsenal flick fix", &m.arsenal_flick_fix);
 		row_checkbox("no shadow", &w.no_shadow);
 
 		row_checkbox("time changer", &w.time_changer);

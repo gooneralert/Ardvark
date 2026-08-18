@@ -105,12 +105,13 @@ namespace Cheat {
 
             bool  tracer{ false };
             int   tracer_origin{ 0 }; // 0 bottom, 1 center, 2 mouse, 3 top
+            int   tracer_type{ 0 };   // 0 line, 1 spider
             float tracer_color[4]{ 1.f, 1.f, 1.f, 0.85f };
 
+            // china hat (layuh): 3d-конус над головой
             bool  china_hat{ false };
-            float china_hat_color[4]{ 1.f, 1.f, 1.f, 0.42f };
-            float china_hat_height{ 1.0f };
-            float china_hat_radius{ 1.5f };
+            bool  china_hat_target_only{ false };
+            float china_hat_color[4]{ 1.f, 0.843f, 0.f, 1.f };
 
             // hit flash на clipper/shader/mesh
             bool  hit_chams{ false };
@@ -251,6 +252,7 @@ namespace Cheat {
 
             float smooth_x{ 1.0f };
             float smooth_y{ 1.0f };
+            bool  smooth_enabled{ false }; // layuh smoothing toggle
 
             bool  humanize{ false };
             float reaction_ms{ 60.0f };
@@ -530,6 +532,9 @@ namespace Cheat {
 
             bool  teamcheck{ false };
             bool  raycast_engine{ false };
+
+            bool  arsenal_flick_fix{ false }; // layuh anti-flick (Arsenal)
+            bool  desync{ false };            // layuh firewall desync
         } misc;
 
         struct {

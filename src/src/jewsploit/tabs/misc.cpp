@@ -225,6 +225,9 @@ void ng_tabs::draw_misc_tab()
 	pad();
 	ng::checkbox("infinite jump", &Cheat::g_Settings.misc.inf_jump);
 	gap();
+	pad();
+	ng::checkbox("desync", &Cheat::g_Settings.misc.desync);
+	gap();
 
 	pad();
 	ng::checkbox("hitchance", &cfg.hitchance_enabled);

@@ -534,19 +534,25 @@ void ng_tabs::draw_esp_tab()
 			row_select("##tracer_origin", "tracer origin",
 			           &g_Settings.esp.tracer_origin, k_tracer_origin, 4);
 			gap();
+
+			static const char* k_tracer_type[] = { "line", "spider" };
+			row_select("##tracer_type", "tracer type",
+			           &g_Settings.esp.tracer_type, k_tracer_type, 2);
+			gap();
 		}
 
-		row_cb_color("china hat", &g_Settings.esp.china_hat,
-		             g_Settings.esp.china_hat_color, "esp_china_hat_color");
+		pad();
+		ng::checkbox("china hat", &g_Settings.esp.china_hat);
 		gap();
 
 		if (g_Settings.esp.china_hat)
 		{
-			row_slider("##china_hat_h", "hat height",
-			           &g_Settings.esp.china_hat_height, 0.3f, 3.0f);
+			pad();
+			ng::checkbox("hat target only", &g_Settings.esp.china_hat_target_only);
 			gap();
-			row_slider("##china_hat_r", "hat radius",
-			           &g_Settings.esp.china_hat_radius, 0.4f, 3.5f);
+			ImGui::SetCursorPosX(12.f);
+			ng::label_color("esp_china_hat_color", "hat color",
+			                g_Settings.esp.china_hat_color);
 			gap();
 		}
 

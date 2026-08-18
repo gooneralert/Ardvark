@@ -30,6 +30,7 @@ namespace
 
 		if (show_smooth)
 		{
+			row_checkbox("smoothing", &cfg.smooth_enabled);
 			row_slider_f("smoothness x", &cfg.smooth_x, 0.1f, 5.0f, "%.2f");
 			row_slider_f("smoothness y", &cfg.smooth_y, 0.1f, 5.0f, "%.2f");
 		}

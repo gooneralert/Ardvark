@@ -242,6 +242,7 @@ void WriteAimCfg(std::ostringstream& out, const char* prefix, const Settings::Ai
     PutFloat(out, k("hitchance"), c.hitchance);
     PutFloat(out, k("smooth_x"), c.smooth_x);
     PutFloat(out, k("smooth_y"), c.smooth_y);
+    PutBool(out, k("smooth_enabled"), c.smooth_enabled);
     PutBool(out, k("humanize"), c.humanize);
     PutFloat(out, k("reaction_ms"), c.reaction_ms);
     PutBool(out, k("sticky"), c.sticky);
@@ -286,6 +287,7 @@ void ReadAimCfg(const KV& kv, const char* prefix, Settings::AimbotConfig& c)
     GetFloat(kv, k("hitchance"), c.hitchance);
     GetFloat(kv, k("smooth_x"), c.smooth_x);
     GetFloat(kv, k("smooth_y"), c.smooth_y);
+    GetBool(kv, k("smooth_enabled"), c.smooth_enabled);
     GetBool(kv, k("humanize"), c.humanize);
     GetFloat(kv, k("reaction_ms"), c.reaction_ms);
     GetBool(kv, k("sticky"), c.sticky);
@@ -398,10 +400,10 @@ bool Save(const std::string& name)
     PutBool(out, "esp.flags", s.esp.flags);
     PutBool(out, "esp.tracer", s.esp.tracer);
     PutInt(out, "esp.tracer_origin", s.esp.tracer_origin);
+    PutInt(out, "esp.tracer_type", s.esp.tracer_type);
     PutBool(out, "esp.china_hat", s.esp.china_hat);
+    PutBool(out, "esp.china_hat_target_only", s.esp.china_hat_target_only);
     PutF4(out, "esp.china_hat_color", s.esp.china_hat_color);
-    PutFloat(out, "esp.china_hat_height", s.esp.china_hat_height);
-    PutFloat(out, "esp.china_hat_radius", s.esp.china_hat_radius);
     PutBool(out, "esp.hit_chams", s.esp.hit_chams);
     PutF4(out, "esp.hit_chams_color", s.esp.hit_chams_color);
     PutFloat(out, "esp.hit_chams_duration", s.esp.hit_chams_duration);
@@ -608,6 +610,8 @@ bool Save(const std::string& name)
     PutBool(out, "misc.explorer", s.misc.explorer);
     PutBool(out, "misc.esp_preview", s.misc.esp_preview);
     PutBool(out, "misc.mcp", s.misc.mcp);
+    PutBool(out, "misc.arsenal_flick_fix", s.misc.arsenal_flick_fix);
+    PutBool(out, "misc.desync", s.misc.desync);
     PutBool(out, "lua.executor", s.lua.executor);
     PutFloat(out, "lua.ticks_ms", s.lua.ticks_ms);
 
@@ -741,10 +745,12 @@ bool Load(const std::string& name)
     GetBool(kv, "esp.flags", s.esp.flags);
     GetBool(kv, "esp.tracer", s.esp.tracer);
     GetInt(kv, "esp.tracer_origin", s.esp.tracer_origin);
+    GetInt(kv, "esp.tracer_type", s.esp.tracer_type);
+    if (s.esp.tracer_type < 0) s.esp.tracer_type = 0;
+    if (s.esp.tracer_type > 1) s.esp.tracer_type = 1;
     GetBool(kv, "esp.china_hat", s.esp.china_hat);
+    GetBool(kv, "esp.china_hat_target_only", s.esp.china_hat_target_only);
     GetF4(kv, "esp.china_hat_color", s.esp.china_hat_color);
-    GetFloat(kv, "esp.china_hat_height", s.esp.china_hat_height);
-    GetFloat(kv, "esp.china_hat_radius", s.esp.china_hat_radius);
     GetBool(kv, "esp.hit_chams", s.esp.hit_chams);
     GetF4(kv, "esp.hit_chams_color", s.esp.hit_chams_color);
     GetFloat(kv, "esp.hit_chams_duration", s.esp.hit_chams_duration);
@@ -993,6 +999,8 @@ bool Load(const std::string& name)
     GetBool(kv, "misc.explorer", s.misc.explorer);
     GetBool(kv, "misc.esp_preview", s.misc.esp_preview);
     GetBool(kv, "misc.mcp", s.misc.mcp);
+    GetBool(kv, "misc.arsenal_flick_fix", s.misc.arsenal_flick_fix);
+    GetBool(kv, "misc.desync", s.misc.desync);
     GetBool(kv, "lua.executor", s.lua.executor);
     GetFloat(kv, "lua.ticks_ms", s.lua.ticks_ms);
     if (s.lua.ticks_ms < 1.f) s.lua.ticks_ms = 1.f;

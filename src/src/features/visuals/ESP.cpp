@@ -751,120 +751,147 @@ ImU32 Col4(const float c[4])
     return IM_COL32((int)(c[0]*255),(int)(c[1]*255),(int)(c[2]*255),(int)(c[3]*255));
 }
 
-// конус над башкой
-static void DrawChinaHat(
-    ImDrawList* dl,
-    const Matrix4x4& vm,
-    const Vector2& viewport,
-    float overlay_w,
-    float overlay_h,
-    const Vector3& head_pos,
-    const float* col4)
+// layuh spiderweb tracer: quad bezier, прогибается вниз по мере удаления
+static void DrawSpiderTracer(ImDrawList* dl, ImVec2 origin, ImVec2 target, ImU32 color)
 {
-    if (!dl || !col4)
+    if (!dl)
     {
         return;
     }
 
-    float hat_h = Cheat::g_Settings.esp.china_hat_height;
-    float hat_r = Cheat::g_Settings.esp.china_hat_radius;
-    if (hat_h < 0.1f)
+    const float dx = fabsf(target.x - origin.x);
+    const float dy = fabsf(target.y - origin.y);
+    const float dip = 120.0f + 0.4f * dx + 0.25f * dy;
+    const ImVec2 ctrl(
+        (origin.x + target.x) * 0.5f,
+        (origin.y + target.y) * 0.5f + dip);
+
+    const int segments = 32;
+    auto point_at = [&](float t) -> ImVec2
     {
-        hat_h = 0.1f;
+        const float it = 1.0f - t;
+        return ImVec2(
+            it * it * origin.x + 2.0f * it * t * ctrl.x + t * t * target.x,
+            it * it * origin.y + 2.0f * it * t * ctrl.y + t * t * target.y);
+    };
+
+    ImVec2 prev = origin;
+    for (int i = 1; i <= segments; ++i)
+    {
+        const ImVec2 pt = point_at((float)i / (float)segments);
+        dl->AddLine(prev, pt, IM_COL32(0, 0, 0, 200), 2.5f);
+        prev = pt;
     }
 
-    if (hat_r < 0.1f)
+    prev = origin;
+    for (int i = 1; i <= segments; ++i)
     {
-        hat_r = 0.1f;
+        const ImVec2 pt = point_at((float)i / (float)segments);
+        dl->AddLine(prev, pt, color, 1.0f);
+        prev = pt;
     }
+}
 
-    const int segs = 48;
-    Vector3 apex(
-        head_pos.x,
-        head_pos.y + hat_h + 0.15f,
-        head_pos.z);
-
-    Vector2 apex_s{};
-    if (!WorldToScreen(vm, viewport, apex, apex_s))
-    {
+// china hat из layuh: 3d-конус из линий над головой
+static void DrawChinaHat(ImDrawList* draw, const Matrix4x4& vm, const Vector2& viewport,
+                         const Vector3& head_pos, const float* col4)
+{
+    if (!draw || !col4)
         return;
+
+    const float hatRadius = 1.5f;
+    const float hatHeight = 1.2f;
+    const int segments = 24;
+
+    std::vector<Vector3> vertices;
+    std::vector<Vector2> screenVertices;
+    vertices.reserve(1 + (segments + 1) * 4);
+
+    vertices.push_back(head_pos + Vector3(0, hatHeight, 0));
+
+    for (int i = 0; i <= segments; i++) {
+        float angle = (i * 2.0f * 3.14159f) / segments;
+        vertices.push_back(head_pos + Vector3(
+            hatRadius * cosf(angle),
+            0,
+            hatRadius * sinf(angle)
+        ));
     }
 
-    ImVec2 base_s[48];
-    bool any = PointOnOverlay(apex_s, overlay_w, overlay_h, 2.f);
-    bool all_ok = true;
-
-    for (int i = 0; i < segs; ++i)
-    {
-        float ang = (2.f * 3.14159f * (float)i) / (float)segs;
-        Vector3 p(
-            head_pos.x + hat_r * cosf(ang),
-            head_pos.y + 0.2f,
-            head_pos.z + hat_r * sinf(ang));
-
-        Vector2 sp{};
-        if (!WorldToScreen(vm, viewport, p, sp))
-        {
-            all_ok = false;
-            base_s[i] = ImVec2(-9999.f, -9999.f);
-            continue;
+    for (int ring = 1; ring <= 3; ring++) {
+        float ringRadius = hatRadius * (ring / 4.0f);
+        float ringHeight = hatHeight * (1.0f - ring / 4.0f);
+        for (int i = 0; i <= segments; i++) {
+            float angle = (i * 2.0f * 3.14159f) / segments;
+            vertices.push_back(head_pos + Vector3(
+                ringRadius * cosf(angle),
+                ringHeight,
+                ringRadius * sinf(angle)
+            ));
         }
-
-        base_s[i] = ImVec2(sp.x, sp.y);
-        any = any || PointOnOverlay(sp, overlay_w, overlay_h, 2.f);
     }
 
-    if (!any)
-    {
+    bool allVisible = true;
+    screenVertices.reserve(vertices.size());
+    for (const auto& vertex : vertices) {
+        Vector2 screen;
+        if (!WorldToScreen(vm, viewport, vertex, screen)) {
+            allVisible = false;
+            break;
+        }
+        screenVertices.push_back(screen);
+    }
+
+    if (!allVisible)
         return;
+
+    ImColor color(col4[0], col4[1], col4[2], col4[3]);
+
+    // спицы от вершины к основанию
+    for (int i = 1; i <= segments; i++) {
+        draw->AddLine(
+            ImVec2(screenVertices[0].x, screenVertices[0].y),
+            ImVec2(screenVertices[i].x, screenVertices[i].y),
+            color, 0.8f
+        );
     }
 
-    ImU32 fill = IM_COL32(
-        (int)(col4[0] * 255), (int)(col4[1] * 255),
-        (int)(col4[2] * 255), (int)(col4[3] * 255));
-    ImU32 base_col = IM_COL32(
-        (int)(col4[0] * 255), (int)(col4[1] * 255),
-        (int)(col4[2] * 255), (int)(col4[3] * 0.6f * 255));
-    ImU32 outline = IM_COL32(0, 0, 0, 100);
+    // основание
+    for (int i = 1; i <= segments; i++) {
+        int next = (i == segments) ? 1 : i + 1;
+        draw->AddLine(
+            ImVec2(screenVertices[i].x, screenVertices[i].y),
+            ImVec2(screenVertices[next].x, screenVertices[next].y),
+            color, 1.0f
+        );
+    }
 
-    ImDrawListFlags fl = dl->Flags;
-    dl->Flags |= ImDrawListFlags_AntiAliasedFill | ImDrawListFlags_AntiAliasedLines;
-
-    ImVec2 apex_im(apex_s.x, apex_s.y);
-    const float soft = 2.f;
-
-    for (int i = 0; i < segs; ++i)
-    {
-        int next = (i + 1) % segs;
-        if (base_s[i].x < -9000.f || base_s[next].x < -9000.f)
-        {
-            continue;
+    // внутренние кольца
+    for (int ring = 1; ring <= 3; ring++) {
+        int ringStart = 1 + ring * (segments + 1);
+        for (int i = 0; i < segments; i++) {
+            int curr = ringStart + i;
+            int next = ringStart + ((i + 1) % (segments + 1));
+            draw->AddLine(
+                ImVec2(screenVertices[curr].x, screenVertices[curr].y),
+                ImVec2(screenVertices[next].x, screenVertices[next].y),
+                ImColor(color.Value.x, color.Value.y, color.Value.z, 0.8f), 0.6f
+            );
         }
-
-        float ang = (2.f * 3.14159f * (float)i) / (float)segs;
-        ImVec2 apex_off(
-            apex_im.x + cosf(ang) * soft,
-            apex_im.y + sinf(ang) * soft);
-        dl->AddTriangleFilled(apex_off, base_s[i], base_s[next], fill);
     }
 
-    if (all_ok)
-    {
-        dl->AddConvexPolyFilled(base_s, segs, base_col);
-    }
-
-    for (int i = 0; i < segs; ++i)
-    {
-        int next = (i + 1) % segs;
-        if (base_s[i].x < -9000.f || base_s[next].x < -9000.f)
-        {
-            continue;
+    // вертикальные струны
+    for (int i = 0; i < segments; i += 2) {
+        for (int ring = 0; ring < 3; ring++) {
+            int curr = 1 + ring * (segments + 1) + i;
+            int next = 1 + (ring + 1) * (segments + 1) + i;
+            draw->AddLine(
+                ImVec2(screenVertices[curr].x, screenVertices[curr].y),
+                ImVec2(screenVertices[next].x, screenVertices[next].y),
+                ImColor(color.Value.x, color.Value.y, color.Value.z, 0.6f), 0.5f
+            );
         }
-
-        dl->AddLine(base_s[i], base_s[next], outline, 1.2f);
     }
-
-    dl->Flags = fl;
 }
 
 // есп каждый кадр оверлея
@@ -1369,8 +1396,13 @@ void Cheat::Visuals::ESP::Render()
             ImU32 tc = Col4(is_bot ? st.box_color : Cheat::g_Settings.esp.tracer_color);
             if (aim_target)
                 tc = aim_red;
-            draw_list->AddLine(from, to, IM_COL32(0, 0, 0, 200), 2.5f);
-            draw_list->AddLine(from, to, tc, 1.0f);
+            if (Cheat::g_Settings.esp.tracer_type == 1)
+                DrawSpiderTracer(draw_list, from, to, tc);
+            else
+            {
+                draw_list->AddLine(from, to, IM_COL32(0, 0, 0, 200), 2.5f);
+                draw_list->AddLine(from, to, tc, 1.0f);
+            }
         }
 
         float hit_fade = 0.f;
@@ -1545,11 +1577,23 @@ void Cheat::Visuals::ESP::Render()
             }
         }
 
+        // china hat (layuh): 3d-конус над головой
         if (!corpse_mode && Cheat::g_Settings.esp.china_hat && cache.head)
         {
-            DrawChinaHat(
-                draw_list, vm, viewport, overlay_w, overlay_h,
-                head_pos, Cheat::g_Settings.esp.china_hat_color);
+            bool draw_hat = true;
+            if (Cheat::g_Settings.esp.china_hat_target_only)
+            {
+                const std::uint64_t tgt = Cheat::Features::Aim::CurrentTarget();
+                draw_hat = (tgt != 0 && cache.address == tgt);
+            }
+
+            if (draw_hat)
+            {
+                Vector3 hat_pos = head_pos;
+                hat_pos.y += 0.4f; // Offset above the head
+                DrawChinaHat(draw_list, vm, viewport, hat_pos,
+                             Cheat::g_Settings.esp.china_hat_color);
+            }
         }
 
         // труп: чамсы уже нарисовали, имя x_x и выход
