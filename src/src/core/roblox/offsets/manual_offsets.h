@@ -98,11 +98,11 @@ namespace ManualOffsets {
     }
 
     // Btools — Workspace MouseCommand shared_ptr pipeline (FoulzExternal dump).
+    // Each command slot is a shared_ptr pair: object ptr at the offset, control
+    // block ptr at offset + 8 (there is no separate refcount constant).
     namespace Btools {
         inline constexpr uintptr_t WorkspaceCurrentCommand  = 0x878;
-        inline constexpr uintptr_t WorkspaceCurrentRefCount = 0x880;
         inline constexpr uintptr_t WorkspaceStickyCommand   = 0x888;
-        inline constexpr uintptr_t WorkspaceStickyRefCount  = 0x890;
         inline constexpr uintptr_t MouseCommandWorkspace    = 0x50;
         inline constexpr int       ToolAllocationSize       = 0xD0;
     }

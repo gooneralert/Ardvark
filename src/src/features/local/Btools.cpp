@@ -243,9 +243,9 @@ bool ActivateWithVTable(uintptr_t workspace, uintptr_t vtable)
     if (!g_saved)
     {
         g_orig_cur_obj  = g_Memory.Read<std::uintptr_t>(workspace + ManualOffsets::Btools::WorkspaceCurrentCommand);
-        g_orig_cur_ctrl = g_Memory.Read<std::uintptr_t>(workspace + ManualOffsets::Btools::WorkspaceCurrentRefCount);
+        g_orig_cur_ctrl = g_Memory.Read<std::uintptr_t>(workspace + ManualOffsets::Btools::WorkspaceCurrentCommand + 8);
         g_orig_stk_obj  = g_Memory.Read<std::uintptr_t>(workspace + ManualOffsets::Btools::WorkspaceStickyCommand);
-        g_orig_stk_ctrl = g_Memory.Read<std::uintptr_t>(workspace + ManualOffsets::Btools::WorkspaceStickyRefCount);
+        g_orig_stk_ctrl = g_Memory.Read<std::uintptr_t>(workspace + ManualOffsets::Btools::WorkspaceStickyCommand + 8);
         g_saved = true;
     }
 
@@ -266,10 +266,11 @@ bool ActivateWithVTable(uintptr_t workspace, uintptr_t vtable)
     const uintptr_t ctrl = MakeControlBlock();
     if (!ctrl) return false;
 
+    // shared_ptr pair per slot: [object @ Command, ctrl block @ Command + 8]
     g_Memory.Write<std::uintptr_t>(workspace + ManualOffsets::Btools::WorkspaceCurrentCommand, tool);
-    g_Memory.Write<std::uintptr_t>(workspace + ManualOffsets::Btools::WorkspaceCurrentRefCount, ctrl);
+    g_Memory.Write<std::uintptr_t>(workspace + ManualOffsets::Btools::WorkspaceCurrentCommand + 8, ctrl);
     g_Memory.Write<std::uintptr_t>(workspace + ManualOffsets::Btools::WorkspaceStickyCommand, tool);
-    g_Memory.Write<std::uintptr_t>(workspace + ManualOffsets::Btools::WorkspaceStickyRefCount, ctrl);
+    g_Memory.Write<std::uintptr_t>(workspace + ManualOffsets::Btools::WorkspaceStickyCommand + 8, ctrl);
 
     g_active_tool = tool;
     g_active_ctrl = ctrl;
@@ -286,9 +287,9 @@ void Deactivate()
         if (ws)
         {
             g_Memory.Write<std::uintptr_t>(ws + ManualOffsets::Btools::WorkspaceCurrentCommand, g_orig_cur_obj);
-            g_Memory.Write<std::uintptr_t>(ws + ManualOffsets::Btools::WorkspaceCurrentRefCount, g_orig_cur_ctrl);
+            g_Memory.Write<std::uintptr_t>(ws + ManualOffsets::Btools::WorkspaceCurrentCommand + 8, g_orig_cur_ctrl);
             g_Memory.Write<std::uintptr_t>(ws + ManualOffsets::Btools::WorkspaceStickyCommand, g_orig_stk_obj);
-            g_Memory.Write<std::uintptr_t>(ws + ManualOffsets::Btools::WorkspaceStickyRefCount, g_orig_stk_ctrl);
+            g_Memory.Write<std::uintptr_t>(ws + ManualOffsets::Btools::WorkspaceStickyCommand + 8, g_orig_stk_ctrl);
         }
     }
 
