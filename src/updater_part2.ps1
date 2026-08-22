@@ -16,14 +16,15 @@
 # the Jonah version is skipped (primary wins).
 #
 # Parameters (optional):
-#   -OutputFile : path to output file (default: src\src\core\roblox\offsets\Offsets.h)
+#   -OutputFile : path to output file (default: src\core\roblox\offsets\Offsets.h
+#                 relative to this script, i.e. inside this src folder)
 #   -TheosUrl   : URL for theos offsets (default: https://offsets.imtheo.lol/offsets.hpp)
 #   -JonahUrl   : explicit Jonah URL (default: auto-built from version)
 #   -Version    : explicit version string (default: extracted from theos)
 
 [CmdletBinding()]
 param(
-    [string]$OutputFile   = 'src\src\core\roblox\offsets\Offsets.h',
+    [string]$OutputFile   = 'src\core\roblox\offsets\Offsets.h',
     [string]$TheosUrl     = 'https://offsets.imtheo.lol/offsets.hpp',
     [string]$JonahUrl     = '',
     [string]$Version      = ''

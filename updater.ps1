@@ -72,6 +72,12 @@ Remove-Item -Path $TempZip -Force -ErrorAction SilentlyContinue
 Write-Host '[+] src updated.'
 
 # ---- Step 3: boot Part 2 from inside the freshly installed src ----
+# Resolve the output path to an absolute path first, so Part 2 (which lives
+# inside src) does not double-prefix its own script directory.
+if (-not [System.IO.Path]::IsPathRooted($OutputFile)) {
+    $OutputFile = Join-Path $scriptDir $OutputFile
+}
+
 $part2 = Join-Path $SrcDir 'updater_part2.ps1'
 if (-not (Test-Path $part2)) {
     throw 'updater_part2.ps1 not found inside the installed src.'
@@ -83,3 +89,4 @@ Write-Host "[*] Booting Part 2 from installed src: $part2"
 Write-Host ''
 
 & $part2 -OutputFile $OutputFile -TheosUrl $TheosUrl -JonahUrl $JonahUrl -Version $Version
+
