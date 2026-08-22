@@ -199,7 +199,9 @@
     <ClInclude Include="src\core\roblox\enums\Enums.h" />
     <ClInclude Include="src\core\roblox\offsets\Offsets.h" />
     <ClInclude Include="src\core\roblox\math\Math.h" />
+    <ClInclude Include="src\core\roblox\Rtti.h" />
     <ClInclude Include="src\features\visuals\RaycastEngine.h" />
+    <ClInclude Include="src\features\visuals\EngineChamsOffsets.h" />
     <ClInclude Include="src\features\visuals\ESP.h" />
     <ClInclude Include="src\features\visuals\EspLayout.h" />
     <ClInclude Include="src\features\visuals\Crosshair.h" />
@@ -327,6 +329,7 @@
     <ClCompile Include="src\core\roblox\classes\Player.cpp" />
     <ClCompile Include="src\core\roblox\classes\Players.cpp" />
     <ClCompile Include="src\core\roblox\classes\Workspace.cpp" />
+    <ClCompile Include="src\core\roblox\Rtti.cpp" />
     <ClCompile Include="src\features\visuals\RaycastEngine.cpp" />
     <ClCompile Include="src\features\visuals\ESP.cpp" />
     <ClCompile Include="src\features\visuals\boxfill\BoxFill.cpp">

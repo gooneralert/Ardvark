@@ -1,4 +1,4 @@
-#include "pch.h"
+﻿#include "pch.h"
 #include "EngineChams.h"
 #include "EngineChamsPriv.h"
 #include "EngineChamsApply.h"
@@ -7,7 +7,8 @@
 #include "core/memory/Memory.h"
 
 #include "core/roblox/offsets/Offsets.h"
-#include "core/roblox/offsets/manual_offsets.h"
+#include "../EngineChamsOffsets.h"
+#include "core/roblox/Rtti.h"
 #include "core/roblox/math/Math.h"
 #include "core/globals/Globals.h"
 #include "core/player/PlayerHandler.h"
@@ -49,7 +50,7 @@ std::atomic<bool> g_run{ false };
 
 bool WorldCenter(uintptr_t ent, Vector3& out)
 {
-	namespace FC = ManualOffsets::FastClusterEntity;
+	namespace FC = ChamsOffsets::FastClusterEntity;
 
 	float minx = g_Memory.Read<float>(ent + FC::BBoxMinX);
 	float miny = g_Memory.Read<float>(ent + FC::BBoxMinY);
@@ -286,7 +287,7 @@ void RefreshKnown()
 			g_miss[ent] = 0;
 		}
 
-		uintptr_t rq = ent + ManualOffsets::FastClusterEntity::RenderQueueId;
+		uintptr_t rq = ent + ChamsOffsets::FastClusterEntity::RenderQueueId;
 		if (!g_Memory.IsWritable(rq, sizeof(std::uint32_t)))
 		{
 			continue;
@@ -437,9 +438,24 @@ void Loop()
 			}
 
 			uintptr_t base = g_Memory.GetModuleBase(L"RobloxPlayerBeta.exe");
-			if (base)
+			static uintptr_t s_vt_base = 0; // база, на которой закэшировали vtable
+			static uintptr_t s_vt = 0;
+
+			// vtable живьём резолвим через MSVC RTTI один раз на модуль; при
+			// переатаче/смене базы сбрасываем и резолвим заново
+			if (!base || s_vt_base != base)
 			{
-				g_vt = base + ManualOffsets::FastClusterEntity::VTableRva;
+				s_vt_base = base;
+				s_vt = 0;
+			}
+			if (!s_vt && base)
+			{
+				s_vt = Cheat::Roblox::Rtti::VTableByRttiName(
+					".?AVFastClusterEntity@Graphics@RBX@@");
+			}
+			if (s_vt)
+			{
+				g_vt = s_vt;
 			}
 
 			// известные — каждый тик, фуллскан чаще

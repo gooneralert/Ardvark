@@ -1,8 +1,9 @@
-#include "pch.h"
+﻿#include "pch.h"
 #include "EngineChamsStyles.h"
 #include "EngineChamsApply.h"
 
 #include "core/roblox/offsets/Offsets.h"
+#include "../EngineChamsOffsets.h"
 
 #include <cstdint>
 
@@ -29,7 +30,7 @@ std::uint32_t ColorParam(int idx)
 
 std::uint32_t StyleQueue(int style)
 {
-	namespace RQ = ManualOffsets::RenderQueue;
+	namespace RQ = ChamsOffsets::RenderQueue;
 
 	if (style == 5)
 	{

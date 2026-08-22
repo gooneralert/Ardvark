@@ -322,7 +322,8 @@ def main():
     print("Offsets.h:")
     print(f"  inline constexpr uintptr_t RaycastBoundDesc = {desc_rva:#x};")
     print(f"  inline constexpr uintptr_t RaycastBoundFn   = {fn_off:#x};")
-    print(f"  inline constexpr uintptr_t VTableRva              = {fc_rva:#x};")
+    print("  # engine chams vtable needs NO constant anymore:")
+    print("  # core/roblox/Rtti.h resolves it at runtime from the same RTTI name.")
 
 
 if __name__ == "__main__":

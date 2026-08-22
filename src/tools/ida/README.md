@@ -38,7 +38,9 @@ Cheat uses: `slot = module_base + RaycastBoundDesc + RaycastBoundFn`.
 2. Run `tools/ida/raycast.py` — File → Script file… / MCP `py_exec_file`.
 3. Copy printed lines into `Offsets.h`:
    - `WorldRoot::RaycastBoundDesc` / `RaycastBoundFn`
-   - `FastClusterEntity::VTableRva` (engine chams)
+   - The FastCluster block is **diagnostic only** — engine chams now resolves the
+     FastClusterEntity vtable at runtime via MSVC RTTI (`core/roblox/Rtti.h`),
+     so `VTableRva` is no longer a hard-coded offset.
 
 If the script output looks sane (Raycast index maps to a high RVA, nearby methods listed, FastCluster slot0 in `.text`), **stop**. Done.
 

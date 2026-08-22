@@ -1,4 +1,4 @@
-#include "pch.h"
+﻿#include "pch.h"
 #include "EngineChamsApply.h"
 #include "EngineChamsPriv.h"
 #include "EngineChamsStyles.h"
@@ -6,7 +6,7 @@
 #include "core/memory/Memory.h"
 
 #include "core/roblox/offsets/Offsets.h"
-#include "core/roblox/offsets/manual_offsets.h"
+#include "../EngineChamsOffsets.h"
 #include "app/Settings.h"
 
 #include <cstdint>
@@ -32,7 +32,7 @@ bool EntAlive(uintptr_t ent)
 		return false;
 	}
 
-	return g_Memory.IsWritable(ent + ManualOffsets::FastClusterEntity::RenderQueueId, sizeof(std::uint32_t));
+	return g_Memory.IsWritable(ent + ChamsOffsets::FastClusterEntity::RenderQueueId, sizeof(std::uint32_t));
 }
 
 // для refresh: тока vtable, IsWritable иногда врёт и гасит чамсы
@@ -48,8 +48,8 @@ bool EntKnown(uintptr_t ent)
 
 bool LayerAlive(uintptr_t layer)
 {
-	return g_Memory.IsWritable(layer + ManualOffsets::MaterialLayer::FillModeByte, 1) &&
-	       g_Memory.IsWritable(layer + ManualOffsets::MaterialLayer::ColorData, sizeof(std::uint32_t));
+	return g_Memory.IsWritable(layer + ChamsOffsets::MaterialLayer::FillModeByte, 1) &&
+	       g_Memory.IsWritable(layer + ChamsOffsets::MaterialLayer::ColorData, sizeof(std::uint32_t));
 }
 
 void DropLayersLocked(uintptr_t ent)
@@ -88,20 +88,20 @@ void RestoreLayersLocked(uintptr_t ent)
 		if (alive && LayerAlive(layer))
 		{
 			LayerBackup& b = bit->second;
-			g_Memory.Write<std::uint8_t>(layer + ManualOffsets::MaterialLayer::FillModeByte, b.fillmode);
-			if (g_Memory.IsWritable(layer + ManualOffsets::MaterialLayer::MatFlags, 4))
+			g_Memory.Write<std::uint8_t>(layer + ChamsOffsets::MaterialLayer::FillModeByte, b.fillmode);
+			if (g_Memory.IsWritable(layer + ChamsOffsets::MaterialLayer::MatFlags, 4))
 			{
-				g_Memory.Write<std::uint32_t>(layer + ManualOffsets::MaterialLayer::MatFlags, b.matflags);
+				g_Memory.Write<std::uint32_t>(layer + ChamsOffsets::MaterialLayer::MatFlags, b.matflags);
 			}
-			if (g_Memory.IsWritable(layer + ManualOffsets::MaterialLayer::Param, 4))
+			if (g_Memory.IsWritable(layer + ChamsOffsets::MaterialLayer::Param, 4))
 			{
-				g_Memory.Write<std::uint32_t>(layer + ManualOffsets::MaterialLayer::Param, b.param);
+				g_Memory.Write<std::uint32_t>(layer + ChamsOffsets::MaterialLayer::Param, b.param);
 			}
-			if (g_Memory.IsWritable(layer + ManualOffsets::MaterialLayer::Flags2, 4))
+			if (g_Memory.IsWritable(layer + ChamsOffsets::MaterialLayer::Flags2, 4))
 			{
-				g_Memory.Write<std::uint32_t>(layer + ManualOffsets::MaterialLayer::Flags2, b.flags2);
+				g_Memory.Write<std::uint32_t>(layer + ChamsOffsets::MaterialLayer::Flags2, b.flags2);
 			}
-			g_Memory.Write<std::uint32_t>(layer + ManualOffsets::MaterialLayer::ColorData, b.color);
+			g_Memory.Write<std::uint32_t>(layer + ChamsOffsets::MaterialLayer::ColorData, b.color);
 		}
 
 		g_layers.erase(bit);
@@ -130,7 +130,7 @@ void RestoreAll()
 			continue;
 		}
 
-		g_Memory.Write<std::uint32_t>(ent + ManualOffsets::FastClusterEntity::RenderQueueId, id);
+		g_Memory.Write<std::uint32_t>(ent + ChamsOffsets::FastClusterEntity::RenderQueueId, id);
 
 		auto lit = ent_layers.find(ent);
 		if (lit == ent_layers.end())
@@ -147,20 +147,20 @@ void RestoreAll()
 			}
 
 			LayerBackup& b = bit->second;
-			g_Memory.Write<std::uint8_t>(layer + ManualOffsets::MaterialLayer::FillModeByte, b.fillmode);
-			if (g_Memory.IsWritable(layer + ManualOffsets::MaterialLayer::MatFlags, 4))
+			g_Memory.Write<std::uint8_t>(layer + ChamsOffsets::MaterialLayer::FillModeByte, b.fillmode);
+			if (g_Memory.IsWritable(layer + ChamsOffsets::MaterialLayer::MatFlags, 4))
 			{
-				g_Memory.Write<std::uint32_t>(layer + ManualOffsets::MaterialLayer::MatFlags, b.matflags);
+				g_Memory.Write<std::uint32_t>(layer + ChamsOffsets::MaterialLayer::MatFlags, b.matflags);
 			}
-			if (g_Memory.IsWritable(layer + ManualOffsets::MaterialLayer::Param, 4))
+			if (g_Memory.IsWritable(layer + ChamsOffsets::MaterialLayer::Param, 4))
 			{
-				g_Memory.Write<std::uint32_t>(layer + ManualOffsets::MaterialLayer::Param, b.param);
+				g_Memory.Write<std::uint32_t>(layer + ChamsOffsets::MaterialLayer::Param, b.param);
 			}
-			if (g_Memory.IsWritable(layer + ManualOffsets::MaterialLayer::Flags2, 4))
+			if (g_Memory.IsWritable(layer + ChamsOffsets::MaterialLayer::Flags2, 4))
 			{
-				g_Memory.Write<std::uint32_t>(layer + ManualOffsets::MaterialLayer::Flags2, b.flags2);
+				g_Memory.Write<std::uint32_t>(layer + ChamsOffsets::MaterialLayer::Flags2, b.flags2);
 			}
-			g_Memory.Write<std::uint32_t>(layer + ManualOffsets::MaterialLayer::ColorData, b.color);
+			g_Memory.Write<std::uint32_t>(layer + ChamsOffsets::MaterialLayer::ColorData, b.color);
 		}
 	}
 }
@@ -179,7 +179,7 @@ void RestoreOne(uintptr_t ent)
 	auto it = g_saved.find(ent);
 	if (it != g_saved.end())
 	{
-		g_Memory.Write<std::uint32_t>(ent + ManualOffsets::FastClusterEntity::RenderQueueId, it->second);
+		g_Memory.Write<std::uint32_t>(ent + ChamsOffsets::FastClusterEntity::RenderQueueId, it->second);
 		g_saved.erase(it);
 	}
 	RestoreLayersLocked(ent);
@@ -199,14 +199,14 @@ void ApplyLayers(uintptr_t ent, std::uint8_t fill, std::uint32_t param, std::uin
 		return;
 	}
 
-	uintptr_t arr = g_Memory.Read<uintptr_t>(ent + ManualOffsets::FastClusterEntity::TechniqueArrayPtr);
+	uintptr_t arr = g_Memory.Read<uintptr_t>(ent + ChamsOffsets::FastClusterEntity::TechniqueArrayPtr);
 	if (!g_Memory.IsValid(arr))
 	{
 		return;
 	}
 
-	uintptr_t begin = g_Memory.Read<uintptr_t>(arr + ManualOffsets::TechniqueArray::BeginOffset);
-	uintptr_t end = g_Memory.Read<uintptr_t>(arr + ManualOffsets::TechniqueArray::EndOffset);
+	uintptr_t begin = g_Memory.Read<uintptr_t>(arr + ChamsOffsets::TechniqueArray::BeginOffset);
+	uintptr_t end = g_Memory.Read<uintptr_t>(arr + ChamsOffsets::TechniqueArray::EndOffset);
 	if (!g_Memory.IsValid(begin) || end <= begin)
 	{
 		return;
@@ -218,7 +218,7 @@ void ApplyLayers(uintptr_t ent, std::uint8_t fill, std::uint32_t param, std::uin
 		return;
 	}
 
-	std::size_t count = bytes / ManualOffsets::MaterialLayer::Stride;
+	std::size_t count = bytes / ChamsOffsets::MaterialLayer::Stride;
 	if (count == 0 || count > 256)
 	{
 		return;
@@ -226,7 +226,7 @@ void ApplyLayers(uintptr_t ent, std::uint8_t fill, std::uint32_t param, std::uin
 
 	for (std::size_t i = 0; i < count; ++i)
 	{
-		uintptr_t layer = begin + i * ManualOffsets::MaterialLayer::Stride;
+		uintptr_t layer = begin + i * ChamsOffsets::MaterialLayer::Stride;
 		if (!LayerAlive(layer))
 		{
 			continue;
@@ -237,30 +237,30 @@ void ApplyLayers(uintptr_t ent, std::uint8_t fill, std::uint32_t param, std::uin
 			if (!g_layers.count(layer))
 			{
 				LayerBackup b{};
-				b.fillmode = g_Memory.Read<std::uint8_t>(layer + ManualOffsets::MaterialLayer::FillModeByte);
-				b.matflags = g_Memory.Read<std::uint32_t>(layer + ManualOffsets::MaterialLayer::MatFlags);
-				b.param = g_Memory.Read<std::uint32_t>(layer + ManualOffsets::MaterialLayer::Param);
-				b.flags2 = g_Memory.Read<std::uint32_t>(layer + ManualOffsets::MaterialLayer::Flags2);
-				b.color = g_Memory.Read<std::uint32_t>(layer + ManualOffsets::MaterialLayer::ColorData);
+				b.fillmode = g_Memory.Read<std::uint8_t>(layer + ChamsOffsets::MaterialLayer::FillModeByte);
+				b.matflags = g_Memory.Read<std::uint32_t>(layer + ChamsOffsets::MaterialLayer::MatFlags);
+				b.param = g_Memory.Read<std::uint32_t>(layer + ChamsOffsets::MaterialLayer::Param);
+				b.flags2 = g_Memory.Read<std::uint32_t>(layer + ChamsOffsets::MaterialLayer::Flags2);
+				b.color = g_Memory.Read<std::uint32_t>(layer + ChamsOffsets::MaterialLayer::ColorData);
 				g_layers[layer] = b;
 				g_ent_layers[ent].push_back(layer);
 			}
 		}
 
-		g_Memory.Write<std::uint8_t>(layer + ManualOffsets::MaterialLayer::FillModeByte, fill);
-		if (g_Memory.IsWritable(layer + ManualOffsets::MaterialLayer::MatFlags, 4))
+		g_Memory.Write<std::uint8_t>(layer + ChamsOffsets::MaterialLayer::FillModeByte, fill);
+		if (g_Memory.IsWritable(layer + ChamsOffsets::MaterialLayer::MatFlags, 4))
 		{
-			g_Memory.Write<std::uint32_t>(layer + ManualOffsets::MaterialLayer::MatFlags, 0);
+			g_Memory.Write<std::uint32_t>(layer + ChamsOffsets::MaterialLayer::MatFlags, 0);
 		}
-		if (g_Memory.IsWritable(layer + ManualOffsets::MaterialLayer::Param, 4))
+		if (g_Memory.IsWritable(layer + ChamsOffsets::MaterialLayer::Param, 4))
 		{
-			g_Memory.Write<std::uint32_t>(layer + ManualOffsets::MaterialLayer::Param, param);
+			g_Memory.Write<std::uint32_t>(layer + ChamsOffsets::MaterialLayer::Param, param);
 		}
-		if (g_Memory.IsWritable(layer + ManualOffsets::MaterialLayer::Flags2, 4))
+		if (g_Memory.IsWritable(layer + ChamsOffsets::MaterialLayer::Flags2, 4))
 		{
-			g_Memory.Write<std::uint32_t>(layer + ManualOffsets::MaterialLayer::Flags2, flags2);
+			g_Memory.Write<std::uint32_t>(layer + ChamsOffsets::MaterialLayer::Flags2, flags2);
 		}
-		g_Memory.Write<std::uint32_t>(layer + ManualOffsets::MaterialLayer::ColorData, color);
+		g_Memory.Write<std::uint32_t>(layer + ChamsOffsets::MaterialLayer::ColorData, color);
 	}
 }
 
@@ -271,7 +271,7 @@ void ApplyEntity(uintptr_t ent)
 		return;
 	}
 
-	uintptr_t rq = ent + ManualOffsets::FastClusterEntity::RenderQueueId;
+	uintptr_t rq = ent + ChamsOffsets::FastClusterEntity::RenderQueueId;
 	if (!g_Memory.IsWritable(rq, sizeof(std::uint32_t)))
 	{
 		return;
