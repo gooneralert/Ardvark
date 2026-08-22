@@ -17,50 +17,66 @@
 #include <cstring>
 #include <chrono>
 #include <cstddef>
-
-#ifndef CFG_CALL_TARGET_VALID
-#define CFG_CALL_TARGET_VALID 0x00000001
-#endif
+#include <cmath>
 
 namespace Cheat {
 namespace Features {
 namespace RaycastSilent {
 namespace {
 
-// Raycast function slot is resolved dynamically via the WorldRoot
-// function-descriptor scan (guide "find_first_func") — no hard-coded RVA.
+// ---- gelato shellcode-execution model -----------------------------------------
+// The raycast hooking here is a port of booted-off-gelato's silentaim raycast
+// hook. The stub is a tiny data-block-driven redirector that copies override
+// vectors into the ray params and tail-jumps to the original native. It lives in
+// a code cave inside d3d11.dll (a user-mode graphics DLL loaded on both Win10 and
+// Win11) -- no system-DLL padding pages, no CFG SetProcessValidCallTargets, no
+// VirtualAllocEx'd state page. That is what keeps it stable on Win10.
 
-#pragma pack(push, 4)
-struct RaycastState {
-	std::uint32_t active = 0;
-	std::uint32_t reserved = 0;
-	float target_x = 0.f;
-	float target_y = 0.f;
-	float target_z = 0.f;
-	float scale = 1.15f;
-	std::uint64_t calls = 0;
-	float cam_x = 0.f;
-	float cam_y = 0.f;
-	float cam_z = 0.f;
+// Data block layout shared with the stub; offsets must not change.
+constexpr std::uint64_t off_call_counter       = 0x00;
+constexpr std::uint64_t off_last_origin        = 0x08;
+constexpr std::uint64_t off_last_direction     = 0x14;
+constexpr std::uint64_t off_override_direction = 0x28;
+constexpr std::uint64_t off_new_direction      = 0x2C;
+constexpr std::uint64_t off_override_origin    = 0x38;
+constexpr std::uint64_t off_new_origin         = 0x3C;
+constexpr std::size_t   data_block_bytes       = 0x50;
+constexpr std::size_t   stub_slot_bytes        = 0x100;
+
+struct RaycastTarget {
+	const char* name;
+	bool packed_ray;
 };
-#pragma pack(pop)
 
-static_assert(offsetof(RaycastState, active) == 0x00);
-static_assert(offsetof(RaycastState, target_x) == 0x08);
-static_assert(offsetof(RaycastState, calls) == 0x18);
-static_assert(offsetof(RaycastState, cam_x) == 0x20);
+// Same set gelato hooks. Descriptors resolve dynamically via the WorldRoot
+// FunctionDescriptor scan (no hard-coded RVA).
+constexpr RaycastTarget k_targets[] = {
+	{ "Raycast",                     false },
+	{ "FindPartOnRay",               true  },
+	{ "FindPartOnRayWithIgnoreList", true  },
+	{ "FindPartOnRayWithWhitelist",  true  },
+	{ "findPartOnRay",               true  },
+};
+constexpr std::size_t k_target_count = sizeof(k_targets) / sizeof(k_targets[0]);
+
+struct HookTarget {
+	std::uintptr_t slot = 0;     // descriptor function-pointer address
+	std::uintptr_t stub = 0;     // stub address inside the cave
+	std::uintptr_t original = 0; // original native pointer
+	bool packed = false;
+};
 
 struct Hook {
-	std::uintptr_t thunk = 0;
-	std::uintptr_t state = 0;
-	std::uintptr_t original = 0;
+	std::uintptr_t data_block = 0;
 	std::uintptr_t module_base = 0;
+	std::vector<HookTarget> targets;
 	bool installed = false;
 	bool active = false;
 	bool wallbang = false;
 };
 
 Hook g_hook{};
+std::uintptr_t g_original = 0;
 auto g_last_fail = std::chrono::steady_clock::time_point{};
 std::uintptr_t g_last_base = 0;
 auto g_last_slot_check = std::chrono::steady_clock::time_point{};
@@ -138,209 +154,6 @@ bool write_protected(std::uintptr_t address, const void* data, std::size_t size)
 	return wrote;
 }
 
-bool mark_cfg(std::uintptr_t t)
-{
-	static FARPROC proc = nullptr;
-	if (!proc)
-	{
-		const char* mods[] = {
-			"kernelbase.dll", "kernel32.dll",
-			"api-ms-win-core-memory-l1-1-3.dll"
-		};
-		for (auto* m : mods)
-		{
-			HMODULE h = GetModuleHandleA(m);
-			if (!h)
-				h = LoadLibraryA(m);
-			if (!h)
-				continue;
-			proc = GetProcAddress(h, "SetProcessValidCallTargets");
-			if (proc)
-				break;
-		}
-	}
-	if (!proc || !g_Memory.GetHandle())
-		return false;
-
-	struct Info {
-		ULONG_PTR Offset;
-		ULONG Flags;
-	} info{};
-	info.Offset = t & (page_sz() - 1);
-	info.Flags = CFG_CALL_TARGET_VALID;
-
-	using Fn = BOOL(WINAPI*)(HANDLE, PVOID, SIZE_T, ULONG, void*);
-	return ((Fn)proc)(
-		g_Memory.GetHandle(),
-		(void*)(t & ~((std::uintptr_t)page_sz() - 1)),
-		page_sz(), 1, &info) != 0;
-}
-
-void append_u64(std::vector<std::uint8_t>& c, std::uint64_t v)
-{
-	const auto* b = (const std::uint8_t*)&v;
-	c.insert(c.end(), b, b + 8);
-}
-
-void patch_rel32(std::vector<std::uint8_t>& c, std::size_t o, std::size_t t)
-{
-	const std::int32_t v = (std::int32_t)((std::ptrdiff_t)t - (std::ptrdiff_t)(o + 4));
-	std::memcpy(c.data() + o, &v, 4);
-}
-
-std::vector<std::uint8_t> make_hook_thunk(std::uintptr_t state, std::uintptr_t orig)
-{
-	std::vector<std::uint8_t> c;
-	c.reserve(384);
-	std::vector<std::size_t> inactive;
-
-	auto je_inactive = [&]
-	{
-		c.insert(c.end(), { 0x0F, 0x84 });
-		inactive.push_back(c.size());
-		c.insert(c.end(), { 0, 0, 0, 0 });
-	};
-	auto jbe_inactive = [&]
-	{
-		c.insert(c.end(), { 0x0F, 0x86 });
-		inactive.push_back(c.size());
-		c.insert(c.end(), { 0, 0, 0, 0 });
-	};
-
-	c.insert(c.end(), { 0x48, 0x83, 0xEC, 0x68 });
-	c.insert(c.end(), { 0x49, 0xBA });
-	append_u64(c, state);
-	c.insert(c.end(), { 0x41, 0x83, 0x3A, 0x00 });
-	je_inactive();
-	c.insert(c.end(), { 0x4D, 0x85, 0xC0 }); je_inactive();
-	c.insert(c.end(), { 0x4D, 0x85, 0xC9 }); je_inactive();
-
-	c.insert(c.end(), { 0xF3, 0x41, 0x0F, 0x10, 0x42, 0x08 });
-	c.insert(c.end(), { 0xF3, 0x41, 0x0F, 0x5C, 0x00 });
-	c.insert(c.end(), { 0xF3, 0x0F, 0x11, 0x44, 0x24, 0x40 });
-	c.insert(c.end(), { 0xF3, 0x41, 0x0F, 0x10, 0x4A, 0x0C });
-	c.insert(c.end(), { 0xF3, 0x41, 0x0F, 0x5C, 0x48, 0x04 });
-	c.insert(c.end(), { 0xF3, 0x0F, 0x11, 0x4C, 0x24, 0x44 });
-	c.insert(c.end(), { 0xF3, 0x41, 0x0F, 0x10, 0x52, 0x10 });
-	c.insert(c.end(), { 0xF3, 0x41, 0x0F, 0x5C, 0x50, 0x08 });
-	c.insert(c.end(), { 0xF3, 0x0F, 0x11, 0x54, 0x24, 0x48 });
-
-	c.insert(c.end(), { 0x0F, 0x28, 0xD8 });
-	c.insert(c.end(), { 0xF3, 0x0F, 0x59, 0xDB });
-	c.insert(c.end(), { 0x0F, 0x28, 0xE1 });
-	c.insert(c.end(), { 0xF3, 0x0F, 0x59, 0xE4 });
-	c.insert(c.end(), { 0xF3, 0x0F, 0x58, 0xDC });
-	c.insert(c.end(), { 0x0F, 0x28, 0xE2 });
-	c.insert(c.end(), { 0xF3, 0x0F, 0x59, 0xE4 });
-	c.insert(c.end(), { 0xF3, 0x0F, 0x58, 0xDC });
-	c.insert(c.end(), { 0xF3, 0x0F, 0x51, 0xDB });
-	c.insert(c.end(), { 0x0F, 0x57, 0xED });
-	c.insert(c.end(), { 0x0F, 0x2E, 0xDD });
-	jbe_inactive();
-
-	c.insert(c.end(), { 0xF3, 0x41, 0x0F, 0x10, 0x21 });
-	c.insert(c.end(), { 0xF3, 0x0F, 0x59, 0xE4 });
-	c.insert(c.end(), { 0xF3, 0x41, 0x0F, 0x10, 0x69, 0x04 });
-	c.insert(c.end(), { 0xF3, 0x0F, 0x59, 0xED });
-	c.insert(c.end(), { 0xF3, 0x0F, 0x58, 0xE5 });
-	c.insert(c.end(), { 0xF3, 0x41, 0x0F, 0x10, 0x69, 0x08 });
-	c.insert(c.end(), { 0xF3, 0x0F, 0x59, 0xED });
-	c.insert(c.end(), { 0xF3, 0x0F, 0x58, 0xE5 });
-	c.insert(c.end(), { 0xF3, 0x0F, 0x51, 0xE4 });
-	c.insert(c.end(), { 0x0F, 0x57, 0xED });
-	c.insert(c.end(), { 0x0F, 0x2E, 0xE5 });
-	jbe_inactive();
-
-	c.insert(c.end(), { 0x41, 0x8B, 0x42, 0x04 });
-	c.insert(c.end(), { 0xA8, 0x01 });
-	c.insert(c.end(), { 0x0F, 0x85 });
-	const std::size_t wallbang_jmp = c.size();
-	c.insert(c.end(), { 0, 0, 0, 0 });
-
-	const std::size_t dir_only_off = c.size();
-	c.insert(c.end(), { 0x0F, 0x28, 0xEC });
-	c.insert(c.end(), { 0xF3, 0x0F, 0x5E, 0xEB });
-	c.insert(c.end(), { 0xF3, 0x0F, 0x59, 0xC5 });
-	c.insert(c.end(), { 0xF3, 0x0F, 0x59, 0xCD });
-	c.insert(c.end(), { 0xF3, 0x0F, 0x59, 0xD5 });
-	c.insert(c.end(), { 0xF3, 0x41, 0x0F, 0x11, 0x01 });
-	c.insert(c.end(), { 0xF3, 0x41, 0x0F, 0x11, 0x49, 0x04 });
-	c.insert(c.end(), { 0xF3, 0x41, 0x0F, 0x11, 0x51, 0x08 });
-	c.insert(c.end(), { 0x49, 0xFF, 0x42, 0x18 });
-	c.push_back(0xE9);
-	const std::size_t to_call = c.size();
-	c.insert(c.end(), { 0, 0, 0, 0 });
-
-	const std::size_t wallbang_off = c.size();
-	patch_rel32(c, wallbang_jmp, wallbang_off);
-
-	c.insert(c.end(), { 0xF3, 0x41, 0x0F, 0x10, 0x20 });
-	c.insert(c.end(), { 0xF3, 0x41, 0x0F, 0x5C, 0x62, 0x20 });
-	c.insert(c.end(), { 0xF3, 0x0F, 0x59, 0xE4 });
-	c.insert(c.end(), { 0xF3, 0x41, 0x0F, 0x10, 0x68, 0x04 });
-	c.insert(c.end(), { 0xF3, 0x41, 0x0F, 0x5C, 0x6A, 0x24 });
-	c.insert(c.end(), { 0xF3, 0x0F, 0x59, 0xED });
-	c.insert(c.end(), { 0xF3, 0x0F, 0x58, 0xE5 });
-	c.insert(c.end(), { 0xF3, 0x41, 0x0F, 0x10, 0x68, 0x08 });
-	c.insert(c.end(), { 0xF3, 0x41, 0x0F, 0x5C, 0x6A, 0x28 });
-	c.insert(c.end(), { 0xF3, 0x0F, 0x59, 0xED });
-	c.insert(c.end(), { 0xF3, 0x0F, 0x58, 0xE5 });
-	c.insert(c.end(), { 0xB8, 0x00, 0x00, 0x10, 0x41 });
-	c.insert(c.end(), { 0x66, 0x0F, 0x6E, 0xE8 });
-	c.insert(c.end(), { 0x0F, 0x2F, 0xE5 });
-	c.insert(c.end(), { 0x0F, 0x82 });
-	const std::size_t cam_jb = c.size();
-	c.insert(c.end(), { 0, 0, 0, 0 });
-	patch_rel32(c, cam_jb, dir_only_off);
-
-	c.insert(c.end(), { 0xF3, 0x0F, 0x5E, 0xC3 });
-	c.insert(c.end(), { 0xF3, 0x0F, 0x5E, 0xCB });
-	c.insert(c.end(), { 0xF3, 0x0F, 0x5E, 0xD3 });
-
-	c.insert(c.end(), { 0x0F, 0x28, 0xE0 });
-	c.insert(c.end(), { 0xF3, 0x41, 0x0F, 0x59, 0x62, 0x14 });
-	c.insert(c.end(), { 0xF3, 0x41, 0x0F, 0x10, 0x6A, 0x08 });
-	c.insert(c.end(), { 0xF3, 0x0F, 0x5C, 0xEC });
-	c.insert(c.end(), { 0xF3, 0x0F, 0x11, 0x6C, 0x24, 0x50 });
-	c.insert(c.end(), { 0xF3, 0x0F, 0x58, 0xE4 });
-	c.insert(c.end(), { 0xF3, 0x0F, 0x11, 0x64, 0x24, 0x40 });
-
-	c.insert(c.end(), { 0x0F, 0x28, 0xE1 });
-	c.insert(c.end(), { 0xF3, 0x41, 0x0F, 0x59, 0x62, 0x14 });
-	c.insert(c.end(), { 0xF3, 0x41, 0x0F, 0x10, 0x6A, 0x0C });
-	c.insert(c.end(), { 0xF3, 0x0F, 0x5C, 0xEC });
-	c.insert(c.end(), { 0xF3, 0x0F, 0x11, 0x6C, 0x24, 0x54 });
-	c.insert(c.end(), { 0xF3, 0x0F, 0x58, 0xE4 });
-	c.insert(c.end(), { 0xF3, 0x0F, 0x11, 0x64, 0x24, 0x44 });
-
-	c.insert(c.end(), { 0x0F, 0x28, 0xE2 });
-	c.insert(c.end(), { 0xF3, 0x41, 0x0F, 0x59, 0x62, 0x14 });
-	c.insert(c.end(), { 0xF3, 0x41, 0x0F, 0x10, 0x6A, 0x10 });
-	c.insert(c.end(), { 0xF3, 0x0F, 0x5C, 0xEC });
-	c.insert(c.end(), { 0xF3, 0x0F, 0x11, 0x6C, 0x24, 0x58 });
-	c.insert(c.end(), { 0xF3, 0x0F, 0x58, 0xE4 });
-	c.insert(c.end(), { 0xF3, 0x0F, 0x11, 0x64, 0x24, 0x48 });
-
-	c.insert(c.end(), { 0x4C, 0x8D, 0x44, 0x24, 0x50 });
-	c.insert(c.end(), { 0x4C, 0x8D, 0x4C, 0x24, 0x40 });
-	c.insert(c.end(), { 0x49, 0xFF, 0x42, 0x18 });
-
-	const std::size_t call_off = c.size();
-	patch_rel32(c, to_call, call_off);
-	const std::size_t inactive_off = c.size();
-	for (auto o : inactive)
-		patch_rel32(c, o, inactive_off);
-
-	c.insert(c.end(), { 0x48, 0x8B, 0x84, 0x24, 0x90, 0x00, 0x00, 0x00 });
-	c.insert(c.end(), { 0x48, 0x89, 0x44, 0x24, 0x20 });
-	c.insert(c.end(), { 0x48, 0xB8 });
-	append_u64(c, orig);
-	c.insert(c.end(), { 0xFF, 0xD0 });
-	c.insert(c.end(), { 0x48, 0x83, 0xC4, 0x68 });
-	c.push_back(0xC3);
-	return c;
-}
-
 std::uintptr_t find_cave_in_module(std::uintptr_t mod, std::size_t need, std::uintptr_t min_off, std::uintptr_t ignore)
 {
 	IMAGE_DOS_HEADER dos{};
@@ -355,13 +168,14 @@ std::uintptr_t find_cave_in_module(std::uintptr_t mod, std::size_t need, std::ui
 	const std::uintptr_t sec_base = nt_addr + offsetof(IMAGE_NT_HEADERS64, OptionalHeader) +
 		nt.FileHeader.SizeOfOptionalHeader;
 
+	// Scan every section (not just executable ones) for padding, exactly like
+	// the gelato cave search -- the d3d11.dll padding we target is not in an
+	// executable section.
 	for (WORD i = 0; i < nt.FileHeader.NumberOfSections; ++i)
 	{
 		IMAGE_SECTION_HEADER sec{};
 		if (!read_val(sec_base + (std::uintptr_t)i * sizeof(sec), &sec, sizeof(sec)))
 			break;
-		if ((sec.Characteristics & IMAGE_SCN_MEM_EXECUTE) == 0)
-			continue;
 
 		const std::uintptr_t off = sec.VirtualAddress;
 		const std::size_t size = sec.Misc.VirtualSize ? sec.Misc.VirtualSize : sec.SizeOfRawData;
@@ -400,7 +214,7 @@ std::uintptr_t find_cave_in_module(std::uintptr_t mod, std::size_t need, std::ui
 				continue;
 			if (ignore && aligned == ignore)
 				continue;
-			if (g_hook.thunk && aligned == g_hook.thunk)
+			if (g_hook.data_block && aligned == g_hook.data_block)
 				continue;
 			return aligned;
 		}
@@ -408,18 +222,117 @@ std::uintptr_t find_cave_in_module(std::uintptr_t mod, std::size_t need, std::ui
 	return 0;
 }
 
+void push_bytes(std::vector<std::uint8_t>& code, std::initializer_list<std::uint8_t> bytes)
+{
+	for (auto b : bytes)
+		code.push_back(b);
+}
+
+void push64(std::vector<std::uint8_t>& code, std::uint64_t value)
+{
+	for (int i = 0; i < 8; i++)
+		code.push_back(static_cast<std::uint8_t>(value >> (i * 8)));
+}
+
+// gelato's stub, verbatim. Register contract at the hooked descriptor native:
+//   r11 = data-block base (clobbered, free)
+//   r8  = ray origin (or packed ray origin+dir)
+//   r9  = direction    (non-packed only)
+// The stub bumps the call counter, records the last ray, copies the override
+// origin/direction from the data block onto the params when armed, then
+// tail-jumps to the original native. No stack use, no XMM, no call.
+std::vector<std::uint8_t> build_stub(std::uint64_t data_block, std::uint64_t original, bool packed_ray)
+{
+	std::vector<std::uint8_t> code;
+	code.reserve(160);
+
+	push_bytes(code, { 0x49, 0xBB });
+	push64(code, data_block);
+	push_bytes(code, { 0x49, 0xFF, 0x03 });          // inc qword [r11] (call counter)
+
+	push_bytes(code, { 0x41, 0x8B, 0x00 });
+	push_bytes(code, { 0x41, 0x89, 0x43, 0x08 });
+	push_bytes(code, { 0x41, 0x8B, 0x40, 0x04 });
+	push_bytes(code, { 0x41, 0x89, 0x43, 0x0C });
+	push_bytes(code, { 0x41, 0x8B, 0x40, 0x08 });
+	push_bytes(code, { 0x41, 0x89, 0x43, 0x10 });    // origin -> last_origin
+
+	if (packed_ray)
+	{
+		push_bytes(code, { 0x41, 0x8B, 0x40, 0x0C });
+		push_bytes(code, { 0x41, 0x89, 0x43, 0x14 });
+		push_bytes(code, { 0x41, 0x8B, 0x40, 0x10 });
+		push_bytes(code, { 0x41, 0x89, 0x43, 0x18 });
+		push_bytes(code, { 0x41, 0x8B, 0x40, 0x14 });
+		push_bytes(code, { 0x41, 0x89, 0x43, 0x1C }); // packed dir -> last_direction
+
+		push_bytes(code, { 0x41, 0x83, 0x7B, 0x28, 0x01 }); // cmp [r11+0x28],1
+		push_bytes(code, { 0x75, 0x18 });
+		push_bytes(code, { 0x41, 0x8B, 0x43, 0x2C });
+		push_bytes(code, { 0x41, 0x89, 0x40, 0x0C });
+		push_bytes(code, { 0x41, 0x8B, 0x43, 0x30 });
+		push_bytes(code, { 0x41, 0x89, 0x40, 0x10 });
+		push_bytes(code, { 0x41, 0x8B, 0x43, 0x34 });
+		push_bytes(code, { 0x41, 0x89, 0x40, 0x14 }); // new_direction -> packed dir
+
+		push_bytes(code, { 0x41, 0x83, 0x7B, 0x38, 0x01 }); // cmp [r11+0x38],1
+		push_bytes(code, { 0x75, 0x17 });
+		push_bytes(code, { 0x41, 0x8B, 0x43, 0x3C });
+		push_bytes(code, { 0x41, 0x89, 0x00 });
+		push_bytes(code, { 0x41, 0x8B, 0x43, 0x40 });
+		push_bytes(code, { 0x41, 0x89, 0x40, 0x04 });
+		push_bytes(code, { 0x41, 0x8B, 0x43, 0x44 });
+		push_bytes(code, { 0x41, 0x89, 0x40, 0x08 }); // new_origin -> packed origin
+	}
+	else
+	{
+		push_bytes(code, { 0x41, 0x8B, 0x01 });
+		push_bytes(code, { 0x41, 0x89, 0x43, 0x14 });
+		push_bytes(code, { 0x41, 0x8B, 0x41, 0x04 });
+		push_bytes(code, { 0x41, 0x89, 0x43, 0x18 });
+		push_bytes(code, { 0x41, 0x8B, 0x41, 0x08 });
+		push_bytes(code, { 0x41, 0x89, 0x43, 0x1C }); // [r9] dir -> last_direction
+
+		push_bytes(code, { 0x41, 0x83, 0x7B, 0x28, 0x01 }); // cmp [r11+0x28],1
+		push_bytes(code, { 0x75, 0x17 });
+		push_bytes(code, { 0x41, 0x8B, 0x43, 0x2C });
+		push_bytes(code, { 0x41, 0x89, 0x01 });
+		push_bytes(code, { 0x41, 0x8B, 0x43, 0x30 });
+		push_bytes(code, { 0x41, 0x89, 0x41, 0x04 });
+		push_bytes(code, { 0x41, 0x8B, 0x43, 0x34 });
+		push_bytes(code, { 0x41, 0x89, 0x41, 0x08 }); // new_direction -> [r9]
+
+		push_bytes(code, { 0x41, 0x83, 0x7B, 0x38, 0x01 }); // cmp [r11+0x38],1
+		push_bytes(code, { 0x75, 0x17 });
+		push_bytes(code, { 0x41, 0x8B, 0x43, 0x3C });
+		push_bytes(code, { 0x41, 0x89, 0x00 });
+		push_bytes(code, { 0x41, 0x8B, 0x43, 0x40 });
+		push_bytes(code, { 0x41, 0x89, 0x40, 0x04 });
+		push_bytes(code, { 0x41, 0x8B, 0x43, 0x44 });
+		push_bytes(code, { 0x41, 0x89, 0x40, 0x08 }); // new_origin -> [r8]
+	}
+
+	push_bytes(code, { 0x48, 0xB8 });  // mov rax, original
+	push64(code, original);
+	push_bytes(code, { 0xFF, 0xE0 });  // jmp rax
+	return code;
+}
+
 std::uintptr_t find_dll_cave(std::size_t need, std::uintptr_t ignore)
 {
+	// Gelato digs its raycast shellcode into d3d11.dll (a user-mode graphics
+	// DLL that Roblox loads on both Win10 and Win11) instead of the kernel
+	// bridge DLLs whose padding pages are handled differently between Win10
+	// and Win11 -- the Win10 crash source.
 	static const wchar_t* pref[] = {
-		L"winsta.dll", L"win32u.dll", L"user32.dll",
+		L"d3d11.dll",
 	};
-
 	for (std::size_t i = 0; i < sizeof(pref) / sizeof(pref[0]); ++i)
 	{
 		const std::uintptr_t mod = g_Memory.GetModuleBase(pref[i]);
 		if (!mod)
 			continue;
-		const std::uintptr_t cave = find_cave_in_module(mod, need, i == 0 ? 0x2000u : 0x1000u, ignore);
+		const std::uintptr_t cave = find_cave_in_module(mod, need, 0x1000u, ignore);
 		if (cave)
 			return cave;
 	}
@@ -431,47 +344,55 @@ std::uintptr_t module_base()
 	return g_Memory.GetModuleBase(L"RobloxPlayerBeta.exe");
 }
 
-std::uintptr_t slot_addr(std::uintptr_t /*base*/)
+// Resolve a WorldRoot method's descriptor function-pointer slot by name
+// (same reflection source Reflect::RaycastSlot uses).
+std::uintptr_t find_slot(const char* name)
 {
-	// Resolved dynamically via the WorldRoot function-descriptor scan.
-	return Reflect::RaycastSlot();
+	const auto ws = Cheat::Globals::Workspace;
+	if (!ws || !g_Memory.IsValid(ws->address))
+		return 0;
+	const auto class_desc = g_Memory.Read<std::uint64_t>(ws->address + ::Instance::ClassDescriptor);
+	if (!class_desc || !g_Memory.IsValid((std::uintptr_t)class_desc))
+		return 0;
+	const auto func_desc = Reflect::FindFunction((std::uintptr_t)class_desc, name);
+	if (!func_desc)
+		return 0;
+	return (std::uintptr_t)func_desc + ::FunctionDescriptor::Function;
 }
 
-void deactivate_state()
+// Disarm the redirect so the next ray passes through untouched.
+void clear_overrides()
 {
-	if (!g_hook.state || !g_Memory.GetHandle())
+	if (!g_hook.data_block || !g_Memory.GetHandle())
 		return;
-	std::uint32_t z = 0;
-	w_mem(g_hook.state, &z, sizeof(z));
+	std::uint32_t zero = 0;
+	w_mem(g_hook.data_block + off_override_direction, &zero, sizeof(zero));
+	w_mem(g_hook.data_block + off_override_origin, &zero, sizeof(zero));
+}
+
+void deactivate()
+{
+	clear_overrides();
 	g_hook.active = false;
 	g_hook.wallbang = false;
 }
 
-void free_state()
+bool restore_slots()
 {
-	if (g_hook.state)
+	if (!g_hook.module_base || !g_Memory.GetHandle() || !g_Memory.IsAlive())
+		return false;
+	if (module_base() != g_hook.module_base)
+		return false;
+
+	for (const auto& t : g_hook.targets)
 	{
-		g_Memory.Free(g_hook.state);
-		g_hook.state = 0;
+		if (!t.slot || !t.original)
+			continue;
+		if (g_Memory.Read<std::uintptr_t>(t.slot) != t.stub)
+			continue;
+		write_protected(t.slot, &t.original, sizeof(t.original));
 	}
-}
-
-bool restore_slot()
-{
-	if (!g_hook.module_base || !addr_ok(g_hook.original) || !g_hook.thunk)
-		return false;
-	if (!g_Memory.GetHandle() || !g_Memory.IsAlive())
-		return false;
-
-	const std::uintptr_t live = module_base();
-	if (!live || live != g_hook.module_base)
-		return false;
-
-	const std::uintptr_t slot = slot_addr(g_hook.module_base);
-	if (g_Memory.Read<std::uintptr_t>(slot) != g_hook.thunk)
-		return false;
-
-	return write_protected(slot, &g_hook.original, sizeof(g_hook.original));
+	return true;
 }
 
 bool install()
@@ -488,102 +409,99 @@ bool install()
 		now - g_last_fail < std::chrono::milliseconds(1500))
 		return false;
 
-	const std::uintptr_t slot = slot_addr(base);
-	const std::uintptr_t fn = g_Memory.Read<std::uintptr_t>(slot);
-	if (!addr_ok(fn) || !region_exec(fn))
+	// Resolve every target slot + original native first (fail fast).
+	struct Resolved {
+		std::uintptr_t slot;
+		std::uintptr_t orig;
+		bool packed;
+	};
+	std::vector<Resolved> res;
+	res.reserve(k_target_count);
+	for (std::size_t i = 0; i < k_target_count; ++i)
 	{
-		g_last_fail = now;
-		return false;
-	}
-
-	if (g_hook.thunk && g_hook.state && g_hook.original == fn)
-	{
-		mark_cfg(g_hook.thunk);
-		if (write_protected(slot, &g_hook.thunk, sizeof(g_hook.thunk)) &&
-			g_Memory.Read<std::uintptr_t>(slot) == g_hook.thunk)
-		{
-			g_hook.module_base = base;
-			g_hook.installed = true;
-			deactivate_state();
-			return true;
-		}
-	}
-
-	if (!g_hook.state)
-		g_hook.state = g_Memory.Alloc(page_sz(), PAGE_READWRITE);
-	if (!g_hook.state)
-	{
-		g_last_fail = now;
-		return false;
-	}
-
-	auto thunk = make_hook_thunk(g_hook.state, fn);
-	if (thunk.size() > 0x200)
-	{
-		g_last_fail = now;
-		return false;
-	}
-
-	std::uintptr_t stub = 0;
-	std::uintptr_t ignore = 0;
-	for (int attempt = 0; attempt < 3 && !stub; ++attempt)
-	{
-		const std::uintptr_t cand = find_dll_cave(0x200, ignore);
-		if (!cand)
-			break;
-		if (!write_protected(cand, thunk.data(), thunk.size()))
-		{
-			ignore = cand;
+		const std::uintptr_t slot = find_slot(k_targets[i].name);
+		if (!slot)
 			continue;
-		}
-		stub = cand;
+		const std::uintptr_t orig = g_Memory.Read<std::uintptr_t>(slot);
+		if (!addr_ok(orig) || !region_exec(orig))
+			continue;
+		res.push_back({ slot, orig, k_targets[i].packed_ray });
 	}
-
-	if (!stub)
+	if (res.empty())
 	{
 		g_last_fail = now;
 		return false;
 	}
 
-	RaycastState empty{};
-	empty.scale = 1.15f;
-	if (!w_mem(g_hook.state, &empty, sizeof(empty)))
+	// One contiguous cave in d3d11.dll: data block + per-target stub slots.
+	const std::size_t need = data_block_bytes + stub_slot_bytes * res.size();
+	const std::uintptr_t cave = find_dll_cave(need, 0);
+	if (!cave)
 	{
 		g_last_fail = now;
 		return false;
 	}
 
-	FlushInstructionCache(g_Memory.GetHandle(), (void*)stub, thunk.size());
-	mark_cfg(stub);
-
-	if (!region_exec(stub))
+	DWORD old = 0;
+	if (!protect_remote(cave, need, PAGE_EXECUTE_READWRITE, &old))
 	{
 		g_last_fail = now;
 		return false;
 	}
 
-	if (!write_protected(slot, &stub, sizeof(stub)) ||
-		g_Memory.Read<std::uintptr_t>(slot) != stub)
+	std::uint8_t zero_block[data_block_bytes]{};
+	if (!w_mem(cave, zero_block, sizeof(zero_block)))
 	{
+		if (old)
+			protect_remote(cave, need, old, nullptr);
 		g_last_fail = now;
 		return false;
 	}
 
+	std::vector<HookTarget> installed_av;
+	installed_av.reserve(res.size());
+	for (std::size_t i = 0; i < res.size(); ++i)
+	{
+		const std::uintptr_t stub = cave + data_block_bytes + i * stub_slot_bytes;
+		auto bytes = build_stub(cave, res[i].orig, res[i].packed);
+		if (bytes.size() > stub_slot_bytes)
+			continue;
+		if (!write_protected(stub, bytes.data(), bytes.size()))
+			continue;
+		if (!write_protected(res[i].slot, &stub, sizeof(stub)))
+			continue;
+		if (g_Memory.Read<std::uintptr_t>(res[i].slot) != stub)
+			continue;
+		installed_av.push_back({ res[i].slot, stub, res[i].orig, res[i].packed });
+	}
+
+	if (installed_av.empty())
+	{
+		if (old)
+			protect_remote(cave, need, old, nullptr);
+		w_mem(cave, zero_block, sizeof(zero_block));
+		g_last_fail = now;
+		return false;
+	}
+
+	FlushInstructionCache(g_Memory.GetHandle(), (void*)cave, need);
+
+	g_hook.data_block = cave;
 	g_hook.module_base = base;
-	g_hook.original = fn;
-	g_hook.thunk = stub;
+	g_hook.targets = std::move(installed_av);
+	g_original = g_hook.targets[0].original;
 	g_hook.installed = true;
 	g_hook.active = false;
 	g_hook.wallbang = false;
 	return true;
 }
 
-}
+} // namespace
 
 bool Ready() { return g_hook.installed; }
 bool Aiming() { return g_hook.active; }
 bool WallbangMode() { return g_hook.wallbang; }
-std::uintptr_t OriginalHandler() { return g_hook.original; }
+std::uintptr_t OriginalHandler() { return g_original; }
 
 bool Install()
 {
@@ -592,14 +510,15 @@ bool Install()
 
 void Remove()
 {
-	deactivate_state();
-	restore_slot();
+	deactivate();
+	restore_slots();
 	g_hook.installed = false;
 
 	if (!g_Memory.GetHandle() || !g_Memory.IsAlive())
 	{
-		free_state();
 		g_hook = {};
+		g_original = 0;
+		g_last_base = 0;
 	}
 }
 
@@ -632,13 +551,22 @@ void Ensure(bool want)
 		return;
 
 	const auto now = std::chrono::steady_clock::now();
-	if (g_hook.installed && g_hook.thunk)
+	if (g_hook.installed && g_hook.data_block)
 	{
 		if (g_last_slot_check.time_since_epoch().count() == 0 ||
 			now - g_last_slot_check >= std::chrono::milliseconds(250))
 		{
 			g_last_slot_check = now;
-			if (g_Memory.Read<std::uintptr_t>(slot_addr(base)) != g_hook.thunk)
+			bool intact = !g_hook.targets.empty();
+			for (const auto& t : g_hook.targets)
+			{
+				if (g_Memory.Read<std::uintptr_t>(t.slot) != t.stub)
+				{
+					intact = false;
+					break;
+				}
+			}
+			if (!intact)
 			{
 				g_hook.installed = false;
 				g_hook.module_base = 0;
@@ -654,54 +582,79 @@ void SetActive(bool on, const Vector3& world_target, bool wallbang)
 {
 	if (!on)
 	{
-		deactivate_state();
+		deactivate();
 		return;
 	}
 
-	if (!g_hook.installed || !g_hook.state)
+	if (!g_hook.installed || !g_hook.data_block)
 		return;
 
-#pragma pack(push, 4)
-	struct Payload {
-		std::uint32_t reserved;
-		float target_x;
-		float target_y;
-		float target_z;
-		float scale;
-		std::uint64_t calls;
-		float cam_x;
-		float cam_y;
-		float cam_z;
-	};
-#pragma pack(pop)
-
-	Payload p{};
-	p.reserved = wallbang ? 1u : 0u;
-	p.target_x = world_target.x;
-	p.target_y = world_target.y;
-	p.target_z = world_target.z;
-	p.scale = 1.15f;
-
+	Vector3 cam{};
+	bool have_cam = false;
 	if (Cheat::Globals::Workspace)
 	{
 		auto c = Cheat::Globals::Workspace->GetCurrentCamera();
 		if (c && g_Memory.IsValid(c->address))
 		{
 			Camera cam_obj(c->address);
-			Vector3 cp = cam_obj.GetPosition();
-			p.cam_x = cp.x;
-			p.cam_y = cp.y;
-			p.cam_z = cp.z;
+			cam = cam_obj.GetPosition();
+			have_cam = true;
 		}
 	}
+	if (!have_cam)
+	{
+		deactivate();
+		return;
+	}
 
-	w_mem(g_hook.state + offsetof(RaycastState, reserved), &p, sizeof(p));
-	std::uint32_t one = 1;
-	w_mem(g_hook.state + offsetof(RaycastState, active), &one, sizeof(one));
+	const float dx = world_target.x - cam.x;
+	const float dy = world_target.y - cam.y;
+	const float dz = world_target.z - cam.z;
+	const float len = std::sqrt(dx * dx + dy * dy + dz * dz);
+	if (len <= 0.001f)
+	{
+		deactivate();
+		return;
+	}
+
+	// Mirror the gelato silentaim behaviour: origin anchored at the camera
+	// when aiming directly, or pulled just behind the target for wallbang
+	// (magic-bullet) hits. Direction magnitude = ray extent.
+	float org[3]{};
+	float dir[3]{};
+	if (wallbang)
+	{
+		constexpr float k_scale = 1.15f;
+		const float ux = dx / len, uy = dy / len, uz = dz / len;
+		org[0] = world_target.x - ux * k_scale;
+		org[1] = world_target.y - uy * k_scale;
+		org[2] = world_target.z - uz * k_scale;
+		dir[0] = ux * (k_scale * 2.0f);
+		dir[1] = uy * (k_scale * 2.0f);
+		dir[2] = uz * (k_scale * 2.0f);
+	}
+	else
+	{
+		constexpr float k_range = 10000.0f;
+		const float ux = dx / len, uy = dy / len, uz = dz / len;
+		org[0] = cam.x;
+		org[1] = cam.y;
+		org[2] = cam.z;
+		dir[0] = ux * k_range;
+		dir[1] = uy * k_range;
+		dir[2] = uz * k_range;
+	}
+
+	const std::uint32_t one = 1;
+	w_mem(g_hook.data_block + off_new_origin, org, sizeof(org));
+	w_mem(g_hook.data_block + off_new_direction, dir, sizeof(dir));
+	w_mem(g_hook.data_block + off_override_origin, &one, sizeof(one));
+	w_mem(g_hook.data_block + off_override_direction, &one, sizeof(one));
+
 	g_hook.active = true;
 	g_hook.wallbang = wallbang;
 }
 
-}
-}
-}
+} // namespace RaycastSilent
+} // namespace Features
+} // namespace Cheat

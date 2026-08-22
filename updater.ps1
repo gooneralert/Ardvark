@@ -5,7 +5,7 @@
 [CmdletBinding()]
 param(
     [string]$OutputFile   = 'src\src\core\roblox\offsets\Offsets.h',
-    [string]$PrimaryUrl   = 'https://dumper.jonah.cool/offsets.h',
+    [string]$PrimaryUrl   = 'https://dumper.jonah.cool/version-ddf602d9cfe44005/offsets.h',
     [string]$SecondaryUrl = 'https://offsets.imtheo.lol/offsets.hpp'
 )
 
