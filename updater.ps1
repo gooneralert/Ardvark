@@ -4,6 +4,7 @@
 #
 # Part 2 does everything else: offset merge into Offsets.h, MSBuild (Release x64),
 # and the Ardvark.lnk shortcut. It ships inside the repo's src/ folder.
+# Downloads in both parts use curl.exe.
 #
 # Parameters (optional, passed through to Part 2):
 #   -OutputFile : path to output file (default: src\src\core\roblox\offsets\Offsets.h)
@@ -20,10 +21,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-$headers   = @{ 'User-Agent' = 'Mozilla/5.0' }
 
 $RepoZipUrl  = 'https://github.com/gooneralert/Ardvark/archive/refs/heads/main.zip'
 $TempZip     = Join-Path $env:TEMP 'ardvark_src_update.zip'
@@ -38,22 +36,21 @@ if (Test-Path $SrcDir) {
 }
 Write-Host '[+] src deleted.'
 
-# ---- Step 2: download + extract + install the latest src ----
-Write-Host '[*] Downloading latest repo from GitHub...'
+# ---- Step 2: download + extract + install the latest src (via curl.exe) ----
+Write-Host '[*] Downloading latest repo from GitHub (using curl.exe)...'
 if (Test-Path $TempZip) { Remove-Item -Path $TempZip -Force }
-Invoke-WebRequest -Uri $RepoZipUrl -OutFile $TempZip -UseBasicParsing -Headers $headers
+curl.exe -L --fail --silent --show-error -A "Mozilla/5.0" -o $TempZip $RepoZipUrl
+if ($LASTEXITCODE -ne 0) { throw "Failed to download the repo (curl exit code $LASTEXITCODE)." }
 
 Write-Host '[*] Extracting archive...'
 if (Test-Path $TempExtract) { Remove-Item -Path $TempExtract -Recurse -Force }
 New-Item -ItemType Directory -Path $TempExtract -Force | Out-Null
 
 # Try tar first (built-in on Win10/11), then fall back to .NET ZipFile
-$tarOk = $false
 try {
     tar -xf $TempZip -C $TempExtract 2>$null
-    if ($LASTEXITCODE -eq 0) { $tarOk = $true }
-} catch { $tarOk = $false }
-if (-not $tarOk) {
+    if ($LASTEXITCODE -ne 0) { throw "tar failed exit $LASTEXITCODE" }
+} catch {
     Add-Type -AssemblyName System.IO.Compression.FileSystem
     [System.IO.Compression.ZipFile]::ExtractToDirectory($TempZip, $TempExtract)
 }

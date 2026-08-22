@@ -1,4 +1,4 @@
-# updater_part2.ps1 - Part 2 of 2 (lives inside src/)
+﻿# updater_part2.ps1 - Part 2 of 2 (lives inside src/)
 # Everything after the source install:
 #   Step 3 - Downloads the two offset files, merges them, and writes
 #            src\src\core\roblox\offsets\Offsets.h
@@ -39,8 +39,6 @@ if (-not [System.IO.Path]::IsPathRooted($OutputFile)) {
     $OutputFile = Join-Path $scriptDir $OutputFile
 }
 
-$headers = @{ 'User-Agent' = 'Mozilla/5.0' }
-
 # ---- Helper: extract Roblox version from theos file content ----
 function Get-VersionFromTheosContent {
     param([string]$Content)
@@ -76,7 +74,8 @@ if (-not $version -and -not $JonahUrl) {
 # Download theos first to extract version if needed
 Write-Host "Downloading theos offsets (primary source) from $TheosUrl ..."
 $tmpTheos = Join-Path $env:TEMP 'offsets_theos.hpp'
-Invoke-WebRequest -Uri $TheosUrl -OutFile $tmpTheos -UseBasicParsing -Headers $headers
+curl.exe -L --fail --silent --show-error -A "Mozilla/5.0" -o $tmpTheos $TheosUrl
+if ($LASTEXITCODE -ne 0) { throw "Failed to download theos offsets (curl exit code $LASTEXITCODE)." }
 $theosContent = Get-Content -Path $tmpTheos -Raw
 
 # If we still don't have a version and JonahUrl is not explicitly set, extract from theos
@@ -104,7 +103,8 @@ if ($JonahUrl) {
 # ---- Download Jonah (secondary source) ----
 Write-Host "Downloading Jonah offsets (secondary source) from $primaryUrl ..."
 $tmpJonah = Join-Path $env:TEMP 'offsets_jonah.h'
-Invoke-WebRequest -Uri $primaryUrl -OutFile $tmpJonah -UseBasicParsing -Headers $headers
+curl.exe -L --fail --silent --show-error -A "Mozilla/5.0" -o $tmpJonah $primaryUrl
+if ($LASTEXITCODE -ne 0) { throw "Failed to download Jonah offsets (curl exit code $LASTEXITCODE)." }
 $jonahContent = Get-Content -Path $tmpJonah -Raw
 
 # ---- Parsing function (works on any content) ----
