@@ -73,7 +73,7 @@ if (-not $version -and -not $JonahUrl) {
 }
 
 # Download theos first to extract version if needed
-Write-Host "Downloading theos offsets (primary source) from $TheosUrl ..."
+Write-Host "Downloading theos offsets from $TheosUrl ..."
 $tmpTheos = Join-Path $env:TEMP 'offsets_theos.hpp'
 curl.exe -L --fail --silent --show-error -A "Mozilla/5.0" -o $tmpTheos $TheosUrl
 if ($LASTEXITCODE -ne 0) { throw "Failed to download theos offsets (curl exit code $LASTEXITCODE)." }
