@@ -114,8 +114,8 @@ std::string EscapeLua(const std::string& s)
 uintptr_t ByteCodeOffset(const std::string& cls)
 {
 	if (cls == "ModuleScript")
-		return ::ModuleScript::Bytecode;
-	return ::LocalScript::Bytecode;
+		return ::ModuleScript::ByteCode;
+	return ::LocalScript::ByteCode;
 }
 
 bool IsLuauVersion(std::uint8_t v)

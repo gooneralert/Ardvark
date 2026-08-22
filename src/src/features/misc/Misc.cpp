@@ -293,10 +293,10 @@ void Cheat::Features::Misc::Tick(float dt)
 				std::uint64_t sched = g_Memory.Read<std::uint64_t>(
 					base + ::TaskScheduler::Pointer);
 				if (g_Memory.IsValid(sched) &&
-					g_Memory.IsWritable(sched + ::TaskScheduler::MaxFps, sizeof(double)))
+					g_Memory.IsWritable(sched + ::TaskScheduler::MaxFPS, sizeof(double)))
 				{
 					double cur = g_Memory.Read<double>(
-						sched + ::TaskScheduler::MaxFps);
+						sched + ::TaskScheduler::MaxFPS);
 					// иногда delay иногда fps, угадываем по диапазону
 					if (cur > 0.0 && cur <= 1.0)
 					{
@@ -315,7 +315,7 @@ void Cheat::Features::Misc::Tick(float dt)
 
 		if (s_sched)
 		{
-			std::uint64_t addr = s_sched + ::TaskScheduler::MaxFps;
+			std::uint64_t addr = s_sched + ::TaskScheduler::MaxFPS;
 			if (m.fps_unlock)
 			{
 				if (!s_got_orig)
