@@ -16,7 +16,7 @@ namespace ManualOffsets {
     // Engine chams — FastClusterEntity (entity-level fields).
     // Source: custom dump.
     namespace FastClusterEntity {
-        inline constexpr uintptr_t VTableRva              = 0x6AE1C10;
+        inline constexpr uintptr_t VTableRva              = 0x68CB818;
         inline constexpr uintptr_t ContextPtr             = 0x8;
         inline constexpr uintptr_t RenderQueueId          = 0x10;
         inline constexpr uintptr_t AlphaByte              = 0x14;
@@ -101,8 +101,8 @@ namespace ManualOffsets {
     // Each command slot is a shared_ptr pair: object ptr at the offset, control
     // block ptr at offset + 8 (there is no separate refcount constant).
     namespace Btools {
-        inline constexpr uintptr_t WorkspaceCurrentCommand  = 0x878;
-        inline constexpr uintptr_t WorkspaceStickyCommand   = 0x888;
+        inline constexpr uintptr_t WorkspaceCurrentCommand  = 0x870;
+        inline constexpr uintptr_t WorkspaceStickyCommand   = 0x880;
         inline constexpr uintptr_t MouseCommandWorkspace    = 0x50;
         inline constexpr int       ToolAllocationSize       = 0xD0;
     }
