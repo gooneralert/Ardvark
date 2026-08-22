@@ -90,13 +90,6 @@ namespace ManualOffsets {
         inline constexpr uintptr_t ScreenOnTopOfBlur      = 0x10;
     }
 
-    // GuiBase2D — manual override while the auto-generated Offsets.h value is
-    // wrong. Auto header still keeps AbsolutePosition = 0x108; code paths that
-    // used to read it now use this override (0x10C) until the dumper is fixed.
-    namespace GuiBase2D {
-        inline constexpr uintptr_t AbsolutePosition = 0x10C;
-    }
-
     // Btools — Workspace MouseCommand shared_ptr pipeline (FoulzExternal dump).
     // Each command slot is a shared_ptr pair: object ptr at the offset, control
     // block ptr at offset + 8 (there is no separate refcount constant).

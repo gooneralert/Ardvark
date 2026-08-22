@@ -15,7 +15,6 @@ extern "C" {
 #include "core/roblox/classes/Classes.h"
 #include "core/roblox/math/Math.h"
 #include "core/roblox/offsets/Offsets.h"
-#include "core/roblox/offsets/manual_offsets.h"
 #include "renderer/Renderer.h"
 
 #include <cmath>
@@ -918,7 +917,7 @@ int l_index(lua_State* L)
 	{
 		if (std::strcmp(key, "AbsolutePosition") == 0)
 		{
-			const Vector2 v = g_Memory.Read<Vector2>(ud->address + ::ManualOffsets::GuiBase2D::AbsolutePosition);
+			const Vector2 v = g_Memory.Read<Vector2>(ud->address + ::GuiBase2D::AbsolutePosition);
 			LuaTypes::PushVector2(L, v.x, v.y);
 			return 1;
 		}
