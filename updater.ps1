@@ -1,12 +1,16 @@
 # updater.ps1
 # Downloads two offset files, preserves namespaces + enums, merges them, and writes the
 # offsets file the external actually uses: src\src\core\roblox\offsets\Offsets.h
+#
+# Theos (secondary) is the primary source; Jonah's dumper is used only for missing offsets.
+# Version is auto-extracted from theos to build the Jonah URL.
 
 [CmdletBinding()]
 param(
     [string]$OutputFile   = 'src\src\core\roblox\offsets\Offsets.h',
-    [string]$PrimaryUrl   = 'https://dumper.jonah.cool/version-ddf602d9cfe44005/offsets.h',
-    [string]$SecondaryUrl = 'https://offsets.imtheo.lol/offsets.hpp'
+    [string]$TheosUrl     = 'https://offsets.imtheo.lol/offsets.hpp',   # primary source
+    [string]$JonahUrl     = '',   # auto-built from version, unless explicitly set
+    [string]$Version      = ''    # optional explicit version
 )
 
 $ErrorActionPreference = 'Stop'
@@ -20,6 +24,70 @@ if (-not [System.IO.Path]::IsPathRooted($OutputFile)) {
 
 $headers = @{ 'User-Agent' = 'Mozilla/5.0' }
 
+# ---- Helper: extract Roblox version from theos file content ----
+function Get-VersionFromTheosContent {
+    param([string]$Content)
+    if ($Content -match 'Roblox Version\s*:\s*([\w-]+)') {
+        return $matches[1]
+    }
+    return $null
+}
+
+# ---- Determine version for Jonah URL ----
+$version = $Version
+if (-not $version -and -not $JonahUrl) {
+    # Try environment variable
+    $envVer = [Environment]::GetEnvironmentVariable('THEOS_VERSION')
+    if ($envVer) {
+        $version = $envVer
+        Write-Host "Using version from environment variable THEOS_VERSION: $version"
+    }
+    else {
+        # Try version.txt in script directory
+        $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+        $versionFile = Join-Path $scriptDir 'version.txt'
+        if (Test-Path $versionFile) {
+            $version = (Get-Content $versionFile -Raw).Trim()
+            Write-Host "Using version from $versionFile : $version"
+        }
+    }
+}
+
+# Download theos (secondary) first to extract version if needed
+Write-Host "Downloading theos offsets (primary source) from $TheosUrl ..."
+$tmpTheos = Join-Path $env:TEMP 'offsets_theos.hpp'
+Invoke-WebRequest -Uri $TheosUrl -OutFile $tmpTheos -UseBasicParsing -Headers $headers
+$theosContent = Get-Content -Path $tmpTheos -Raw
+
+# If we still don't have a version and JonahUrl is not explicitly set, extract from theos
+if (-not $JonahUrl -and -not $version) {
+    $version = Get-VersionFromTheosContent -Content $theosContent
+    if ($version) {
+        Write-Host "Extracted version from theos file: $version"
+    } else {
+        Write-Host "Could not extract version from theos file, will use default Jonah URL."
+    }
+}
+
+# Build Jonah URL
+if ($JonahUrl) {
+    Write-Host "Using explicit Jonah URL: $JonahUrl"
+    $primaryUrl = $JonahUrl
+} elseif ($version) {
+    $primaryUrl = "https://dumper.jonah.cool/$version/offsets.h"
+    Write-Host "Using version-based Jonah URL: $primaryUrl"
+} else {
+    $primaryUrl = 'https://dumper.jonah.cool/offsets.h'
+    Write-Host "No version found, using default Jonah URL: $primaryUrl"
+}
+
+# ---- Download Jonah (secondary source) ----
+Write-Host "Downloading Jonah offsets (secondary source) from $primaryUrl ..."
+$tmpJonah = Join-Path $env:TEMP 'offsets_jonah.h'
+Invoke-WebRequest -Uri $primaryUrl -OutFile $tmpJonah -UseBasicParsing -Headers $headers
+$jonahContent = Get-Content -Path $tmpJonah -Raw
+
+# ---- Parsing functions (unchanged) ----
 function Parse-OffsetsFile {
     param([string]$Content)
 
@@ -108,69 +176,59 @@ function Parse-OffsetsFile {
     }
 }
 
-Write-Host 'Downloading primary offsets...'
-$tmpPrimary = Join-Path $env:TEMP 'offsets_primary.h'
-Invoke-WebRequest -Uri $PrimaryUrl -OutFile $tmpPrimary -UseBasicParsing -Headers $headers
+# ---- Parse both files ----
+$theos   = Parse-OffsetsFile -Content $theosContent
+$jonah   = Parse-OffsetsFile -Content $jonahContent
 
-Write-Host 'Downloading secondary offsets...'
-$tmpSecondary = Join-Path $env:TEMP 'offsets_secondary.hpp'
-Invoke-WebRequest -Uri $SecondaryUrl -OutFile $tmpSecondary -UseBasicParsing -Headers $headers
-
-$primaryContent   = Get-Content -Path $tmpPrimary -Raw
-$secondaryContent = Get-Content -Path $tmpSecondary -Raw
-
-$primary   = Parse-OffsetsFile -Content $primaryContent
-$secondary = Parse-OffsetsFile -Content $secondaryContent
-
-# ----- Merge namespaces -----
+# ----- Merge namespaces: theos first, then jonah (only add missing) -----
 $mergedNs       = [ordered]@{}
 $mergedEnums    = [ordered]@{}
 $mergedOrder    = @()
 
-# Primary first
-foreach ($ns in $primary.NamespaceOrder) {
+# Theos first (primary)
+foreach ($ns in $theos.NamespaceOrder) {
     if (-not $mergedNs.Contains($ns)) {
         $mergedNs[$ns]      = [ordered]@{}
         $mergedEnums[$ns]   = [ordered]@{}
         $mergedOrder += $ns
     }
-    foreach ($off in $primary.Namespaces[$ns].GetEnumerator()) {
+    foreach ($off in $theos.Namespaces[$ns].GetEnumerator()) {
         $mergedNs[$ns][$off.Key] = $off.Value
     }
-    foreach ($enum in $primary.NamespaceEnums[$ns].GetEnumerator()) {
+    foreach ($enum in $theos.NamespaceEnums[$ns].GetEnumerator()) {
         $mergedEnums[$ns][$enum.Key] = $enum.Value
     }
 }
 
-# Secondary second (only add if not already present)
-foreach ($ns in $secondary.NamespaceOrder) {
+# Jonah second (only add if not already present)
+foreach ($ns in $jonah.NamespaceOrder) {
     if (-not $mergedNs.Contains($ns)) {
         $mergedNs[$ns]      = [ordered]@{}
         $mergedEnums[$ns]   = [ordered]@{}
         $mergedOrder += $ns
     }
-    foreach ($off in $secondary.Namespaces[$ns].GetEnumerator()) {
+    foreach ($off in $jonah.Namespaces[$ns].GetEnumerator()) {
         if (-not $mergedNs[$ns].Contains($off.Key)) {
             $mergedNs[$ns][$off.Key] = $off.Value
         }
     }
-    foreach ($enum in $secondary.NamespaceEnums[$ns].GetEnumerator()) {
+    foreach ($enum in $jonah.NamespaceEnums[$ns].GetEnumerator()) {
         if (-not $mergedEnums[$ns].Contains($enum.Key)) {
             $mergedEnums[$ns][$enum.Key] = $enum.Value
         }
     }
 }
 
-# ----- Merge global offsets & enums -----
+# ----- Merge global offsets & enums: theos first -----
 $mergedGlobal      = [ordered]@{}
 $mergedGlobalEnums = [ordered]@{}
-foreach ($off in $primary.Global.GetEnumerator())   { $mergedGlobal[$off.Key] = $off.Value }
-foreach ($off in $secondary.Global.GetEnumerator()) { if (-not $mergedGlobal.Contains($off.Key)) { $mergedGlobal[$off.Key] = $off.Value } }
+foreach ($off in $theos.Global.GetEnumerator())   { $mergedGlobal[$off.Key] = $off.Value }
+foreach ($off in $jonah.Global.GetEnumerator())   { if (-not $mergedGlobal.Contains($off.Key)) { $mergedGlobal[$off.Key] = $off.Value } }
 
-foreach ($enum in $primary.GlobalEnums.GetEnumerator())   { $mergedGlobalEnums[$enum.Key] = $enum.Value }
-foreach ($enum in $secondary.GlobalEnums.GetEnumerator()) { if (-not $mergedGlobalEnums.Contains($enum.Key)) { $mergedGlobalEnums[$enum.Key] = $enum.Value } }
+foreach ($enum in $theos.GlobalEnums.GetEnumerator())   { $mergedGlobalEnums[$enum.Key] = $enum.Value }
+foreach ($enum in $jonah.GlobalEnums.GetEnumerator())   { if (-not $mergedGlobalEnums.Contains($enum.Key)) { $mergedGlobalEnums[$enum.Key] = $enum.Value } }
 
-Write-Host "Merged offsets from $($mergedOrder.Count) namespaces."
+Write-Host "Merged offsets from $($mergedOrder.Count) namespaces (theos primary)."
 
 # ----- Generate output -----
 $lines = @(
@@ -179,8 +237,8 @@ $lines = @(
     ''
     '// geeg offsets'
     '// Auto-generated by updater.ps1'
-    "// Sources: $PrimaryUrl"
-    "//         $SecondaryUrl"
+    "// Primary source (theos): $TheosUrl"
+    "// Secondary source (Jonah): $primaryUrl"
     ''
 )
 
@@ -234,6 +292,6 @@ foreach ($ns in $mergedOrder) {
 
 Set-Content -Path $OutputFile -Value $lines -Encoding Ascii
 
-Remove-Item $tmpPrimary, $tmpSecondary -ErrorAction SilentlyContinue
+Remove-Item $tmpTheos, $tmpJonah -ErrorAction SilentlyContinue
 
 Write-Host "Wrote $OutputFile"
