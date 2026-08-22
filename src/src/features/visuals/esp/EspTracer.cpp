@@ -1,5 +1,6 @@
 #include "pch.h"
 #include "EspTracer.h"
+#include "features/GameCursor.h"
 
 namespace Cheat {
 namespace Visuals {
@@ -13,6 +14,12 @@ ImVec2 TracerOrigin(float overlay_w, float overlay_h, int mode)
 
 	if (mode == 2)
 	{
+		// курсор как в gelato: GetCursorPos + ScreenToClient(WINDOWSCLIENT),
+		// корректно работает в first-person mouse-lock
+		float x = 0.f, y = 0.f;
+		if (Cheat::GameCursor::Cursor(x, y))
+			return ImVec2(x, y);
+
 		ImVec2 m = ImGui::GetIO().MousePos;
 		return ImVec2(m.x, m.y);
 	}

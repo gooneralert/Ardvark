@@ -16,6 +16,7 @@
 #include "features/visuals/Crosshair.h"
 #include "features/visuals/EngineChams.h"
 #include "features/aim/Aim.h"
+#include "features/aim/Triggerbot.h"
 #include "features/aim/RaycastSilent.h"
 #include "features/aim/MagicBullet.h"
 #include "features/aim/ViewportSilent.h"
@@ -85,6 +86,7 @@ void Menu::Render()
                 Cheat::Visuals::MeshDxShader::Flush(Cheat::Core::g_RenderTargetView);
             Features::HitboxExpander::Render();
             Features::Aim::Render();
+            Features::Triggerbot::Render();
             Visuals::KillEffects::Tick();
         }
         if (g_Settings.lua.executor)

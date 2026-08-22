@@ -226,6 +226,8 @@
     <ClInclude Include="src\features\aim\ViewportSilent.h" />
     <ClInclude Include="src\features\aim\MouseSilent.h" />
     <ClInclude Include="src\features\aim\PhantomSilent.h" />
+    <ClInclude Include="src\features\aim\Triggerbot.h" />
+    <ClInclude Include="src\features\GameCursor.h" />
     <ClInclude Include="src\features\world\WorldVisuals.h" />
     <ClInclude Include="src\features\world\LightingInvalidate.h" />
     <ClInclude Include="src\features\world\WorldExtras.h" />
@@ -259,6 +261,7 @@
     <ClInclude Include="src\gui\tabs\misc.h" />
     <ClInclude Include="src\gui\tabs\local.h" />
     <ClInclude Include="src\gui\tabs\settings_tab.h" />
+    <ClInclude Include="src\gui\tabs\trigger.h" />
     <ClInclude Include="src\gui\tabs\helpers.h" />
     <ClInclude Include="src\gui\icons.h" />
     <ClInclude Include="src\gui\lua_window.h" />
@@ -351,6 +354,7 @@
     <ClCompile Include="src\features\aim\ViewportSilent.cpp" />
     <ClCompile Include="src\features\aim\MouseSilent.cpp" />
     <ClCompile Include="src\features\aim\PhantomSilent.cpp" />
+    <ClCompile Include="src\features\aim\Triggerbot.cpp" />
     <ClCompile Include="src\features\world\WorldVisuals.cpp" />
     <ClCompile Include="src\features\world\LightingInvalidate.cpp" />
     <ClCompile Include="src\features\world\WorldExtras.cpp" />
@@ -679,6 +683,7 @@
     <ClCompile Include="src\gui\tabs\local.cpp" />
     <ClCompile Include="src\gui\tabs\settings_tab.cpp" />
     <ClCompile Include="src\gui\tabs\helpers.cpp" />
+    <ClCompile Include="src\gui\tabs\trigger.cpp" />
     <ClCompile Include="src\gui\colors\colors.cpp" />
     <ClCompile Include="src\gui\icons.cpp" />
     <ClCompile Include="src\gui\lua_window.cpp" />

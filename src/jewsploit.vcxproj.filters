@@ -420,6 +420,8 @@
     <ClInclude Include="src\features\visuals\MeshFetch.h" />
     <ClInclude Include="src\features\games\ApocalypseRising.h" />
     <ClInclude Include="src\features\aim\PhantomSilent.h" />
+    <ClInclude Include="src\features\aim\Triggerbot.h" />
+    <ClInclude Include="src\features\GameCursor.h" />
     <ClInclude Include="src\features\world\LightingInvalidate.h" />
     <ClInclude Include="src\features\world\WorldExtras.h" />
     <ClInclude Include="src\features\misc\HitboxExpander.h" />
@@ -430,6 +432,7 @@
     <ClInclude Include="src\gui\tabs\misc.h" />
     <ClInclude Include="src\gui\tabs\local.h" />
     <ClInclude Include="src\gui\tabs\settings_tab.h" />
+    <ClInclude Include="src\gui\tabs\trigger.h" />
     <ClInclude Include="src\gui\tabs\helpers.h" />
     <ClInclude Include="third_party\lua\lua.h" />
     <ClInclude Include="third_party\lua\lauxlib.h" />
@@ -697,6 +700,7 @@
     <ClCompile Include="src\features\games\ApocalypseRising.cpp" />
     <ClCompile Include="src\features\visuals\MeshFetch.cpp" />
     <ClCompile Include="src\features\aim\PhantomSilent.cpp" />
+    <ClCompile Include="src\features\aim\Triggerbot.cpp" />
     <ClCompile Include="src\features\world\LightingInvalidate.cpp" />
     <ClCompile Include="src\features\world\WorldExtras.cpp" />
     <ClCompile Include="src\features\misc\HitboxExpander.cpp" />
@@ -761,6 +765,7 @@
     <ClCompile Include="src\gui\tabs\local.cpp" />
     <ClCompile Include="src\gui\tabs\settings_tab.cpp" />
     <ClCompile Include="src\gui\tabs\helpers.cpp" />
+    <ClCompile Include="src\gui\tabs\trigger.cpp" />
     <ClCompile Include="src\gui\colors\colors.cpp" />
   </ItemGroup>
   <ItemGroup>

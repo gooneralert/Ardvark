@@ -3,6 +3,7 @@
 #include "EspLayout.h"
 #include "HavocWorldEsp.h"
 #include "features/games/PhantomForces.h"
+#include "features/GameCursor.h"
 #include "ShaderChams.h"
 #include "MeshChams.h"
 #include "MeshDxShader.h"
@@ -547,6 +548,12 @@ ImVec2 TracerOrigin(float overlay_w, float overlay_h, int mode)
 
     if (mode == 2)
     {
+        // курсор как в gelato — GetCursorPos + ScreenToClient(WINDOWSCLIENT),
+        // работает и в first-person mouse-lock (не «залипает» на старом imgui)
+        float x = 0.f, y = 0.f;
+        if (Cheat::GameCursor::Cursor(x, y))
+            return ImVec2(x, y);
+
         ImVec2 m = ImGui::GetIO().MousePos;
         return ImVec2(m.x, m.y);
     }

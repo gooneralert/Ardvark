@@ -504,6 +504,23 @@ bool Save(const std::string& name)
     WriteAimCfg(out, "aim.camera", s.aim.camera);
     WriteAimCfg(out, "aim.silent", s.aim.silent);
 
+    PutBool(out, "triggerbot.enabled", s.triggerbot.enabled);
+    PutInt(out, "triggerbot.key", s.triggerbot.key);
+    PutInt(out, "triggerbot.key_mode", s.triggerbot.key_mode);
+    PutFloat(out, "triggerbot.delay_ms", s.triggerbot.delay_ms);
+    PutFloat(out, "triggerbot.click_duration_ms", s.triggerbot.click_duration_ms);
+    PutFloat(out, "triggerbot.hitchance", s.triggerbot.hitchance);
+    PutFloat(out, "triggerbot.max_distance", s.triggerbot.max_distance);
+    PutBool(out, "triggerbot.prediction_enabled", s.triggerbot.prediction_enabled);
+    PutFloat(out, "triggerbot.prediction_xz", s.triggerbot.prediction_xz);
+    PutFloat(out, "triggerbot.prediction_y", s.triggerbot.prediction_y);
+    PutBool(out, "triggerbot.draw_prediction", s.triggerbot.draw_prediction);
+    PutInt(out, "triggerbot.hitboxes", s.triggerbot.hitboxes);
+    PutFloat(out, "triggerbot.hitbox_multiplier", s.triggerbot.hitbox_multiplier);
+    PutInt(out, "triggerbot.checks", s.triggerbot.checks);
+    PutBool(out, "triggerbot.pf_parts", s.triggerbot.pf_parts);
+    PutBool(out, "triggerbot.debug", s.triggerbot.debug);
+
     PutBool(out, "world.no_shadow", s.world.no_shadow);
     PutBool(out, "world.time_changer", s.world.time_changer);
     PutFloat(out, "world.clock_time", s.world.clock_time);
@@ -854,6 +871,30 @@ bool Load(const std::string& name)
 		s.aim.silent_enabled = true;
 	GetInt(kv, "aim.silent_bind", s.aim.silent_bind);
 	GetInt(kv, "aim.silent_bind_mode", s.aim.silent_bind_mode);
+
+    GetBool(kv, "triggerbot.enabled", s.triggerbot.enabled);
+	GetInt(kv, "triggerbot.key", s.triggerbot.key);
+	GetInt(kv, "triggerbot.key_mode", s.triggerbot.key_mode);
+	GetFloat(kv, "triggerbot.delay_ms", s.triggerbot.delay_ms);
+	GetFloat(kv, "triggerbot.click_duration_ms", s.triggerbot.click_duration_ms);
+	GetFloat(kv, "triggerbot.hitchance", s.triggerbot.hitchance);
+	GetFloat(kv, "triggerbot.max_distance", s.triggerbot.max_distance);
+	GetBool(kv, "triggerbot.prediction_enabled", s.triggerbot.prediction_enabled);
+	GetFloat(kv, "triggerbot.prediction_xz", s.triggerbot.prediction_xz);
+	GetFloat(kv, "triggerbot.prediction_y", s.triggerbot.prediction_y);
+	GetBool(kv, "triggerbot.draw_prediction", s.triggerbot.draw_prediction);
+	GetInt(kv, "triggerbot.hitboxes", s.triggerbot.hitboxes);
+	GetFloat(kv, "triggerbot.hitbox_multiplier", s.triggerbot.hitbox_multiplier);
+	GetInt(kv, "triggerbot.checks", s.triggerbot.checks);
+	GetBool(kv, "triggerbot.pf_parts", s.triggerbot.pf_parts);
+	GetBool(kv, "triggerbot.debug", s.triggerbot.debug);
+
+	// минимальные значения слайдеров = 1, чиним старые конфиги с 0
+	if (s.triggerbot.delay_ms < 1.f) s.triggerbot.delay_ms = 1.f;
+	if (s.triggerbot.click_duration_ms < 1.f) s.triggerbot.click_duration_ms = 1.f;
+	if (s.triggerbot.hitchance < 1.f) s.triggerbot.hitchance = 1.f;
+	if (s.triggerbot.max_distance < 1.f) s.triggerbot.max_distance = 1.f;
+	if (s.triggerbot.hitbox_multiplier < 1.0f) s.triggerbot.hitbox_multiplier = 1.0f;
 
     GetBool(kv, "world.no_shadow", s.world.no_shadow);
     GetBool(kv, "world.time_changer", s.world.time_changer);

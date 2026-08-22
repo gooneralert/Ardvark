@@ -297,6 +297,54 @@ namespace Cheat {
             SILENT_METHOD_COUNT
         };
 
+        // ---- triggerbot (ported from gelato) ----
+        // какая часть тела является целью
+        // 0 = всё тело (whole body), дальше конкретные группы
+        enum TriggerHitbox {
+            TRIGGER_HITBOX_WHOLE = 0,
+            TRIGGER_HITBOX_HEAD,
+            TRIGGER_HITBOX_TORSO,
+            TRIGGER_HITBOX_ARMS,
+            TRIGGER_HITBOX_LEGS,
+            TRIGGER_HITBOX_HRP,
+        };
+
+        // check bitflags, совпадают с gelato triggerbot.settings.checks
+        enum TriggerCheck {
+            TRIGGER_CHECK_TEAM = 1,      // скип тиммейтов
+            TRIGGER_CHECK_HEALTH = 2,    // скип мёртвых
+            TRIGGER_CHECK_FF = 4,        // скип форсфилдов
+            TRIGGER_CHECK_INVIS = 8,     // скип невидимок
+            TRIGGER_CHECK_VISIBLE = 16,  // только видимые (wallcheck)
+        };
+
+        struct TriggerbotConfig {
+            bool  enabled{ false };
+            int   key{ 0x06 };       // XBUTTON2 как в gelato
+            int   key_mode{ 0 };     // 0 hold, 1 toggle, 2 always, 3 once
+
+            float delay_ms{ 5.0f };
+            float click_duration_ms{ 50.0f };
+            float hitchance{ 100.0f };
+
+            float max_distance{ 1000.0f };
+
+            bool  prediction_enabled{ false };
+            float prediction_xz{ 1.0f };
+            float prediction_y{ 1.01f };
+            bool  draw_prediction{ false };
+
+            int hitboxes{ TRIGGER_HITBOX_WHOLE };
+            // визуальный множитель триггер-бокса (не трогает реальные парты)
+            float hitbox_multiplier{ 1.10f };
+            int checks{ 0 };
+            // PF-specific: точные парты под курсором (как pf_part_under_cursor)
+            bool  pf_parts{ true };
+
+            // on-screen debug HUD (для отладки, показывает курсор/статусы)
+            bool  debug{ false };
+        };
+
         struct {
             int  bind{ 0 };
             int  bind_mode{ 0 };
@@ -337,6 +385,8 @@ namespace Cheat {
                 return silent_raycast() || silent_magic();
             }
         } aim;
+
+        TriggerbotConfig triggerbot;
 
         struct {
             bool  no_shadow{ false };

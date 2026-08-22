@@ -16,6 +16,7 @@
 #include "tabs/esp.h"
 #include "tabs/misc.h"
 #include "tabs/settings_tab.h"
+#include "tabs/trigger.h"
 #include "app/Settings.h"
 #include "features/visuals/ESPPreview.h"
 #include "core/globals/Globals.h"
@@ -368,13 +369,13 @@ void menu::draw()
 	ImDrawList* dl = ImGui::GetWindowDrawList();
 	float rnd = ImGui::GetStyle().WindowRounding;
 
-	const char* tab_names[] = { "aim", "esp", "misc", "settings" };
-	const int tab_n = 4;
+	const char* tab_names[] = { "aim", "trigger", "esp", "misc", "settings" };
+	const int tab_n = 5;
 	const float tab_gap = 28.f;
 	const float hit_pad_x = 6.f;
 	const float hit_h = 28.f;
 
-	static float tab_anim[4]{};
+	static float tab_anim[5]{};
 
 	if (tab < 0) tab = 0;
 	if (tab >= tab_n) tab = tab_n - 1;
@@ -426,7 +427,7 @@ void menu::draw()
 		}
 
 		// табы по центру
-		float widths[4]{};
+		float widths[5]{};
 		float row_w = 0.f;
 		for (int i = 0; i < tab_n; i++)
 		{
@@ -689,10 +690,15 @@ void menu::draw()
 
 		else if (tab == 1)
 		{
-			ng_tabs::draw_esp_tab();
+			ng_tabs::draw_trigger_tab();
 		}
 
 		else if (tab == 2)
+		{
+			ng_tabs::draw_esp_tab();
+		}
+
+		else if (tab == 3)
 		{
 			ng_tabs::draw_misc_tab();
 		}

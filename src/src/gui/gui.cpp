@@ -9,6 +9,7 @@
 #include "tabs/misc.h"
 #include "tabs/local.h"
 #include "tabs/settings_tab.h"
+#include "tabs/trigger.h"
 #include "app/Settings.h"
 #include "core/globals/Globals.h"
 #include "core/roblox/classes/Classes.h"
@@ -212,10 +213,12 @@ namespace gui
         if (sidebar_selected == 0)
             ng_tabs::draw_aim_tab();
         else if (sidebar_selected == 1)
-            ng_tabs::draw_esp_tab();
+            ng_tabs::draw_trigger_tab();
         else if (sidebar_selected == 2)
-            ng_tabs::draw_misc_tab();
+            ng_tabs::draw_esp_tab();
         else if (sidebar_selected == 3)
+            ng_tabs::draw_misc_tab();
+        else if (sidebar_selected == 4)
             ng_tabs::draw_local_tab();
         else
             ng_tabs::draw_settings_tab(&menu_kb, &menu_kb_skip);
@@ -383,7 +386,7 @@ namespace gui
         ImGui::PopStyleColor();
 
         static int sidebar_selected = 0;
-        static const std::vector<const char*> sidebar_items = { "Aim", "Visuals", "Misc", "Local", "Settings" };
+        static const std::vector<const char*> sidebar_items = { "Aim", "Triggerbot", "Visuals", "Misc", "Local", "Settings" };
         constexpr float sidebar_width = 100.f;
 
         ImGui::SetCursorPos(ImVec2(inner_padding, subtab_margin));
