@@ -20,6 +20,7 @@
 #                 relative to this script, i.e. inside this src folder)
 #   -TheosUrl   : URL for theos offsets (default: https://offsets.imtheo.lol/offsets.hpp)
 #   -JonahUrl   : explicit Jonah URL (default: auto-built from version)
+#                 a local file path is also accepted (e.g. C:\offsets\jonah.h)
 #   -Version    : explicit version string (default: extracted from theos)
 
 [CmdletBinding()]
@@ -101,12 +102,30 @@ if ($JonahUrl) {
     Write-Host "No version found, using default Jonah URL: $primaryUrl"
 }
 
-# ---- Download Jonah (secondary source) ----
-Write-Host "Downloading Jonah offsets (secondary source) from $primaryUrl ..."
-$tmpJonah = Join-Path $env:TEMP 'offsets_jonah.h'
-curl.exe -L --fail --silent --show-error -A "Mozilla/5.0" -o $tmpJonah $primaryUrl
-if ($LASTEXITCODE -ne 0) { throw "Failed to download Jonah offsets (curl exit code $LASTEXITCODE)." }
-$jonahContent = Get-Content -Path $tmpJonah -Raw
+# ---- Acquire Jonah (secondary source) - local file path or download ----
+# $primaryUrl may be a URL or a local file path. If it points to an existing
+# file, read it directly instead of downloading ("exact same, just a file").
+if ($primaryUrl -match '^[a-zA-Z]+://') {
+    Write-Host "Downloading Jonah offsets (secondary source) from $primaryUrl ..."
+    $tmpJonah = Join-Path $env:TEMP 'offsets_jonah.h'
+    curl.exe -L --fail --silent --show-error -A "Mozilla/5.0" -o $tmpJonah $primaryUrl
+    if ($LASTEXITCODE -ne 0) { throw "Failed to download Jonah offsets (curl exit code $LASTEXITCODE)." }
+    $jonahContent = Get-Content -Path $tmpJonah -Raw
+} else {
+    # Local file: try as-is, then relative to this script's directory.
+    $jonahFile = $primaryUrl
+    if (-not (Test-Path -LiteralPath $jonahFile -PathType Leaf)) {
+        $candidate = Join-Path (Split-Path -Parent $MyInvocation.MyCommand.Path) $primaryUrl
+        if (Test-Path -LiteralPath $candidate -PathType Leaf) {
+            $jonahFile = $candidate
+        }
+    }
+    if (-not (Test-Path -LiteralPath $jonahFile -PathType Leaf)) {
+        throw "Jonah file not found: $primaryUrl"
+    }
+    Write-Host "Using local Jonah file: $jonahFile"
+    $jonahContent = Get-Content -Path $jonahFile -Raw
+}
 
 # ---- Parsing function (works on any content) ----
 function Parse-OffsetsFile {

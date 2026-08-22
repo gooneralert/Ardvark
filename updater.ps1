@@ -10,6 +10,7 @@
 #   -OutputFile : path to output file (default: src\src\core\roblox\offsets\Offsets.h)
 #   -TheosUrl   : URL for theos offsets (default: https://offsets.imtheo.lol/offsets.hpp)
 #   -JonahUrl   : explicit Jonah URL (default: auto-built from version)
+#                        a local file path is also accepted (e.g. "C:\offsets\jonah.h")
 #   -Version    : explicit version string (default: extracted from theos)
 
 [CmdletBinding()]
