@@ -1,16 +1,24 @@
 # updater.ps1
-# Downloads two offset files, preserves namespaces + enums, merges them, and writes the
-# offsets file the external actually uses: src\src\core\roblox\offsets\Offsets.h
+# Downloads two offset files, merges them, and writes src\src\core\roblox\offsets\Offsets.h
 #
-# Theos (secondary) is the primary source; Jonah's dumper is used only for missing offsets.
-# Version is auto-extracted from theos to build the Jonah URL.
+# Theos (offsets.imtheo.lol) is the primary source.
+# Jonah (dumper.jonah.cool) fills in missing offsets.
+# Version is auto-extracted from theos to build the matching Jonah URL.
+# Duplicates: if an offset name already exists in the same namespace from theos,
+# the Jonah version is skipped (primary wins).
+#
+# Parameters (optional):
+#   -OutputFile : path to output file (default: src\src\core\roblox\offsets\Offsets.h)
+#   -TheosUrl   : URL for theos offsets (default: https://offsets.imtheo.lol/offsets.hpp)
+#   -JonahUrl   : explicit Jonah URL (default: auto-built from version)
+#   -Version    : explicit version string (default: extracted from theos)
 
 [CmdletBinding()]
 param(
     [string]$OutputFile   = 'src\src\core\roblox\offsets\Offsets.h',
-    [string]$TheosUrl     = 'https://offsets.imtheo.lol/offsets.hpp',   # primary source
-    [string]$JonahUrl     = '',   # auto-built from version, unless explicitly set
-    [string]$Version      = ''    # optional explicit version
+    [string]$TheosUrl     = 'https://offsets.imtheo.lol/offsets.hpp',
+    [string]$JonahUrl     = '',
+    [string]$Version      = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -53,7 +61,7 @@ if (-not $version -and -not $JonahUrl) {
     }
 }
 
-# Download theos (secondary) first to extract version if needed
+# Download theos first to extract version if needed
 Write-Host "Downloading theos offsets (primary source) from $TheosUrl ..."
 $tmpTheos = Join-Path $env:TEMP 'offsets_theos.hpp'
 Invoke-WebRequest -Uri $TheosUrl -OutFile $tmpTheos -UseBasicParsing -Headers $headers
@@ -87,7 +95,7 @@ $tmpJonah = Join-Path $env:TEMP 'offsets_jonah.h'
 Invoke-WebRequest -Uri $primaryUrl -OutFile $tmpJonah -UseBasicParsing -Headers $headers
 $jonahContent = Get-Content -Path $tmpJonah -Raw
 
-# ---- Parsing functions (unchanged) ----
+# ---- Parsing function (works on any content) ----
 function Parse-OffsetsFile {
     param([string]$Content)
 
@@ -180,57 +188,73 @@ function Parse-OffsetsFile {
 $theos   = Parse-OffsetsFile -Content $theosContent
 $jonah   = Parse-OffsetsFile -Content $jonahContent
 
-# ----- Merge namespaces: theos first, then jonah (only add missing) -----
+# ----- Merge: theos (primary) then jonah (secondary, missing only) -----
 $mergedNs       = [ordered]@{}
 $mergedEnums    = [ordered]@{}
 $mergedOrder    = @()
 
-# Theos first (primary)
+# 1. Copy all theos namespaces (offsets + enums)
 foreach ($ns in $theos.NamespaceOrder) {
-    if (-not $mergedNs.Contains($ns)) {
-        $mergedNs[$ns]      = [ordered]@{}
-        $mergedEnums[$ns]   = [ordered]@{}
-        $mergedOrder += $ns
-    }
+    $mergedNs[$ns]    = [ordered]@{}
+    $mergedEnums[$ns] = [ordered]@{}
     foreach ($off in $theos.Namespaces[$ns].GetEnumerator()) {
         $mergedNs[$ns][$off.Key] = $off.Value
     }
     foreach ($enum in $theos.NamespaceEnums[$ns].GetEnumerator()) {
         $mergedEnums[$ns][$enum.Key] = $enum.Value
     }
+    $mergedOrder += $ns
 }
 
-# Jonah second (only add if not already present)
-foreach ($ns in $jonah.NamespaceOrder) {
-    if (-not $mergedNs.Contains($ns)) {
-        $mergedNs[$ns]      = [ordered]@{}
-        $mergedEnums[$ns]   = [ordered]@{}
-        $mergedOrder += $ns
-    }
-    foreach ($off in $jonah.Namespaces[$ns].GetEnumerator()) {
-        if (-not $mergedNs[$ns].Contains($off.Key)) {
-            $mergedNs[$ns][$off.Key] = $off.Value
-        }
-    }
-    foreach ($enum in $jonah.NamespaceEnums[$ns].GetEnumerator()) {
-        if (-not $mergedEnums[$ns].Contains($enum.Key)) {
-            $mergedEnums[$ns][$enum.Key] = $enum.Value
-        }
-    }
-}
-
-# ----- Merge global offsets & enums: theos first -----
+# 2. Copy all theos globals
 $mergedGlobal      = [ordered]@{}
 $mergedGlobalEnums = [ordered]@{}
 foreach ($off in $theos.Global.GetEnumerator())   { $mergedGlobal[$off.Key] = $off.Value }
-foreach ($off in $jonah.Global.GetEnumerator())   { if (-not $mergedGlobal.Contains($off.Key)) { $mergedGlobal[$off.Key] = $off.Value } }
+foreach ($enum in $theos.GlobalEnums.GetEnumerator()) { $mergedGlobalEnums[$enum.Key] = $enum.Value }
 
-foreach ($enum in $theos.GlobalEnums.GetEnumerator())   { $mergedGlobalEnums[$enum.Key] = $enum.Value }
-foreach ($enum in $jonah.GlobalEnums.GetEnumerator())   { if (-not $mergedGlobalEnums.Contains($enum.Key)) { $mergedGlobalEnums[$enum.Key] = $enum.Value } }
+# 3. Add jonah namespaces/offsets/enums only if missing
+foreach ($ns in $jonah.NamespaceOrder) {
+    if (-not $mergedNs.Contains($ns)) {
+        # New namespace: add everything
+        $mergedNs[$ns]    = [ordered]@{}
+        $mergedEnums[$ns] = [ordered]@{}
+        $mergedOrder += $ns
+        foreach ($off in $jonah.Namespaces[$ns].GetEnumerator()) {
+            $mergedNs[$ns][$off.Key] = $off.Value
+        }
+        foreach ($enum in $jonah.NamespaceEnums[$ns].GetEnumerator()) {
+            $mergedEnums[$ns][$enum.Key] = $enum.Value
+        }
+    } else {
+        # Existing namespace: add only offsets/enums whose name is not already taken
+        foreach ($off in $jonah.Namespaces[$ns].GetEnumerator()) {
+            if (-not $mergedNs[$ns].Contains($off.Key)) {
+                $mergedNs[$ns][$off.Key] = $off.Value
+            }
+        }
+        foreach ($enum in $jonah.NamespaceEnums[$ns].GetEnumerator()) {
+            if (-not $mergedEnums[$ns].Contains($enum.Key)) {
+                $mergedEnums[$ns][$enum.Key] = $enum.Value
+            }
+        }
+    }
+}
+
+# 4. Add jonah globals only if missing by name
+foreach ($off in $jonah.Global.GetEnumerator()) {
+    if (-not $mergedGlobal.Contains($off.Key)) {
+        $mergedGlobal[$off.Key] = $off.Value
+    }
+}
+foreach ($enum in $jonah.GlobalEnums.GetEnumerator()) {
+    if (-not $mergedGlobalEnums.Contains($enum.Key)) {
+        $mergedGlobalEnums[$enum.Key] = $enum.Value
+    }
+}
 
 Write-Host "Merged offsets from $($mergedOrder.Count) namespaces (theos primary)."
 
-# ----- Generate output -----
+# ----- Generate output file -----
 $lines = @(
     '#pragma once'
     '#include <cstdint>'

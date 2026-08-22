@@ -132,7 +132,7 @@ inline float read_ws(std::uint64_t hum)
 	if (!g_Memory.IsValid(hum))
 		return 16.f;
 
-	float v = g_Memory.Read<float>(hum + ::Humanoid::WalkSpeed);
+	float v = g_Memory.Read<float>(hum + ::Humanoid::Walkspeed);
 	if (!std::isfinite(v))
 		return 16.f;
 
@@ -144,8 +144,8 @@ inline bool write_ws(std::uint64_t hum, float spd)
 	if (!g_Memory.IsValid(hum) || !std::isfinite(spd))
 		return false;
 
-	g_Memory.Write<float>(hum + ::Humanoid::WalkSpeed, spd);
-	g_Memory.Write<float>(hum + ::Humanoid::WalkSpeedCheck, spd);
+	g_Memory.Write<float>(hum + ::Humanoid::Walkspeed, spd);
+	g_Memory.Write<float>(hum + ::Humanoid::WalkspeedCheck, spd);
 	return true;
 }
 

@@ -30,7 +30,7 @@ float Cheat::Humanoid::GetWalkSpeed() const
 		return 0.f;
 	}
 
-	return g_Memory.Read<float>(address + ::Humanoid::WalkSpeed);
+	return g_Memory.Read<float>(address + ::Humanoid::Walkspeed);
 }
 
 float Cheat::Humanoid::GetJumpPower() const
@@ -158,7 +158,7 @@ void Cheat::Humanoid::SetWalkSpeed(float value) const
 		return;
 	}
 
-	g_Memory.Write<float>(address + ::Humanoid::WalkSpeed, value);
+	g_Memory.Write<float>(address + ::Humanoid::Walkspeed, value);
 }
 
 void Cheat::Humanoid::SetJumpPower(float value) const
