@@ -26,7 +26,7 @@
 [CmdletBinding()]
 param(
     [string]$OutputFile   = 'src\core\roblox\offsets\Offsets.h',
-    [string]$TheosUrl     = 'https://offsets.imtheo.lol/version-ce0bcd0fbd484804/offsets.hpp',
+    [string]$TheosUrl     = 'https://offsets.imtheo.lol/offsets.hpp',
     [string]$JonahUrl     = '',
     [string]$Version      = ''
 )
