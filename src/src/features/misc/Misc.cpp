@@ -325,7 +325,7 @@ void Cheat::Features::Misc::Tick(float dt)
 				}
 
 				int cap = m.fps_cap;
-				if (cap < 30) cap = 30;
+				if (cap < 10) cap = 10;
 
 				double target = s_delay ? (1.0 / (double)cap) : (double)cap;
 				if (target != s_last &&
