@@ -157,7 +157,7 @@ void ng_tabs::draw_misc_tab()
 
 		row_checkbox("fps unlocker", &m.fps_unlock);
 		if (m.fps_unlock)
-			row_slider_i("fps cap", &m.fps_cap, 60, 1000);
+			row_slider_i("fps cap", &m.fps_cap, 10, 1000);
 
 		row_checkbox("fov changer", &m.fov);
 		if (m.fov)
