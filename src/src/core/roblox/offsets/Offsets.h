@@ -229,7 +229,7 @@ namespace Humanoid {
     constexpr uintptr_t NameDisplayDistance = 0x1b0;
     constexpr uintptr_t NameOcclusion = 0x1b4;
     constexpr uintptr_t PlatformStand = 0xc5;
-    constexpr uintptr_t PlatformStatePointer = 0x0;
+    constexpr uintptr_t PlatformStatePointer = 0x770f4e0e;
     constexpr uintptr_t RequiresNeck = 0x1dd;
     constexpr uintptr_t RigType = 0x1c0;
     constexpr uintptr_t SeatPart = 0x108;
