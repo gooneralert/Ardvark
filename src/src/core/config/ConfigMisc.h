@@ -114,6 +114,7 @@ inline void WriteMisc(std::ostringstream& out, const Settings& s)
     PutBool(out, "misc.esp_preview", s.misc.esp_preview);
     PutBool(out, "misc.mcp", s.misc.mcp);
     PutBool(out, "lua.executor", s.lua.executor);
+    PutBool(out, "lua.internal_print", s.lua.internal_print);
     PutFloat(out, "lua.ticks_ms", s.lua.ticks_ms);
 }
 
@@ -155,6 +156,7 @@ inline void ReadMisc(const KV& kv, Settings& s)
     GetBool(kv, "misc.esp_preview", s.misc.esp_preview);
     GetBool(kv, "misc.mcp", s.misc.mcp);
     GetBool(kv, "lua.executor", s.lua.executor);
+    GetBool(kv, "lua.internal_print", s.lua.internal_print);
     GetFloat(kv, "lua.ticks_ms", s.lua.ticks_ms);
     if (s.lua.ticks_ms < 1.f) s.lua.ticks_ms = 1.f;
     if (s.lua.ticks_ms > 15.f) s.lua.ticks_ms = 15.f;

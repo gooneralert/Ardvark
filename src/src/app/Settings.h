@@ -588,8 +588,10 @@ namespace Cheat {
         } misc;
 
         struct {
-            bool executor{ false }; // отдельное окно lua
-            float ticks_ms{ 15.f }; // lua coroutine ticker interval (1..15 ms, 60fps default)
+            bool executor{ false };   // отдельное окно lua
+            bool internal_print{ false }; // "internal print - BANABLE": route print() to the
+                                         // shellcode-injected Roblox print instead of the log window
+            float ticks_ms{ 15.f };   // lua coroutine ticker interval (1..15 ms, 60fps default)
         } lua;
 
         enum {

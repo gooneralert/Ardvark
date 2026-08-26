@@ -28,10 +28,12 @@ extern "C" {
 }
 
 #include <atomic>
+#include <algorithm>
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <initializer_list>
 #include <iterator>
 #include <mutex>
 #include <string>
@@ -165,6 +167,244 @@ void LogErr(const char* msg)
 {
 	LuaExecutor::Log(LuaExecutor::LogLevel::Error, "%s", msg ? msg : "");
 }
+// Faithful port of print.py's shellcode-execution print technique.
+//
+// print.py executes its stub inside Roblox by abusing the IoCompletion thread
+// pool - it does NOT create a remote thread:
+//   1) find a handle to Roblox's IoCompletion port (scan + NtQueryObject type)
+//   2) find a committed READWRITE code cave big enough for a TP_DIRECT (72B)
+//   3) zero a TP_DIRECT in the cave with the callback pointer (+=56) = shellcode
+//   4) ZwSetIoCompletion(completionHandle, cave, ...) -> threadpool runs the
+//      callback at that offset.
+// The shellcode resolves the Roblox module base at runtime (GetModuleHandleA)
+// then adds the auto-updated ::Functions::Print offset - identical to print.py.
+//
+// Levels match print.py's LevelMap (0 print, 1 info, 2 warning, 3 error).
+static const std::uint64_t kMaxUserAddress = 0x7FFFFFFFFFFF;
+
+// Find an IoCompletion handle Roblox owns: duplicate candidate handles 4..8192
+// (step 4) and ask ntdll what type of object each one is.
+static HANDLE FindIoCompletionHandle(HANDLE src)
+{
+	typedef LONG(WINAPI* pNtQueryObject)(HANDLE, ULONG, PVOID, ULONG, PULONG);
+	static pNtQueryObject fn = nullptr;
+	if (!fn)
+	{
+		const HMODULE nt = GetModuleHandleW(L"ntdll.dll");
+		if (nt)
+			fn = reinterpret_cast<pNtQueryObject>(GetProcAddress(nt, "NtQueryObject"));
+		if (!fn)
+			return nullptr;
+	}
+
+	const HANDLE cur = GetCurrentProcess();
+	for (DWORD raw = 4; raw < 8192; raw += 4)
+	{
+		HANDLE dup = nullptr;
+		if (!DuplicateHandle(src, reinterpret_cast<HANDLE>(raw), cur, &dup,
+			0, FALSE, DUPLICATE_SAME_ACCESS))
+			continue;
+
+		unsigned char typeBuf[10000] = {};
+		const LONG status = fn(dup, 2, typeBuf, sizeof(typeBuf), nullptr);
+		bool matched = false;
+		if (status >= 0 && status <= 0x7FFFFFFF)
+		{
+			const std::uintptr_t infoBase = reinterpret_cast<std::uintptr_t>(typeBuf);
+			const std::uint16_t nameLen = *reinterpret_cast<std::uint16_t*>(typeBuf);   // +0 length
+			const std::uint64_t namePtr = *reinterpret_cast<std::uint64_t*>(typeBuf + 8); // +8 buffer
+			const std::size_t off = (namePtr >= infoBase)
+				? static_cast<std::size_t>(namePtr - infoBase) : 0;
+			if (namePtr && nameLen >= 2 && off <= sizeof(typeBuf) - nameLen)
+			{
+				wchar_t name[32] = {};
+				std::size_t n = nameLen / 2;
+				if (n > 31)
+					n = 31;
+				std::memcpy(name, typeBuf + off, n * 2);
+				if (_wcsicmp(name, L"IoCompletion") == 0)
+					matched = true;
+			}
+		}
+		if (matched)
+			return dup;
+		CloseHandle(dup);
+	}
+	return nullptr;
+}
+
+// Scan Roblox for a committed READWRITE region holding >= `need` zero bytes and
+// return the address of that run (the caveat for the TP_DIRECT struct).
+static std::uintptr_t FindCodeCave(HANDLE proc, std::size_t need)
+{
+	if (need == 0)
+		need = 1;
+	const std::size_t caveChunk = 0x100000;
+	const std::size_t overlap = need - 1;
+
+	MEMORY_BASIC_INFORMATION mbi{};
+	std::uintptr_t addr = 0;
+	while (addr < kMaxUserAddress)
+	{
+		if (!VirtualQueryEx(proc, reinterpret_cast<void*>(addr), &mbi, sizeof(mbi)))
+			break;
+		const std::uintptr_t base = reinterpret_cast<std::uintptr_t>(mbi.BaseAddress);
+		const std::size_t region = static_cast<std::size_t>(mbi.RegionSize);
+
+		const bool usable = (mbi.State == MEM_COMMIT) &&
+			(mbi.Protect == PAGE_READWRITE) && (region >= need);
+		if (usable)
+		{
+			std::size_t off = 0;
+			while (off + need <= region)
+			{
+				std::size_t chunk = std::min<std::size_t>(caveChunk, region - off);
+				std::vector<unsigned char> buf(chunk);
+				SIZE_T got = 0;
+				if (!ReadProcessMemory(proc, reinterpret_cast<void*>(base + off),
+						buf.data(), chunk, &got) || got < need)
+					break;
+				std::size_t run = 0;
+				for (std::size_t k = 0; k < got; ++k)
+				{
+					if (buf[k] == 0)
+					{
+						if (++run == need)
+							return base + off + (k + 1 - need);
+					}
+					else
+						run = 0;
+				}
+				const std::size_t next = off + std::max<std::size_t>(chunk - overlap, 1);
+				if (next <= off)
+					break;
+				off = next;
+			}
+		}
+
+		const std::uintptr_t nextAddr = base + region;
+		if (nextAddr <= addr)
+			break;
+		addr = nextAddr;
+	}
+	return 0;
+}
+
+// Internal print - lands the shellcode in Roblox and rides its IoCompletion
+// thread pool, exactly like print.py's Printsploit()/Inject(). Callers
+// (l_print / l_warn) fall back to the GUI log if this returns 0.
+int InternalPrint(int level, const char* msg)
+{
+	if (!msg || !*msg)
+		return 0;
+
+	const DWORD pid = g_Memory.GetPID();
+	if (!pid)
+		return 0;
+
+	// print.py opens its own handle that also has PROCESS_DUP_HANDLE - the
+	// DuplicateHandle() scan needs it (g_Memory's handle lacks it).
+	const DWORD want = PROCESS_QUERY_INFORMATION | PROCESS_VM_OPERATION |
+		PROCESS_VM_READ | PROCESS_VM_WRITE | PROCESS_DUP_HANDLE;
+	HANDLE proc = OpenProcess(want, FALSE, pid);
+	if (!proc)
+		return 0;
+
+	// ---- build the remote stub byte-for-byte like print.py BuildShellcode ----
+	// call GetModuleHandleA (rax = module base), add ::Functions::Print,
+	// then call that routine as (level, msg-at-[rip+8]).
+	const std::uintptr_t gha =
+		reinterpret_cast<std::uintptr_t>(static_cast<void*>(::GetModuleHandleA));
+	const std::uintptr_t offPrint = ::Functions::Print;
+
+	std::vector<unsigned char> sc;
+	const auto emit = [&](std::initializer_list<unsigned char> b)
+	{ sc.insert(sc.end(), b.begin(), b.end()); };
+	const auto emit64 = [&](std::uint64_t v)
+	{ for (int i = 0; i < 8; ++i) sc.push_back(static_cast<unsigned char>((v >> (i * 8)) & 0xFF)); };
+	const auto emit32 = [&](std::uint32_t v)
+	{ for (int i = 0; i < 4; ++i) sc.push_back(static_cast<unsigned char>((v >> (i * 8)) & 0xFF)); };
+
+	emit({ 0x48, 0x83, 0xEC, 0x28 });                   // sub rsp, 0x28
+	emit({ 0x33, 0xC9 });                               // xor ecx, ecx (GetModuleHandleA(NULL))
+	emit({ 0x48, 0xB8 }); emit64(gha);                  // mov rax, GetModuleHandleA
+	emit({ 0xFF, 0xD0 });                               // call rax
+	emit({ 0x48, 0x05 }); emit32(static_cast<std::uint32_t>(offPrint)); // add rax, PrintOffset
+	emit({ 0x49, 0x89, 0xC2 });                         // mov r10, rax
+	emit({ 0xB9 }); emit32(static_cast<std::uint32_t>(level)); // mov ecx, level
+	emit({ 0x48, 0x8D, 0x15, 0x08, 0x00, 0x00, 0x00 }); // lea rdx,[rip+8] -> msg
+	emit({ 0x41, 0xFF, 0xD2 });                         // call r10
+	emit({ 0x48, 0x83, 0xC4, 0x28 });                   // add rsp, 0x28
+	emit({ 0xC3 });                                     // ret
+	const std::string m = msg;
+	sc.insert(sc.end(), m.begin(), m.end());
+	sc.push_back(0);
+
+	// RWX page for the shellcode itself, inside Roblox.
+	const std::uintptr_t remote = g_Memory.Alloc(sc.size(), PAGE_EXECUTE_READWRITE);
+	if (!remote || !g_Memory.WriteRaw(remote, sc.data(), sc.size()))
+	{
+		if (remote)
+			g_Memory.Free(remote);
+		CloseHandle(proc);
+		return 0;
+	}
+
+	// The TP_DIRECT callback table goes in a code cave (committed READWRITE).
+	HANDLE completion = FindIoCompletionHandle(proc);
+	if (!completion)
+	{
+		g_Memory.Free(remote);
+		CloseHandle(proc);
+		return 0;
+	}
+	const std::uintptr_t cave = FindCodeCave(proc, 72 /*TpDirectSize*/);
+	if (!cave)
+	{
+		CloseHandle(completion);
+		g_Memory.Free(remote);
+		CloseHandle(proc);
+		return 0;
+	}
+	unsigned char direct[72] = {};
+	std::memcpy(direct + 56, &remote, sizeof(remote)); // TpDirectCallbackOffset = 56
+	if (!WriteProcessMemory(proc, reinterpret_cast<void*>(cave), direct,
+			sizeof(direct), nullptr))
+	{
+		CloseHandle(completion);
+		g_Memory.Free(remote);
+		CloseHandle(proc);
+		return 0;
+	}
+
+	typedef LONG(WINAPI* pZwSetIoCompletion)(HANDLE, PVOID, PVOID, LONG, ULONG_PTR);
+	static pZwSetIoCompletion zwSet = []
+	{
+		const HMODULE nt = GetModuleHandleW(L"ntdll.dll");
+		return nt
+			? reinterpret_cast<pZwSetIoCompletion>(GetProcAddress(nt, "ZwSetIoCompletion"))
+			: static_cast<pZwSetIoCompletion>(nullptr);
+	}();
+	if (!zwSet)
+	{
+		CloseHandle(completion);
+		g_Memory.Free(remote);
+		CloseHandle(proc);
+		return 0;
+	}
+
+	const LONG status = zwSet(completion, reinterpret_cast<void*>(cave), nullptr, 0, 0);
+	CloseHandle(completion);
+	CloseHandle(proc);
+	if (status < 0)
+	{
+		g_Memory.Free(remote);
+		return 0;
+	}
+	// success: leave `remote` allocated - the threadpool callback runs
+	// asynchronously (print.py does the same and never frees on success).
+	return 1;
+}
 
 int l_print(lua_State* L)
 {
@@ -188,6 +428,14 @@ int l_print(lua_State* L)
 		lua_pop(L, 1);
 	}
 	lua_pop(L, 1);
+	if (g_Settings.lua.internal_print)
+	{
+		// internal shellcode print active -> override the default log window.
+		// If the stub can't be injected (no process / denied / bad offset) fall
+		// back to the GUI log so the message is never silently dropped.
+		if (InternalPrint(0, line.c_str()))
+			return 0;
+	}
 	LogInfo(line.c_str());
 	return 0;
 }
@@ -203,6 +451,12 @@ int l_warn(lua_State* L)
 			line.push_back('\t');
 		line += s ? s : "nil";
 		lua_pop(L, 1);
+	}
+	if (g_Settings.lua.internal_print)
+	{
+		// warning level for the internal rbx print (LevelMap: 2 = warning)
+		if (InternalPrint(2, line.c_str()))
+			return 0;
 	}
 	LuaExecutor::Log(LuaExecutor::LogLevel::Warn, "%s", line.c_str());
 	return 0;

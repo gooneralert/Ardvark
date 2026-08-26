@@ -69,6 +69,8 @@ void ng_tabs::draw_settings_tab(int* menu_kb, bool* kb_skip)
 
 		row_checkbox("custom support", &g_Settings.misc.custom_support);
 
+		row_checkbox("internal print - BANABLE", &g_Settings.lua.internal_print);
+
 		row_slider_f("lua tick (ms)", &g_Settings.lua.ticks_ms, 1.f, 15.f, "%.0f");
 	}
 	end_panel();

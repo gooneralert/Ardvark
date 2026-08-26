@@ -630,6 +630,7 @@ bool Save(const std::string& name)
     PutBool(out, "misc.arsenal_flick_fix", s.misc.arsenal_flick_fix);
     PutBool(out, "misc.desync", s.misc.desync);
     PutBool(out, "lua.executor", s.lua.executor);
+    PutBool(out, "lua.internal_print", s.lua.internal_print);
     PutFloat(out, "lua.ticks_ms", s.lua.ticks_ms);
 
     PutInt(out, "gui.theme", s.gui.theme);
@@ -1043,6 +1044,7 @@ bool Load(const std::string& name)
     GetBool(kv, "misc.arsenal_flick_fix", s.misc.arsenal_flick_fix);
     GetBool(kv, "misc.desync", s.misc.desync);
     GetBool(kv, "lua.executor", s.lua.executor);
+    GetBool(kv, "lua.internal_print", s.lua.internal_print);
     GetFloat(kv, "lua.ticks_ms", s.lua.ticks_ms);
     if (s.lua.ticks_ms < 1.f) s.lua.ticks_ms = 1.f;
     if (s.lua.ticks_ms > 15.f) s.lua.ticks_ms = 15.f;
