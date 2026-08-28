@@ -4,5 +4,5 @@
 
 namespace gui
 {
-    void render_esp_preview_window(bool* open, ImVec2 anchor_pos, ImVec2 anchor_size);
+    void render_esp_preview_window(bool* open, ImVec2 anchor_pos, ImVec2 anchor_size, float anim = 1.f);
 }

@@ -32,8 +32,8 @@ namespace {
     void frame3(ImDrawList* dl, const ImRect& outer)
     {
         const ImRect inner(outer.Min + ImVec2(1, 1), outer.Max - ImVec2(1, 1));
-        dl->AddRect(inner.Min, inner.Max, colors::widget_inline_u32(),  0.0f, 0, 1.0f);
-        dl->AddRect(outer.Min, outer.Max, colors::widget_outline_u32(), 0.0f, 0, 1.0f);
+        dl->AddRect(inner.Min, inner.Max, colors::widget_inline_u32(),  3.0f, 0, 1.0f);
+        dl->AddRect(outer.Min, outer.Max, colors::widget_outline_u32(), 3.0f, 0, 1.0f);
     }
 
     ImRect fill_of(const ImRect& outer)
@@ -98,27 +98,38 @@ namespace {
         const int orr = (int)max.x - 1, ob = (int)max.y - 1;
         const int fl = ol + 2, ft = ot + 1, fr = orr - 1;
 
+        const float r = 5.0f;
+
         dl->AddRectFilled(ImVec2((float)fl, (float)ft),
                           ImVec2((float)(fr + 1), (float)ob),
-                          ImGui::GetColorU32(colors::child_fill));
+                          ImGui::GetColorU32(colors::child_fill), r);
 
         for (int i = 0; i < hdr_rows; ++i)
-            dl->AddRectFilled(ImVec2((float)fl, (float)(ft + i)),
-                              ImVec2((float)(fr + 1), (float)(ft + i + 1)),
+        {
+            float t = r - ((float)i + 0.5f);
+            float ins = 0.f;
+            if (t > 0.f)
+                ins = r - sqrtf(r * r - t * t);
+            const int l = fl + (int)ins;
+            const int rr = fr - (int)ins;
+            if (rr < l) continue;
+            dl->AddRectFilled(ImVec2((float)l, (float)(ft + i)),
+                              ImVec2((float)(rr + 1), (float)(ft + i + 1)),
                               colors::header_gradient_row(i, hdr_rows));
+        }
 
         dl->AddRectFilled(ImVec2((float)fl, (float)(ft + hdr_rows)),
                           ImVec2((float)(fr + 1), (float)(ft + hdr_rows + 1)),
                           colors::widget_inline_u32());
 
         dl->AddRect(ImVec2((float)ol, (float)ot),
-                    ImVec2((float)(orr + 1), (float)(ob + 1)), IM_COL32(0, 0, 0, 255), 0.0f, 0, 1.0f);
+                    ImVec2((float)(orr + 1), (float)(ob + 1)), IM_COL32(0, 0, 0, 255), r, 0, 1.0f);
 
         const ImU32 inl = colors::widget_inline_u32();
         const int il = ol + 1, it = ot + 1, ir = orr - 1, ib = ob - 1;
-        dl->AddLine(ImVec2((float)il, (float)ib), ImVec2((float)ir, (float)ib), inl);
-        dl->AddLine(ImVec2((float)il, (float)it), ImVec2((float)il, (float)ib), inl);
-        dl->AddLine(ImVec2((float)ir, (float)it), ImVec2((float)ir, (float)ib), inl);
+        dl->AddLine(ImVec2((float)(il + 2), (float)ib), ImVec2((float)(ir - 2), (float)ib), inl);
+        dl->AddLine(ImVec2((float)il, (float)(it + 4)), ImVec2((float)il, (float)(ib - 3)), inl);
+        dl->AddLine(ImVec2((float)ir, (float)(it + 4)), ImVec2((float)ir, (float)(ib - 3)), inl);
 
         if (title && title[0]) {
             ImFont* font = fonts::ui();

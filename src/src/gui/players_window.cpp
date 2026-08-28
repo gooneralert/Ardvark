@@ -1,4 +1,5 @@
 #include "pch.h"
+#include "glass.h"
 #include "players_window.h"
 #include "widgets/text.h"
 #include "imgui.h"
@@ -194,11 +195,17 @@ namespace gui
 
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.f, 0.f));
         ImGui::PushStyleColor(ImGuiCol_Border, border_outer);
-        ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.08f, 0.08f, 0.08f, 1.f));
+        ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.055f, 0.06f, 0.07f, 0.34f));  // translucent so the acrylic shows through
         bool visible = ImGui::Begin("##players_window", nullptr,
             ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoScrollbar | 0 | ImGuiWindowFlags_NoResize);
         ImGui::PopStyleColor(2);
         ImGui::PopStyleVar();
+        if (visible)
+        {
+            const ImVec2 gp = ImGui::GetWindowPos();
+            const ImVec2 gs = ImGui::GetWindowSize();
+            glass::add_rect(gp.x, gp.y, gs.x, gs.y, 8.f);   // acrylic backdrop for this window
+        }
 
         if (!visible)
         {

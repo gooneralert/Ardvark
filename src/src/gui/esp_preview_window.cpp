@@ -1,4 +1,5 @@
 #include "pch.h"
+#include "glass.h"
 #include "esp_preview_window.h"
 #include "widgets/text.h"
 #include "imgui.h"
@@ -8,7 +9,7 @@ namespace gui
 {
     static const ImVec4 border_outer = ImVec4(0.13f, 0.13f, 0.13f, 1.f);
 
-    void render_esp_preview_window(bool* open, ImVec2 anchor_pos, ImVec2 anchor_size)
+    void render_esp_preview_window(bool* open, ImVec2 anchor_pos, ImVec2 anchor_size, float anim)
     {
         if (!open || !*open)
             return;
@@ -17,25 +18,36 @@ namespace gui
         constexpr float margin = 3.f;
         constexpr float gap = 8.f;
 
-        // размер держим свой, к меню привязана только позиция
+        // Ã‘â‚¬ÃÂ°ÃÂ·ÃÂ¼ÃÂµÃ‘â‚¬ ÃÂ´ÃÂµÃ‘â‚¬ÃÂ¶ÃÂ¸ÃÂ¼ Ã‘ÂÃÂ²ÃÂ¾ÃÂ¹, ÃÂº ÃÂ¼ÃÂµÃÂ½Ã‘Å½ ÃÂ¿Ã‘â‚¬ÃÂ¸ÃÂ²Ã‘ÂÃÂ·ÃÂ°ÃÂ½ÃÂ° Ã‘â€šÃÂ¾ÃÂ»Ã‘Å’ÃÂºÃÂ¾ ÃÂ¿ÃÂ¾ÃÂ·ÃÂ¸Ã‘â€ ÃÂ¸Ã‘Â
         constexpr float win_w = 356.f;
         constexpr float win_h = 504.f;
 
-        ImGui::SetNextWindowPos(ImVec2(anchor_pos.x + anchor_size.x + gap, anchor_pos.y), ImGuiCond_Always);
+        // slide-out: at anim=0 the window sits fully behind the main GUI and
+        // emerges to the right as anim approaches 1
+        const float slide = (1.f - anim) * (win_w + gap + 12.f);
+        ImGui::SetNextWindowPos(ImVec2(anchor_pos.x + anchor_size.x + gap - slide, anchor_pos.y), ImGuiCond_Always);
         ImGui::SetNextWindowSize(ImVec2(win_w, win_h), ImGuiCond_Always);
 
+        ImGui::PushStyleVar(ImGuiStyleVar_Alpha, anim);
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.f, 0.f));
         ImGui::PushStyleColor(ImGuiCol_Border, border_outer);
-        ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.08f, 0.08f, 0.08f, 1.f));
+        ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.055f, 0.06f, 0.07f, 0.34f));  // translucent so the acrylic shows through
         bool visible = ImGui::Begin("##esp_preview_window", nullptr,
             ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoScrollbar
             | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove);
         ImGui::PopStyleColor(2);
         ImGui::PopStyleVar();
+        if (visible)
+        {
+            const ImVec2 gp = ImGui::GetWindowPos();
+            const ImVec2 gs = ImGui::GetWindowSize();
+            glass::add_rect(gp.x, gp.y, gs.x, gs.y, 8.f);   // acrylic backdrop for this window
+        }
 
         if (!visible)
         {
             ImGui::End();
+            ImGui::PopStyleVar();   // alpha
             return;
         }
 

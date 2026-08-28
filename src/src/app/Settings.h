@@ -559,8 +559,9 @@ namespace Cheat {
             bool  reset_korblox{ false };
 
             bool  explorer{ false };
-            bool  esp_preview{ false };
+            bool  esp_preview{ true };   // ESP preview is on by default
             bool  players{ false }; // island -> float players_ui
+bool  music{ false };   // music player window
             bool  mcp{ false }; // localhost bridge для cursor mcp
             bool  custom_support{ false };
 
@@ -607,6 +608,8 @@ namespace Cheat {
         struct {
             int   theme{ 0 };
             int   font{ 0 }; // proxima soft bold
+            float frost{ 0.10f };  // glass milkiness 0..1 (tint + white wash, 0 = clear)
+            float blur{ 10.f };   // glass blur strength 0..100 (default 10, like matcha)
             bool  watermark{ false };
             float watermark_x{ 10.f };
             float watermark_y{ 10.f };

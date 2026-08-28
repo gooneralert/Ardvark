@@ -2,6 +2,7 @@
 #include "combo.h"
 #include "checkbox.h"
 #include "text.h"
+#include "../glass.h"
 #include "imgui.h"
 #include <stdio.h>
 #include <string.h>
@@ -35,10 +36,11 @@ namespace widgets
 
         ImVec2 max(pos.x + width, pos.y + height);
         ImDrawList* draw = ImGui::GetWindowDrawList();
-        draw->AddRectFilled(pos, max, ImGui::GetColorU32(ImVec4(0.08f, 0.08f, 0.08f, 1.f)));
+        constexpr float combo_round = 6.f;
+        draw->AddRectFilled(pos, max, ImGui::GetColorU32(ImVec4(1.f, 1.f, 1.f, 0.07f)), combo_round);
         if (hovered || open)
-            draw->AddRectFilled(pos, max, ImGui::GetColorU32(ImVec4(1.f, 1.f, 1.f, 0.04f)));
-        draw->AddRect(pos, max, ImGui::GetColorU32(ImVec4(0.22f, 0.22f, 0.22f, 1.f)));
+            draw->AddRectFilled(pos, max, ImGui::GetColorU32(ImVec4(1.f, 1.f, 1.f, 0.05f)), combo_round);
+        draw->AddRect(pos, max, ImGui::GetColorU32(ImVec4(1.f, 1.f, 1.f, 0.14f)), combo_round);
 
         constexpr float pad_x = 6.f;
         text_outlined(draw, ImVec2(pos.x + pad_x, pos.y + (height - text_size.y) * 0.5f), ImGui::GetColorU32(ImVec4(0.85f, 0.85f, 0.85f, 1.f)), preview);
@@ -52,8 +54,8 @@ namespace widgets
         ImGui::SetNextWindowSize(ImVec2(width, 0.f));
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(4.f, 4.f));
         ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0.f, 2.f));
-        ImGui::PushStyleColor(ImGuiCol_PopupBg, ImVec4(0.08f, 0.08f, 0.08f, 1.f));
-        ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.22f, 0.22f, 0.22f, 1.f));
+        ImGui::PushStyleColor(ImGuiCol_PopupBg, ImVec4(0.05f, 0.055f, 0.065f, 0.25f));
+        ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(1.f, 1.f, 1.f, 0.14f));
         ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(1.f, 1.f, 1.f, 0.10f));
         ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(1.f, 1.f, 1.f, 0.08f));
         ImGui::PushStyleColor(ImGuiCol_HeaderActive, ImVec4(1.f, 1.f, 1.f, 0.14f));
@@ -61,6 +63,14 @@ namespace widgets
 
         if (ImGui::BeginPopup("##cbpop", ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize))
         {
+            // frosted-glass backdrop for the dropdown
+            const ImVec2 pw = ImGui::GetWindowSize();
+            glass::draw(
+                ImGui::GetWindowDrawList(),
+                ImGui::GetWindowPos(),
+                ImVec2(ImGui::GetWindowPos().x + pw.x, ImGui::GetWindowPos().y + pw.y),
+                ImGui::GetStyle().PopupRounding);
+
             for (int i = 0; i < (int)items.size(); ++i)
             {
                 ImGui::PushID(i);
@@ -130,10 +140,11 @@ namespace widgets
 
         ImVec2 max(pos.x + width, pos.y + height);
         ImDrawList* draw = ImGui::GetWindowDrawList();
-        draw->AddRectFilled(pos, max, ImGui::GetColorU32(ImVec4(0.08f, 0.08f, 0.08f, 1.f)));
+        constexpr float combo_round = 6.f;
+        draw->AddRectFilled(pos, max, ImGui::GetColorU32(ImVec4(1.f, 1.f, 1.f, 0.07f)), combo_round);
         if (hovered || open)
-            draw->AddRectFilled(pos, max, ImGui::GetColorU32(ImVec4(1.f, 1.f, 1.f, 0.04f)));
-        draw->AddRect(pos, max, ImGui::GetColorU32(ImVec4(0.22f, 0.22f, 0.22f, 1.f)));
+            draw->AddRectFilled(pos, max, ImGui::GetColorU32(ImVec4(1.f, 1.f, 1.f, 0.05f)), combo_round);
+        draw->AddRect(pos, max, ImGui::GetColorU32(ImVec4(1.f, 1.f, 1.f, 0.14f)), combo_round);
 
         constexpr float pad_x = 6.f;
         text_outlined(draw, ImVec2(pos.x + pad_x, pos.y + (height - text_size.y) * 0.5f), ImGui::GetColorU32(ImVec4(0.85f, 0.85f, 0.85f, 1.f)), preview);
@@ -147,8 +158,8 @@ namespace widgets
         ImGui::SetNextWindowSize(ImVec2(width, 0.f));
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(4.f, 4.f));
         ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0.f, 2.f));
-        ImGui::PushStyleColor(ImGuiCol_PopupBg, ImVec4(0.08f, 0.08f, 0.08f, 1.f));
-        ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.22f, 0.22f, 0.22f, 1.f));
+        ImGui::PushStyleColor(ImGuiCol_PopupBg, ImVec4(0.05f, 0.055f, 0.065f, 0.25f));
+        ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(1.f, 1.f, 1.f, 0.14f));
         ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(1.f, 1.f, 1.f, 0.10f));
         ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(1.f, 1.f, 1.f, 0.08f));
         ImGui::PushStyleColor(ImGuiCol_HeaderActive, ImVec4(1.f, 1.f, 1.f, 0.14f));
@@ -156,6 +167,14 @@ namespace widgets
 
         if (ImGui::BeginPopup("##mcpop", ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize))
         {
+            // frosted-glass backdrop for the dropdown
+            const ImVec2 pw = ImGui::GetWindowSize();
+            glass::draw(
+                ImGui::GetWindowDrawList(),
+                ImGui::GetWindowPos(),
+                ImVec2(ImGui::GetWindowPos().x + pw.x, ImGui::GetWindowPos().y + pw.y),
+                ImGui::GetStyle().PopupRounding);
+
             for (int i = 0; i < (int)items.size(); ++i)
             {
                 ImGui::PushID(i);

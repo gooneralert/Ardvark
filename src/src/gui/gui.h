@@ -13,4 +13,5 @@ namespace gui
     bool menu_open();
     void set_menu_open(bool open);
     bool any_ui_open();
+bool music_visible();   // music player card currently toggled on
 }

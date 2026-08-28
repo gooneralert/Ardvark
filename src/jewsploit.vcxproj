@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="Debug|Win32">
@@ -77,7 +77,7 @@
       <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;ZSTD_DISABLE_ASM;ZSTD_LEGACY_SUPPORT=0;XXH_NAMESPACE=ZSTD_;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
-      <AdditionalIncludeDirectories>$(ProjectDir)src;$(ProjectDir)src\gui;$(ProjectDir)src\jewsploit;$(ProjectDir)third_party;$(ProjectDir)third_party\lua;$(ProjectDir)third_party\imgui;$(ProjectDir)third_party\freetype\include;$(ProjectDir)third_party\stb;$(ProjectDir)third_party\zstd\lib;$(ProjectDir)assets;$(ProjectDir)assets\hitsounds;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)src;$(ProjectDir)src\gui;$(ProjectDir)src\jewsploit;$(ProjectDir)third_party;$(ProjectDir)third_party\lua;$(ProjectDir)third_party\imgui;$(ProjectDir)third_party\freetype\include;$(ProjectDir)third_party\stb;$(ProjectDir)third_party\zstd\lib;$(ProjectDir)assets;$(ProjectDir)assets\hitsounds;$(ProjectDir)src\music_player\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
@@ -106,7 +106,7 @@
       <PreprocessorDefinitions>WIN32;NDEBUG;_CONSOLE;ZSTD_DISABLE_ASM;ZSTD_LEGACY_SUPPORT=0;XXH_NAMESPACE=ZSTD_;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
-      <AdditionalIncludeDirectories>$(ProjectDir)src;$(ProjectDir)src\gui;$(ProjectDir)src\jewsploit;$(ProjectDir)third_party;$(ProjectDir)third_party\lua;$(ProjectDir)third_party\imgui;$(ProjectDir)third_party\freetype\include;$(ProjectDir)third_party\stb;$(ProjectDir)third_party\zstd\lib;$(ProjectDir)assets;$(ProjectDir)assets\hitsounds;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)src;$(ProjectDir)src\gui;$(ProjectDir)src\jewsploit;$(ProjectDir)third_party;$(ProjectDir)third_party\lua;$(ProjectDir)third_party\imgui;$(ProjectDir)third_party\freetype\include;$(ProjectDir)third_party\stb;$(ProjectDir)third_party\zstd\lib;$(ProjectDir)assets;$(ProjectDir)assets\hitsounds;$(ProjectDir)src\music_player\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
@@ -135,7 +135,7 @@
       <PreprocessorDefinitions>_DEBUG;_CONSOLE;ZSTD_DISABLE_ASM;ZSTD_LEGACY_SUPPORT=0;XXH_NAMESPACE=ZSTD_;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
-      <AdditionalIncludeDirectories>$(ProjectDir)src;$(ProjectDir)src\gui;$(ProjectDir)src\jewsploit;$(ProjectDir)third_party;$(ProjectDir)third_party\lua;$(ProjectDir)third_party\imgui;$(ProjectDir)third_party\freetype\include;$(ProjectDir)third_party\stb;$(ProjectDir)third_party\zstd\lib;$(ProjectDir)assets;$(ProjectDir)assets\hitsounds;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)src;$(ProjectDir)src\gui;$(ProjectDir)src\jewsploit;$(ProjectDir)third_party;$(ProjectDir)third_party\lua;$(ProjectDir)third_party\imgui;$(ProjectDir)third_party\freetype\include;$(ProjectDir)third_party\stb;$(ProjectDir)third_party\zstd\lib;$(ProjectDir)assets;$(ProjectDir)assets\hitsounds;$(ProjectDir)src\music_player\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
@@ -164,7 +164,7 @@
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;ZSTD_DISABLE_ASM;ZSTD_LEGACY_SUPPORT=0;XXH_NAMESPACE=ZSTD_;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
-      <AdditionalIncludeDirectories>$(ProjectDir)src;$(ProjectDir)src\gui;$(ProjectDir)src\jewsploit;$(ProjectDir)third_party;$(ProjectDir)third_party\lua;$(ProjectDir)third_party\imgui;$(ProjectDir)third_party\freetype\include;$(ProjectDir)third_party\stb;$(ProjectDir)third_party\zstd\lib;$(ProjectDir)assets;$(ProjectDir)assets\hitsounds;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)src;$(ProjectDir)src\gui;$(ProjectDir)src\jewsploit;$(ProjectDir)third_party;$(ProjectDir)third_party\lua;$(ProjectDir)third_party\imgui;$(ProjectDir)third_party\freetype\include;$(ProjectDir)third_party\stb;$(ProjectDir)third_party\zstd\lib;$(ProjectDir)assets;$(ProjectDir)assets\hitsounds;$(ProjectDir)src\music_player\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
@@ -173,7 +173,7 @@
     <Link>
       <!-- Prebuilt freetype.lib was built with the static CRT and references a freetype.pdb that is not shipped;
            drop its LIBCMT defaultlib (MSVCRT provides the same CRT symbols) and suppress LNK4099 (missing PDB). -->
-      <AdditionalOptions>/NODEFAULTLIB:LIBCMT /ignore:4099 %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalOptions>/NODEFAULTLIB:LIBCMT /ignore:4099 /MAP:"$(TargetDir)jewsploit.map" %(AdditionalOptions)</AdditionalOptions>
       <SubSystem>Console</SubSystem>
       <StackReserveSize>8388608</StackReserveSize>
       <GenerateDebugInformation>true</GenerateDebugInformation>
@@ -255,6 +255,11 @@
     <ClInclude Include="src\features\lua\execute\Clipboard.h" />
     <ClInclude Include="src\gui\TextEditor\TextEditor.h" />
     <ClInclude Include="src\renderer\Renderer.h" />
+    <ClInclude Include="src\music_player\include\media.h" />
+    <ClInclude Include="src\music_player\include\music_player_host.h" />
+    <ClInclude Include="src\music_player\include\music_player_internal.h" />
+    <ClInclude Include="src\music_player\include\music_player_ui.h" />
+    <ClInclude Include="src\gui\glass.h" />
     <ClInclude Include="src\gui\gui.h" />
     <ClInclude Include="src\gui\Menu.h" />
     <ClInclude Include="src\gui\colors\colors.h" />
@@ -673,6 +678,67 @@
       <WarningLevel>TurnOffAllWarnings</WarningLevel>
       <SDLCheck>false</SDLCheck>
     </ClCompile>
+    <ClCompile Include="src\music_player\src\media.cpp">
+      <PreprocessorDefinitions>NOMINMAX;_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ObjectFileName>$(IntDir)music_player\</ObjectFileName>
+      <PreprocessorDefinitions>NOMINMAX;_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="src\music_player\src\spotify_font_loader.cpp">
+      <PreprocessorDefinitions>NOMINMAX;_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ObjectFileName>$(IntDir)music_player\</ObjectFileName>
+      <PreprocessorDefinitions>NOMINMAX;_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="src\music_player\src\player\background.cpp">
+      <PreprocessorDefinitions>NOMINMAX;_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ObjectFileName>$(IntDir)music_player\</ObjectFileName>
+      <PreprocessorDefinitions>NOMINMAX;_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="src\music_player\src\player\artwork.cpp">
+      <PreprocessorDefinitions>NOMINMAX;_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ObjectFileName>$(IntDir)music_player\</ObjectFileName>
+      <PreprocessorDefinitions>NOMINMAX;_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="src\music_player\src\player\controls.cpp">
+      <PreprocessorDefinitions>NOMINMAX;_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ObjectFileName>$(IntDir)music_player\</ObjectFileName>
+      <PreprocessorDefinitions>NOMINMAX;_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="src\music_player\src\player\header.cpp">
+      <PreprocessorDefinitions>NOMINMAX;_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ObjectFileName>$(IntDir)music_player\</ObjectFileName>
+      <PreprocessorDefinitions>NOMINMAX;_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="src\music_player\src\player\lyrics.cpp">
+      <PreprocessorDefinitions>NOMINMAX;_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ObjectFileName>$(IntDir)music_player\</ObjectFileName>
+      <PreprocessorDefinitions>NOMINMAX;_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="src\music_player\src\player\player.cpp">
+      <PreprocessorDefinitions>NOMINMAX;_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ObjectFileName>$(IntDir)music_player\</ObjectFileName>
+      <PreprocessorDefinitions>NOMINMAX;_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="src\music_player\src\player\svg_path.cpp">
+      <PreprocessorDefinitions>NOMINMAX;_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ObjectFileName>$(IntDir)music_player\</ObjectFileName>
+      <PreprocessorDefinitions>NOMINMAX;_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="src\music_player\host_impl.cpp">
+      <PreprocessorDefinitions>NOMINMAX;_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ObjectFileName>$(IntDir)music_player\</ObjectFileName>
+      <PreprocessorDefinitions>NOMINMAX;_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="src\gui\glass.cpp" />
     <ClCompile Include="src\gui\gui.cpp" />
     <ClCompile Include="src\gui\Menu.cpp" />
     <ClCompile Include="src\gui\tabs\aim.cpp">

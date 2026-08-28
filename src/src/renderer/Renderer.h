@@ -18,6 +18,7 @@ namespace Cheat {
 
         static HWND GetHwnd() { return m_Hwnd; }
         static HWND GetGameHwnd() { return m_GameHwnd; }
+        static ID3D11Device* GetDevice() { return m_Device; }
         static void SetClickThrough(bool click_through);
         // оверлей без активации, дернуть когда imgui хочет клаву
         static void SetTextInputFocus(bool want_text);

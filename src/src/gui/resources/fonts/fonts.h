@@ -15,6 +15,8 @@ namespace fonts {
     extern ImFont* menu;
 
     extern ImFont* tahoma;
+    extern ImFont* music_regular;   // Inter (music player), loaded at startup
+    extern ImFont* music_bold;
     extern ImFont* esp;
     extern ImFont* esp_bold;
 

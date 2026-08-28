@@ -334,6 +334,7 @@ namespace colors {
 
         dl->AddRect(outer.Min, outer.Max, with_alpha(outer_border, alpha), 0.f, 0, thick);
         dl->AddRect(inner.Min, inner.Max, with_alpha(inner_border, alpha), 0.f, 0, thick);
-        dl->AddRectFilled(fill.Min, fill.Max, with_alpha(panel_fill, alpha));
+        // translucent fill: lets the frosted-glass backdrop show through
+        dl->AddRectFilled(fill.Min, fill.Max, with_alpha(panel_fill, alpha * 0.55f));
     }
 }

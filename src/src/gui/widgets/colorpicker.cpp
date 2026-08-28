@@ -9,8 +9,8 @@ namespace widgets
     {
         ImGui::PushStyleColor(ImGuiCol_PopupBg, ImVec4(0.08f, 0.08f, 0.08f, 1.f));
         ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.22f, 0.22f, 0.22f, 1.f));
-        ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 0.f);
-        ImGui::PushStyleVar(ImGuiStyleVar_PopupRounding, 0.f);
+        ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 4.f);
+        ImGui::PushStyleVar(ImGuiStyleVar_PopupRounding, 8.f);
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(6.f, 6.f));
         ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(6.f, 6.f));
     }
@@ -228,21 +228,22 @@ namespace widgets
             ImGui::OpenPopup("##cp");
 
         ImDrawList* draw = ImGui::GetWindowDrawList();
+        const float box_round = box_size * 0.3f;
         if (*value)
-            draw->AddRectFilled(box_min, box_max, ImGui::GetColorU32(ImVec4(1.f, 1.f, 1.f, 1.f)));
+            draw->AddRectFilled(box_min, box_max, ImGui::GetColorU32(ImVec4(1.f, 1.f, 1.f, 1.f)), box_round);
         else
         {
-            draw->AddRectFilled(box_min, box_max, ImGui::GetColorU32(ImVec4(0.f, 0.f, 0.f, 0.35f)));
+            draw->AddRectFilled(box_min, box_max, ImGui::GetColorU32(ImVec4(0.f, 0.f, 0.f, 0.35f)), box_round);
             if (over_left)
-                draw->AddRectFilled(box_min, box_max, ImGui::GetColorU32(ImVec4(1.f, 1.f, 1.f, 0.06f)));
+                draw->AddRectFilled(box_min, box_max, ImGui::GetColorU32(ImVec4(1.f, 1.f, 1.f, 0.06f)), box_round);
         }
-        draw->AddRect(box_min, box_max, ImGui::GetColorU32(ImVec4(0.4f, 0.4f, 0.4f, 1.f)));
+        draw->AddRect(box_min, box_max, ImGui::GetColorU32(ImVec4(0.4f, 0.4f, 0.4f, 1.f)), box_round);
 
         ImU32 text_col = ImGui::GetColorU32(*value ? ImVec4(1.f, 1.f, 1.f, 1.f) : ImVec4(0.55f, 0.55f, 0.55f, 1.f));
         text_outlined(draw, ImVec2(box_max.x + label_gap, pos.y), text_col, label);
 
-        draw->AddRectFilled(sw_min, sw_max, ImGui::GetColorU32(ImVec4(color[0], color[1], color[2], color[3])));
-        draw->AddRect(sw_min, sw_max, ImGui::GetColorU32(over_sw ? ImVec4(1.f, 1.f, 1.f, 0.45f) : ImVec4(0.35f, 0.35f, 0.35f, 1.f)));
+        draw->AddRectFilled(sw_min, sw_max, ImGui::GetColorU32(ImVec4(color[0], color[1], color[2], color[3])), 3.f);
+        draw->AddRect(sw_min, sw_max, ImGui::GetColorU32(over_sw ? ImVec4(1.f, 1.f, 1.f, 0.45f) : ImVec4(0.35f, 0.35f, 0.35f, 1.f)), 3.f);
 
         push_picker_style();
         if (ImGui::BeginPopup("##cp", ImGuiWindowFlags_NoMove | ImGuiWindowFlags_AlwaysAutoResize))
@@ -304,23 +305,24 @@ namespace widgets
             ImGui::OpenPopup("##cp2");
 
         ImDrawList* draw = ImGui::GetWindowDrawList();
+        const float box_round = box_size * 0.3f;
         if (*value)
-            draw->AddRectFilled(box_min, box_max, ImGui::GetColorU32(ImVec4(1.f, 1.f, 1.f, 1.f)));
+            draw->AddRectFilled(box_min, box_max, ImGui::GetColorU32(ImVec4(1.f, 1.f, 1.f, 1.f)), box_round);
         else
         {
-            draw->AddRectFilled(box_min, box_max, ImGui::GetColorU32(ImVec4(0.f, 0.f, 0.f, 0.35f)));
+            draw->AddRectFilled(box_min, box_max, ImGui::GetColorU32(ImVec4(0.f, 0.f, 0.f, 0.35f)), box_round);
             if (over_left)
-                draw->AddRectFilled(box_min, box_max, ImGui::GetColorU32(ImVec4(1.f, 1.f, 1.f, 0.06f)));
+                draw->AddRectFilled(box_min, box_max, ImGui::GetColorU32(ImVec4(1.f, 1.f, 1.f, 0.06f)), box_round);
         }
-        draw->AddRect(box_min, box_max, ImGui::GetColorU32(ImVec4(0.4f, 0.4f, 0.4f, 1.f)));
+        draw->AddRect(box_min, box_max, ImGui::GetColorU32(ImVec4(0.4f, 0.4f, 0.4f, 1.f)), box_round);
 
         ImU32 text_col = ImGui::GetColorU32(*value ? ImVec4(1.f, 1.f, 1.f, 1.f) : ImVec4(0.55f, 0.55f, 0.55f, 1.f));
         text_outlined(draw, ImVec2(box_max.x + label_gap, pos.y), text_col, label);
 
-        draw->AddRectFilled(sw1_min, sw1_max, ImGui::GetColorU32(ImVec4(color1[0], color1[1], color1[2], color1[3])));
-        draw->AddRect(sw1_min, sw1_max, ImGui::GetColorU32(over_sw1 ? ImVec4(1.f, 1.f, 1.f, 0.45f) : ImVec4(0.35f, 0.35f, 0.35f, 1.f)));
-        draw->AddRectFilled(sw2_min, sw2_max, ImGui::GetColorU32(ImVec4(color2[0], color2[1], color2[2], color2[3])));
-        draw->AddRect(sw2_min, sw2_max, ImGui::GetColorU32(over_sw2 ? ImVec4(1.f, 1.f, 1.f, 0.45f) : ImVec4(0.35f, 0.35f, 0.35f, 1.f)));
+        draw->AddRectFilled(sw1_min, sw1_max, ImGui::GetColorU32(ImVec4(color1[0], color1[1], color1[2], color1[3])), 3.f);
+        draw->AddRect(sw1_min, sw1_max, ImGui::GetColorU32(over_sw1 ? ImVec4(1.f, 1.f, 1.f, 0.45f) : ImVec4(0.35f, 0.35f, 0.35f, 1.f)), 3.f);
+        draw->AddRectFilled(sw2_min, sw2_max, ImGui::GetColorU32(ImVec4(color2[0], color2[1], color2[2], color2[3])), 3.f);
+        draw->AddRect(sw2_min, sw2_max, ImGui::GetColorU32(over_sw2 ? ImVec4(1.f, 1.f, 1.f, 0.45f) : ImVec4(0.35f, 0.35f, 0.35f, 1.f)), 3.f);
 
         push_picker_style();
         if (ImGui::BeginPopup("##cp1", ImGuiWindowFlags_NoMove | ImGuiWindowFlags_AlwaysAutoResize))

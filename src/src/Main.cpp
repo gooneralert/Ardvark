@@ -42,10 +42,33 @@ static void CrashAppend(const char* msg)
 
 static LONG WINAPI CrashFilter(EXCEPTION_POINTERS* ep)
 {
-	char line[256];
-	const int n = snprintf(line, sizeof(line), "code=0x%08lX addr=0x%llX\n",
+	// module-relative RIP so we can match it against the .map file
+	HMODULE mod = GetModuleHandleA(nullptr);
+	uintptr_t base = (uintptr_t)mod;
+	uintptr_t rip = ep && ep->ContextRecord ? (uintptr_t)ep->ContextRecord->Rip : 0;
+	uintptr_t access = 0;
+	bool is_write = false;
+	if (ep && ep->ExceptionRecord && ep->ExceptionRecord->ExceptionCode == 0xC0000005
+		&& ep->ExceptionRecord->NumberParameters >= 2)
+	{
+		is_write = ep->ExceptionRecord->ExceptionInformation[0] != 0;
+		access = (uintptr_t)ep->ExceptionRecord->ExceptionInformation[1];
+	}
+	CONTEXT* c = ep ? ep->ContextRecord : nullptr;
+	char line[512];
+	const int n = snprintf(line, sizeof(line),
+		"code=0x%08lX rip=0x%llX rip_rva=0x%llX %s access=0x%llX rax=0x%llX rsi=0x%llX rdi=0x%llX rbx=0x%llX r9=0x%llX r11=0x%llX\n",
 		(unsigned long)(ep ? ep->ExceptionRecord->ExceptionCode : 0),
-		(unsigned long long)(ep ? (uintptr_t)ep->ExceptionRecord->ExceptionAddress : 0));
+		(unsigned long long)rip,
+		(unsigned long long)(rip > base ? rip - base : rip),
+		is_write ? "WRITE" : "READ",
+		(unsigned long long)access,
+		(unsigned long long)(c ? c->Rax : 0),
+		(unsigned long long)(c ? c->Rsi : 0),
+		(unsigned long long)(c ? c->Rdi : 0),
+		(unsigned long long)(c ? c->Rbx : 0),
+		(unsigned long long)(c ? c->R9 : 0),
+		(unsigned long long)(c ? c->R11 : 0));
 	CrashAppend(line);
 	return EXCEPTION_EXECUTE_HANDLER;
 }

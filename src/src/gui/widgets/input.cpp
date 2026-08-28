@@ -36,7 +36,7 @@ namespace widgets
         ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.22f, 0.22f, 0.22f, 1.f));
         ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.9f, 0.9f, 0.9f, 1.f));
         ImGui::PushStyleColor(ImGuiCol_TextSelectedBg, ImVec4(1.f, 1.f, 1.f, 0.18f));
-        ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 0.f);
+        ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 6.f);
         ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.f);
         ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(pad_x, pad_y));
 

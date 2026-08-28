@@ -45,12 +45,14 @@ namespace widgets
         bool clicked = ImGui::IsItemClicked();
 
         ImDrawList* draw = ImGui::GetWindowDrawList();
-        draw->AddRectFilled(btn_min, btn_max, ImGui::GetColorU32(ImVec4(0.08f, 0.08f, 0.08f, 1.f)));
+        constexpr float btn_round = 6.f;
+        // translucent glass button
+        draw->AddRectFilled(btn_min, btn_max, ImGui::GetColorU32(ImVec4(1.f, 1.f, 1.f, 0.07f)), btn_round);
         if (held)
-            draw->AddRectFilled(btn_min, btn_max, ImGui::GetColorU32(ImVec4(1.f, 1.f, 1.f, 0.10f)));
+            draw->AddRectFilled(btn_min, btn_max, ImGui::GetColorU32(ImVec4(1.f, 1.f, 1.f, 0.16f)), btn_round);
         else if (hovered)
-            draw->AddRectFilled(btn_min, btn_max, ImGui::GetColorU32(ImVec4(1.f, 1.f, 1.f, 0.06f)));
-        draw->AddRect(btn_min, btn_max, ImGui::GetColorU32(ImVec4(0.22f, 0.22f, 0.22f, 1.f)));
+            draw->AddRectFilled(btn_min, btn_max, ImGui::GetColorU32(ImVec4(1.f, 1.f, 1.f, 0.12f)), btn_round);
+        draw->AddRect(btn_min, btn_max, ImGui::GetColorU32(ImVec4(1.f, 1.f, 1.f, 0.14f)), btn_round);
 
         text_outlined(draw, ImVec2(btn_min.x + (btn_w - btn_text_size.x) * 0.5f, btn_min.y + (row_h - btn_text_size.y) * 0.5f), ImGui::GetColorU32(ImVec4(0.9f, 0.9f, 0.9f, 1.f)), btn_text);
 

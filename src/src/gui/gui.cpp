@@ -12,13 +12,18 @@
 #include "tabs/trigger.h"
 #include "app/Settings.h"
 #include "core/globals/Globals.h"
+#include "core/console/Console.h"
 #include "core/roblox/classes/Classes.h"
 #include "features/games/PhantomForces.h"
 #include "imgui.h"
 #include "imgui_internal.h"
 #include "widgets/widgets.h"
 #include "widgets/text.h"
+#include "glass.h"
+#include "music_player_ui.h"
+#include "media.h"
 #include <cstring>
+#include <cmath>
 #include <string>
 #include <vector>
 #include <windows.h>
@@ -28,19 +33,20 @@ namespace gui
     constexpr float content_margin = 3.f;
     constexpr float inner_padding = 12.f;
     constexpr float subtab_margin = 6.f;
-    constexpr float topbar_width = 250.f;
-    constexpr float topbar_height = 26.f;
-    constexpr float topbar_gap = content_margin;
     constexpr float navbar_height = 28.f;
 
-    const ImVec4 border_color_outer = ImVec4(0.13f, 0.13f, 0.13f, 1.f);
+    const ImVec4 border_color_outer = ImVec4(0.92f, 0.94f, 0.93f, 1.f); // matcha near-white
     const ImVec4 border_color_inner = ImVec4(0.18f, 0.18f, 0.18f, 1.f);
 
+    static int  s_sidebar_selected = 0;
     static bool s_menu_open = true;
     static bool lua_open = false;
     static bool players_open = false;
     static bool explorer_open = false;
     static bool esp_preview_open = false;
+    static bool music_open = false;
+    static bool music_media_inited = false;
+    static float s_esp_anim = 0.f;   // esp preview slide-out 0..1
     static ImVec2 s_menu_pos{};
     static ImVec2 s_menu_size{};
     static int menu_kb = VK_DELETE;
@@ -64,6 +70,7 @@ namespace gui
     bool menu_open() { return menu_visible(); }
     void set_menu_open(bool open) { set_menu_visible(open); }
     bool any_ui_open() { return any_window_visible(); }
+    bool music_visible() { return music_open; }
 
     static bool rect_contains(ImVec2 mn, ImVec2 mx, float x, float y)
     {
@@ -83,7 +90,6 @@ namespace gui
         static const char* names[] = {
             "##navbar",
             "menu",
-            "menu_topbar",
             "##lua_window",
             "##lua_errors",
             "##players_window",
@@ -91,6 +97,7 @@ namespace gui
             "##esp_preview_window",
             "##properties_window",
             "##decompiled_window",
+            "##spotify_player",
         };
         for (const char* n : names)
         {
@@ -114,13 +121,13 @@ namespace gui
         style.ScrollbarSize     = 0.f;
         style.GrabMinSize       = 10.f;
 
-        style.WindowRounding    = 0.f;
-        style.ChildRounding     = 0.f;
-        style.FrameRounding     = 0.f;
-        style.PopupRounding     = 0.f;
-        style.ScrollbarRounding = 0.f;
-        style.GrabRounding      = 0.f;
-        style.TabRounding       = 0.f;
+        style.WindowRounding    = 8.f;
+        style.ChildRounding     = 8.f;
+        style.FrameRounding     = 6.f;
+        style.PopupRounding     = 8.f;
+        style.ScrollbarRounding = 6.f;
+        style.GrabRounding      = 4.f;
+        style.TabRounding       = 6.f;
 
         style.WindowBorderSize  = 1.f;
         style.FrameBorderSize   = 1.f;
@@ -206,8 +213,9 @@ namespace gui
         ImGui::SetCursorPos(ImVec2(subtab_margin, subtab_margin));
         ImGui::PushStyleColor(ImGuiCol_Border, border_color_inner);
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.f, 0.f));
+        ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 2.f);
         ImGui::BeginChild("##tab_content", ImVec2(content_width, content_height), ImGuiChildFlags_Borders, ImGuiWindowFlags_NoScrollbar);
-        ImGui::PopStyleVar();
+        ImGui::PopStyleVar(2);
         ImGui::PopStyleColor();
 
         if (sidebar_selected == 0)
@@ -227,59 +235,124 @@ namespace gui
         ImGui::EndChild();
     }
 
+    // launcher pill icon kinds
+    enum { NICON_GUI = 0, NICON_LUA, NICON_PLAYERS, NICON_EXPLORER, NICON_MUSIC };
+
+    static void draw_launcher_icon(ImDrawList* dl, int kind, ImVec2 c, ImU32 col)
+    {
+        const float t = 1.4f;
+        switch (kind)
+        {
+        case NICON_GUI: // window pane
+            dl->AddRect(ImVec2(c.x - 8.f, c.y - 6.f), ImVec2(c.x + 8.f, c.y + 7.f), col, 2.5f, 0, t);
+            dl->AddLine(ImVec2(c.x - 8.f, c.y - 2.f), ImVec2(c.x + 8.f, c.y - 2.f), col, t);
+            break;
+        case NICON_LUA: // </>
+        {
+            ImVec2 l[3] = { ImVec2(c.x - 7.f, c.y - 4.f), ImVec2(c.x - 3.f, c.y), ImVec2(c.x - 7.f, c.y + 4.f) };
+            ImVec2 r[3] = { ImVec2(c.x + 7.f, c.y - 4.f), ImVec2(c.x + 3.f, c.y), ImVec2(c.x + 7.f, c.y + 4.f) };
+            dl->AddPolyline(l, 3, col, 0, t);
+            dl->AddPolyline(r, 3, col, 0, t);
+            dl->AddLine(ImVec2(c.x - 1.f, c.y + 4.f), ImVec2(c.x + 1.f, c.y - 4.f), col, t);
+            break;
+        }
+        case NICON_PLAYERS: // two people
+        {
+            dl->AddCircle(ImVec2(c.x - 2.f, c.y - 3.5f), 2.6f, col, 0, t);
+            dl->PathArcTo(ImVec2(c.x - 2.f, c.y + 8.f), 5.5f, IM_PI, 2.f * IM_PI, 12);
+            dl->PathStroke(col, 0, t);
+            dl->AddCircle(ImVec2(c.x + 4.5f, c.y - 4.5f), 2.1f, col, 0, t);
+            dl->PathArcTo(ImVec2(c.x + 4.5f, c.y + 7.f), 4.4f, IM_PI * 0.85f, 2.05f * IM_PI, 10);
+            dl->PathStroke(col, 0, t);
+            break;
+        }
+        case NICON_EXPLORER: // folder
+        {
+            ImVec2 p[6] = {
+                ImVec2(c.x - 8.f, c.y + 6.f), ImVec2(c.x - 8.f, c.y - 4.5f), ImVec2(c.x - 3.f, c.y - 4.5f),
+                ImVec2(c.x - 1.f, c.y - 2.5f), ImVec2(c.x + 8.f, c.y - 2.5f), ImVec2(c.x + 8.f, c.y + 6.f) };
+            dl->AddPolyline(p, 6, col, 0, t);
+            break;
+        }
+        case NICON_MUSIC: // eighth note
+            dl->AddCircleFilled(ImVec2(c.x - 2.5f, c.y + 5.f), 2.8f, col);
+            dl->AddLine(ImVec2(c.x + 0.3f, c.y + 5.f), ImVec2(c.x + 0.3f, c.y - 7.f), col, t);
+            dl->AddBezierCubic(ImVec2(c.x + 0.3f, c.y - 7.f), ImVec2(c.x + 5.5f, c.y - 5.f), ImVec2(c.x + 6.f, c.y - 3.f), ImVec2(c.x + 6.5f, c.y + 0.5f), col, t);
+            break;
+        }
+    }
+
     static void render_navbar()
     {
         ImGuiViewport* vp = ImGui::GetMainViewport();
-        ImGui::SetNextWindowPos(vp->Pos, ImGuiCond_Always);
-        ImGui::SetNextWindowSize(ImVec2(vp->Size.x, navbar_height), ImGuiCond_Always);
+
+        constexpr float cell    = 32.f;   // width per icon
+        constexpr float pill_h  = 40.f;   // pill height (icons + active-dot zone)
+        constexpr float pad_x   = 10.f;
+
+        const float pill_w = pad_x * 2.f + cell * 5.f;
+        const ImVec2 pos(vp->Pos.x + (vp->Size.x - pill_w) * 0.5f, vp->Pos.y + 10.f);
+        ImGui::SetNextWindowPos(pos, ImGuiCond_Always);
+        ImGui::SetNextWindowSize(ImVec2(pill_w, pill_h), ImGuiCond_Always);
 
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.f, 0.f));
-        ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.06f, 0.06f, 0.06f, 1.f));
-        ImGui::PushStyleColor(ImGuiCol_Border, border_color_inner);
-        ImGui::Begin("##navbar", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoBringToFrontOnFocus | 0);
+        ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.f, 0.f, 0.f, 0.f));
+        ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.f, 0.f, 0.f, 0.f));
+        ImGui::Begin("##navbar", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoBackground | 0);
         ImGui::PopStyleColor(2);
         ImGui::PopStyleVar();
 
         ImDrawList* draw = ImGui::GetWindowDrawList();
-        ImVec2 wp = ImGui::GetWindowPos();
-        ImVec2 ws = ImGui::GetWindowSize();
-        draw->AddLine(ImVec2(wp.x, wp.y + ws.y - 1.f), ImVec2(wp.x + ws.x, wp.y + ws.y - 1.f), ImGui::GetColorU32(border_color_inner));
+        const ImVec2 wp = ImGui::GetWindowPos();
 
-        static const char* items[] = { "GUI", "Lua", "Players", "Explorer" };
-        constexpr float pad_x = 14.f;
-        constexpr float item_gap = 18.f;
+        // pill background
+        draw->AddRectFilled(wp, ImVec2(wp.x + pill_w, wp.y + pill_h), IM_COL32(16, 16, 18, 235), pill_h * 0.5f);
+        draw->AddRect(wp, ImVec2(wp.x + pill_w, wp.y + pill_h), IM_COL32(255, 255, 255, 22), pill_h * 0.5f, 0, 1.2f);
 
-        float x = wp.x + pad_x;
-        float y = wp.y + (ws.y - ImGui::CalcTextSize(items[0]).y) * 0.5f;
+        struct Item { const char* id; const char* tip; int kind; };
+        const Item items[5] = {
+            { "nav_menu",     "menu",     NICON_GUI },
+            { "nav_lua",      "lua",      NICON_LUA },
+            { "nav_players",  "players",  NICON_PLAYERS },
+            { "nav_explorer", "explorer", NICON_EXPLORER },
+            { "nav_music",    "music",    NICON_MUSIC },
+        };
 
-        for (int i = 0; i < 4; ++i)
+        const float icon_cy = wp.y + (pill_h - 6.f) * 0.5f;
+
+        for (int i = 0; i < 5; ++i)
         {
-            ImVec2 ts = ImGui::CalcTextSize(items[i]);
-            ImVec2 min(x, wp.y);
-            ImVec2 max(x + ts.x, wp.y + ws.y);
+            const float x0 = wp.x + pad_x + cell * i;
+            ImGui::SetCursorScreenPos(ImVec2(x0, wp.y + 2.f));
+            ImGui::PushID(items[i].id);
+            ImGui::InvisibleButton("##nav_btn", ImVec2(cell, pill_h - 4.f));
+            ImGui::PopID();
+            const bool hovered = ImGui::IsItemHovered();
+            const bool clicked = ImGui::IsItemClicked();
+            if (hovered)
+                ImGui::SetTooltip(items[i].tip);
 
-            ImGui::SetCursorScreenPos(min);
-            ImGui::InvisibleButton(items[i], ImVec2(ts.x, ws.y));
-            bool hovered = ImGui::IsItemHovered();
-            bool clicked = ImGui::IsItemClicked();
+            bool active = false;
+            switch (i)
+            {
+            case 0: if (clicked) s_menu_open = !s_menu_open;                    active = s_menu_open; break;
+            case 1: if (clicked) Cheat::g_Settings.lua.executor = !Cheat::g_Settings.lua.executor;   active = Cheat::g_Settings.lua.executor; break;
+            case 2: if (clicked) Cheat::g_Settings.misc.players = !Cheat::g_Settings.misc.players;   active = Cheat::g_Settings.misc.players; break;
+            case 3: if (clicked) Cheat::g_Settings.misc.explorer = !Cheat::g_Settings.misc.explorer; active = Cheat::g_Settings.misc.explorer; break;
+            case 4: if (clicked) { Cheat::g_Settings.misc.music = !Cheat::g_Settings.misc.music; Cheat::Console::Log(Cheat::Console::Color::Gray, "[music] toggled -> %d", (int)Cheat::g_Settings.misc.music); } active = Cheat::g_Settings.misc.music; break;
+            }
 
-            if (i == 0 && clicked)
-                s_menu_open = !s_menu_open;
-            if (i == 1 && clicked)
-                Cheat::g_Settings.lua.executor = !Cheat::g_Settings.lua.executor;
-            if (i == 2 && clicked)
-                Cheat::g_Settings.misc.players = !Cheat::g_Settings.misc.players;
-            if (i == 3 && clicked)
-                Cheat::g_Settings.misc.explorer = !Cheat::g_Settings.misc.explorer;
+            if (hovered)
+                draw->AddRectFilled(ImVec2(x0 + 2.f, wp.y + 3.f), ImVec2(x0 + cell - 2.f, wp.y + pill_h - 3.f), IM_COL32(255, 255, 255, 14), 8.f);
 
-            bool active = (i == 0 && s_menu_open)
-                || (i == 1 && Cheat::g_Settings.lua.executor)
-                || (i == 2 && Cheat::g_Settings.misc.players)
-                || (i == 3 && Cheat::g_Settings.misc.explorer);
-            ImU32 col = ImGui::GetColorU32(active ? ImVec4(1.f, 1.f, 1.f, 1.f) : (hovered ? ImVec4(0.85f, 0.85f, 0.85f, 1.f) : ImVec4(0.55f, 0.55f, 0.55f, 1.f)));
-            widgets::text_outlined(draw, ImVec2(x, y), col, items[i]);
+            const ImU32 col = ImGui::GetColorU32(active ? ImVec4(1.f, 1.f, 1.f, 1.f) : (hovered ? ImVec4(0.85f, 0.85f, 0.85f, 1.f) : ImVec4(0.55f, 0.55f, 0.55f, 1.f)));
+            draw_launcher_icon(draw, items[i].kind, ImVec2(x0 + cell * 0.5f, icon_cy), col);
 
-            x += ts.x + item_gap;
+            // active dot under the icon (like the reference pill)
+            if (active)
+                draw->AddCircleFilled(ImVec2(x0 + cell * 0.5f, wp.y + pill_h - 4.5f), 1.8f, col);
+
+
         }
 
         ImGui::End();
@@ -319,10 +392,18 @@ namespace gui
     {
         handle_menu_key();
 
+        // frosted-glass look comes from the gui settings:
+        // frost = milkiness (tint + white wash), blur = gaussian blur strength
+        glass::set_frost(Cheat::g_Settings.gui.frost);
+        glass::set_blur(Cheat::g_Settings.gui.blur);
+
+        glass::new_frame();   // collect all glass-backed window rects this frame
+
         lua_open = Cheat::g_Settings.lua.executor;
         players_open = Cheat::g_Settings.misc.players;
         explorer_open = Cheat::g_Settings.misc.explorer;
         esp_preview_open = Cheat::g_Settings.misc.esp_preview;
+        music_open = Cheat::g_Settings.misc.music;
 
         if (s_menu_open)
             render_navbar();
@@ -331,12 +412,27 @@ namespace gui
         players_open = Cheat::g_Settings.misc.players;
         explorer_open = Cheat::g_Settings.misc.explorer;
         esp_preview_open = Cheat::g_Settings.misc.esp_preview;
+        music_open = Cheat::g_Settings.misc.music;   // re-sync after navbar clicks
+
+        // ESP preview: only while the Visuals tab is active; slides out from
+        // underneath the main GUI (rendered before it so the menu covers it)
+        {
+            const float dt = ImGui::GetIO().DeltaTime > 0.f ? ImGui::GetIO().DeltaTime : 1.f / 60.f;
+            const bool esp_wanted = s_menu_open && s_sidebar_selected == 2 && Cheat::g_Settings.misc.esp_preview;
+            s_esp_anim += ((esp_wanted ? 1.f : 0.f) - s_esp_anim) * (1.f - std::exp(-14.f * dt));
+            if (!esp_wanted && s_esp_anim < 0.001f)
+                s_esp_anim = 0.f;
+            if (s_esp_anim > 0.01f)
+                render_esp_preview_window(&esp_preview_open, s_menu_pos, s_menu_size, s_esp_anim);
+        }
 
         if (s_menu_open)
             render_menu_window();
+        else
+            glass::set_menu_rect(0, 0, 0, 0);   // hide the acrylic backdrop when the menu closes
 
-        // чекбокс превью живёт во вкладке esp, то есть внутри меню, поэтому
-        // его значение подхватываем уже после отрисовки
+        // Ã‘â€¡ÃÂµÃÂºÃÂ±ÃÂ¾ÃÂºÃ‘Â ÃÂ¿Ã‘â‚¬ÃÂµÃÂ²Ã‘Å’Ã‘Å½ ÃÂ¶ÃÂ¸ÃÂ²Ã‘â€˜Ã‘â€š ÃÂ²ÃÂ¾ ÃÂ²ÃÂºÃÂ»ÃÂ°ÃÂ´ÃÂºÃÂµ esp, Ã‘â€šÃÂ¾ ÃÂµÃ‘ÂÃ‘â€šÃ‘Å’ ÃÂ²ÃÂ½Ã‘Æ’Ã‘â€šÃ‘â‚¬ÃÂ¸ ÃÂ¼ÃÂµÃÂ½Ã‘Å½, ÃÂ¿ÃÂ¾Ã‘ÂÃ‘â€šÃÂ¾ÃÂ¼Ã‘Æ’
+        // ÃÂµÃÂ³ÃÂ¾ ÃÂ·ÃÂ½ÃÂ°Ã‘â€¡ÃÂµÃÂ½ÃÂ¸ÃÂµ ÃÂ¿ÃÂ¾ÃÂ´Ã‘â€¦ÃÂ²ÃÂ°Ã‘â€šÃ‘â€¹ÃÂ²ÃÂ°ÃÂµÃÂ¼ Ã‘Æ’ÃÂ¶ÃÂµ ÃÂ¿ÃÂ¾Ã‘ÂÃÂ»ÃÂµ ÃÂ¾Ã‘â€šÃ‘â‚¬ÃÂ¸Ã‘ÂÃÂ¾ÃÂ²ÃÂºÃÂ¸
         esp_preview_open = Cheat::g_Settings.misc.esp_preview;
 
         if (s_menu_open && lua_open)
@@ -345,13 +441,35 @@ namespace gui
             render_players_window(&players_open);
         if (s_menu_open && explorer_open)
             render_explorer_window(&explorer_open);
-        if (s_menu_open && esp_preview_open)
-            render_esp_preview_window(&esp_preview_open, s_menu_pos, s_menu_size);
+        // music keeps running even when the menu itself is closed
+        if (music_open)
+        {
+            if (!music_media_inited)
+            {
+                try { media::Init(); }
+                catch (...) { Cheat::Console::Log(Cheat::Console::Color::Gray, "[music] media init failed"); }
+                // spawn the card in the top right (the player clamps these into range)
+                ImGuiViewport* mvp = ImGui::GetMainViewport();
+                native_music_player::g_playerOptions.x = mvp->WorkSize.x;
+                native_music_player::g_playerOptions.y = 14.f;
+                music_media_inited = true;
+            }
+            media::Tick();
+            static bool logged_music_frame = false;
+            if (!logged_music_frame)
+            {
+                logged_music_frame = true;
+                Cheat::Console::Log(Cheat::Console::Color::Gray, "[music] drawing player (visible=%d)", (int)native_music_player::g_playerOptions.visible);
+            }
+            native_music_player::DrawMusicPlayer();
+        }
 
         Cheat::g_Settings.lua.executor = lua_open;
         Cheat::g_Settings.misc.players = players_open;
         Cheat::g_Settings.misc.explorer = explorer_open;
         Cheat::g_Settings.misc.esp_preview = esp_preview_open;
+        Cheat::g_Settings.misc.music = music_open;
+    glass::commit();   // size/position the acrylic backdrop over every collected rect
     }
 
     static void render_menu_window()
@@ -362,12 +480,24 @@ namespace gui
 
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.f, 0.f));
         ImGui::PushStyleColor(ImGuiCol_Border, border_color_outer);
+        ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.05f, 0.055f, 0.065f, 0.30f));
         ImGui::Begin("menu", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | 0);
-        ImGui::PopStyleColor();
+        ImGui::PopStyleColor(2);
         ImGui::PopStyleVar();
 
         ImVec2 win_pos = ImGui::GetWindowPos();
         ImVec2 win_size = ImGui::GetWindowSize();
+
+        // OS-level acrylic backdrop, sized to exactly the menu rectangle
+        // (only the menu gets the blur, not the surrounding ESP overlay)
+        glass::add_rect(win_pos.x, win_pos.y, win_size.x, win_size.y, 8.f);
+
+        // frosted-glass backdrop (blurred game behind the menu), inset so the window border stays visible
+        glass::draw(
+            ImGui::GetWindowDrawList(),
+            ImVec2(win_pos.x + 1.f, win_pos.y + 1.f),
+            ImVec2(win_pos.x + win_size.x - 1.f, win_pos.y + win_size.y - 1.f),
+            7.f);
 
         s_menu_pos = win_pos;
         s_menu_size = win_size;
@@ -385,15 +515,17 @@ namespace gui
         ImGui::PopStyleVar();
         ImGui::PopStyleColor();
 
-        static int sidebar_selected = 0;
         static const std::vector<const char*> sidebar_items = { "Aim", "Triggerbot", "Visuals", "Misc", "Local", "Settings" };
-        constexpr float sidebar_width = 100.f;
+        constexpr float tab_bar_height = 40.f;
 
+        const float inner_w = win_size.x - content_margin * 2.f - inner_padding * 2.f;
+
+        // matcha-style top tab bar
         ImGui::SetCursorPos(ImVec2(inner_padding, subtab_margin));
-        widgets::sidebar_tabs(sidebar_items, &sidebar_selected, sidebar_width);
+        widgets::top_tabs(sidebar_items, &s_sidebar_selected, inner_w, tab_bar_height);
 
-        ImGui::SameLine();
-        render_right_panel(sidebar_selected);
+        ImGui::SetCursorPos(ImVec2(inner_padding, subtab_margin + tab_bar_height + subtab_margin));
+        render_right_panel(s_sidebar_selected);
 
         ImGui::EndChild();
         ImGui::EndChild();
@@ -416,10 +548,8 @@ namespace gui
         ImVec2 bl_min(win_pos.x, win_pos.y + win_size.y - resize_corner), bl_max(win_pos.x + resize_corner, win_pos.y + win_size.y);
         ImVec2 br_min(win_pos.x + win_size.x - resize_corner, win_pos.y + win_size.y - resize_corner), br_max(win_pos.x + win_size.x, win_pos.y + win_size.y);
         ImVec2 menu_min = win_pos, menu_max(win_pos.x + win_size.x, win_pos.y + win_size.y);
-        float topbar_x = win_pos.x + (win_size.x - topbar_width) * 0.5f;
-        ImVec2 topbar_min(topbar_x, win_pos.y - topbar_gap - topbar_height), topbar_max(topbar_x + topbar_width, win_pos.y - topbar_gap);
 
-        bool on_menu = hovered_root_named("menu", "menu_topbar");
+        bool on_menu = hovered_root_named("menu");
 
         int hovered_handle = resize_none;
         if (on_menu || active_handle != resize_none)
@@ -431,7 +561,7 @@ namespace gui
             else if (hit(b_min, b_max, io.MousePos)) hovered_handle = resize_bottom;
         }
 
-        bool over_menu = hit(menu_min, menu_max, io.MousePos) || hit(topbar_min, topbar_max, io.MousePos);
+        bool over_menu = hit(menu_min, menu_max, io.MousePos);
         bool over_empty = on_menu && over_menu && !ImGui::IsAnyItemHovered();
 
         if (ImGui::IsMouseClicked(ImGuiMouseButton_Left) && !ImGui::IsAnyItemActive() && on_menu)
@@ -495,66 +625,6 @@ namespace gui
             ImGui::SetWindowPos(win_pos);
         }
 
-        ImGui::End();
-
-        topbar_x = win_pos.x + (win_size.x - topbar_width) * 0.5f;
-        ImGui::SetNextWindowPos(ImVec2(topbar_x, win_pos.y - topbar_gap - topbar_height), ImGuiCond_Always);
-        ImGui::SetNextWindowSize(ImVec2(topbar_width, topbar_height), ImGuiCond_Always);
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.f, 0.f));
-        ImGui::PushStyleColor(ImGuiCol_Border, border_color_outer);
-        ImGui::Begin("menu_topbar", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoSavedSettings | 0);
-        ImGui::PopStyleColor();
-        ImGui::PopStyleVar();
-
-        ImVec2 topbar_size = ImGui::GetWindowSize();
-
-        ImGui::SetCursorPos(ImVec2(content_margin, content_margin));
-        ImGui::PushStyleColor(ImGuiCol_Border, border_color_inner);
-        ImGui::BeginChild("topbar_inner", ImVec2(topbar_size.x - content_margin * 2.f, topbar_size.y - content_margin * 2.f), ImGuiChildFlags_Borders, ImGuiWindowFlags_NoScrollbar);
-        ImGui::PopStyleColor();
-
-        std::string topbar_str = "Ardvark";
-        if (Cheat::Globals::InstanceDataModel.address)
-        {
-            auto pid = Cheat::Globals::InstanceDataModel.GetPlaceId();
-            std::string title;
-            if (Cheat::Games::PhantomForces::IsActivePlace())
-                title = "Phantom Forces";
-            else if (pid == 863266079ull)
-                title = "Apocalypse Rising 2";
-            else if (pid == 16530963934ull)
-                title = "Havoc";
-            else if (pid == 301549746ull)
-                title = "Counter Blox";
-            else if (pid == 2788229376ull)
-                title = "Da Hood";
-            else if (pid == 2753915549ull)
-                title = "Blox Fruits";
-            else if (pid == 155615604ull)
-                title = "Prison Life";
-            else if (pid == 142823291ull)
-                title = "Murder Mystery 2";
-            else
-            {
-                std::string pname = Cheat::Globals::InstanceDataModel.GetName();
-                if (!pname.empty() && pname != "Unknown" && pname != "DataModel" && pname != "UGC" && pname != "Workspace" && pname != "Game" && pname != "game")
-                    title = pname;
-                else if (pid > 0)
-                    title = std::to_string(pid);
-            }
-
-            if (!title.empty())
-                topbar_str += " | " + title;
-        }
-        const char* topbar_text = topbar_str.c_str();
-        ImVec2 text_size = ImGui::CalcTextSize(topbar_text);
-        ImVec2 inner_size = ImGui::GetWindowSize();
-        ImVec2 text_pos = ImGui::GetWindowPos();
-        text_pos.x += (inner_size.x - text_size.x) * 0.5f;
-        text_pos.y += (inner_size.y - text_size.y) * 0.5f;
-        widgets::text_outlined(ImGui::GetWindowDrawList(), text_pos, ImGui::GetColorU32(ImVec4(1.f, 1.f, 1.f, 1.f)), topbar_text);
-
-        ImGui::EndChild();
         ImGui::End();
     }
 }

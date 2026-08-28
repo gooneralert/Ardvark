@@ -66,14 +66,16 @@ namespace widgets
         ImU32 text_col = ImGui::GetColorU32(ImVec4(1.f, 1.f, 1.f, 1.f));
         text_outlined(draw, pos, text_col, label);
 
-        draw->AddRectFilled(bar_min, bar_max, ImGui::GetColorU32(ImVec4(0.12f, 0.12f, 0.12f, 1.f)));
+        const float bar_round = bar_height * 0.5f;
+        // translucent glass track
+        draw->AddRectFilled(bar_min, bar_max, ImGui::GetColorU32(ImVec4(1.f, 1.f, 1.f, 0.07f)), bar_round);
         if (hovered || active)
-            draw->AddRectFilled(bar_min, bar_max, ImGui::GetColorU32(ImVec4(1.f, 1.f, 1.f, 0.04f)));
+            draw->AddRectFilled(bar_min, bar_max, ImGui::GetColorU32(ImVec4(1.f, 1.f, 1.f, 0.06f)), bar_round);
 
         if (t > 0.f)
-            draw->AddRectFilled(bar_min, ImVec2(fill_x, bar_max.y), ImGui::GetColorU32(ImVec4(1.f, 1.f, 1.f, 0.85f)));
+            draw->AddRectFilled(bar_min, ImVec2(fill_x, bar_max.y), ImGui::GetColorU32(ImVec4(1.f, 1.f, 1.f, 0.85f)), bar_round, ImDrawFlags_RoundCornersLeft);
 
-        draw->AddRect(bar_min, bar_max, ImGui::GetColorU32(ImVec4(0.f, 0.f, 0.f, 1.f)));
+        draw->AddRect(bar_min, bar_max, ImGui::GetColorU32(ImVec4(1.f, 1.f, 1.f, 0.12f)), bar_round);
 
         float value_x = fill_x - value_size.x * 0.5f;
         if (value_x < bar_min.x) value_x = bar_min.x;

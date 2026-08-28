@@ -2,6 +2,7 @@
 #include "Menu.h"
 #include "gui.h"
 #include "icons.h"
+#include "glass.h"
 #include "resources/fonts/fonts.h"
 #include "imgui.h"
 #include "imgui_internal.h"
@@ -52,6 +53,7 @@ bool Menu::Initialize(HWND hWnd, ID3D11Device* pDevice, ID3D11DeviceContext* pDe
     io.FontDefault = fonts::by_index(g_Settings.gui.font);
     gui::setup_style();
     gui::icons_init(pDevice);
+    glass::init(pDevice, pDeviceContext);
 
     if (!ImGui_ImplWin32_Init(hWnd))
         return false;
@@ -205,6 +207,58 @@ float Menu::DrawMenu()
         Renderer::SetClickThrough(!m_bMenuVisible);
     }
 
+    // Music player: while the menu is closed, the card becomes interactive
+    // when the physical cursor is over it. Elsewhere the overlay stays
+    // click-through so the game keeps full mouse control.
+    static bool s_cardHover = false;
+    if (!m_bMenuVisible && gui::music_visible())
+    {
+        bool hover = false;
+        HWND overlay = Renderer::GetHwnd();
+        POINT p{};
+        if (overlay && GetCursorPos(&p) && ScreenToClient(overlay, &p))
+            hover = gui::point_over_ui((float)p.x, (float)p.y);
+
+        if (hover != s_cardHover)
+        {
+            s_cardHover = hover;
+            Renderer::SetClickThrough(!hover);
+
+            if (hover)
+            {
+                ClipCursor(nullptr);
+                while (ShowCursor(TRUE) < 0) {}
+            }
+            else
+            {
+                HWND game = Renderer::GetGameHwnd();
+                if (game && IsWindow(game))
+                {
+                    RECT cr{};
+                    if (GetClientRect(game, &cr))
+                    {
+                        POINT tl{ cr.left, cr.top };
+                        POINT br{ cr.right, cr.bottom };
+                        ClientToScreen(game, &tl);
+                        ClientToScreen(game, &br);
+                        RECT clip{ tl.x, tl.y, br.x, br.y };
+                        ClipCursor(&clip);
+                    }
+                }
+
+                for (int i = 0; i < 8; ++i)
+                {
+                    if (ShowCursor(FALSE) < 0)
+                        break;
+                }
+            }
+        }
+    }
+    else if (m_bMenuVisible && s_cardHover)
+    {
+        s_cardHover = false;   // menu opened: the menu path owns the window state
+    }
+
     m_menuAlpha = open ? 1.f : 0.f;
     return 1.f;
 }
@@ -229,6 +283,8 @@ void Menu::Shutdown()
     Cheat::Features::LuaGc::Stop();
     Cheat::Features::Btools::Shutdown();
 
+    glass::shutdown();
+
     ImGui_ImplDX11_Shutdown();
     ImGui_ImplWin32_Shutdown();
     ImGui::DestroyContext();
@@ -239,6 +295,8 @@ void Menu::Shutdown()
 void Menu::InvalidateDeviceObjects()
 {
     if (!m_bInitialized) return;
+
+    glass::invalidate();
     ImGui_ImplDX11_InvalidateDeviceObjects();
 }
 

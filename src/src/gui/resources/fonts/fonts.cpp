@@ -9,6 +9,8 @@
 #include "font_visitor.h"
 
 #include <Windows.h>
+#include <string>
+#include <cstring>
 
 namespace fonts {
 
@@ -22,6 +24,8 @@ namespace fonts {
     ImFont* menu = nullptr;
 
     ImFont* tahoma = nullptr;
+    ImFont* music_regular = nullptr;
+    ImFont* music_bold = nullptr;
     ImFont* esp = nullptr;
     ImFont* esp_bold = nullptr;
 
@@ -124,6 +128,35 @@ namespace fonts {
 
         esp = fredoka_one ? fredoka_one : tahoma;
         esp_bold = tahoma_bold ? tahoma_bold : tahoma;
+
+        // music player fonts: Inter (SIL OFL) from disk, falling back to tahoma
+        {
+            char base[MAX_PATH] = {};
+            GetModuleFileNameA(nullptr, base, MAX_PATH);
+            char* slash = strrchr(base, '\\');
+            if (slash) *(slash + 1) = 0;
+            const std::string dir = base;
+
+            ImFontConfig mreg;
+            cfg_aa(mreg, 18.f, true);
+            music_regular = io.Fonts->AddFontFromFileTTF(
+                (dir + "..\\..\\src\\music_player\\assets\\fonts\\Inter-Regular.ttf").c_str(),
+                18.f, &mreg, ranges_def);
+            if (!music_regular)
+                music_regular = io.Fonts->AddFontFromFileTTF(
+                    "src/music_player/assets/fonts/Inter-Regular.ttf", 18.f, &mreg, ranges_def);
+
+            ImFontConfig mbold;
+            cfg_aa(mbold, 18.f, true);
+            music_bold = io.Fonts->AddFontFromFileTTF(
+                (dir + "..\\..\\src\\music_player\\assets\\fonts\\Inter-SemiBold.ttf").c_str(),
+                18.f, &mbold, ranges_def);
+            if (!music_bold)
+                music_bold = io.Fonts->AddFontFromFileTTF(
+                    "src/music_player/assets/fonts/Inter-SemiBold.ttf", 18.f, &mbold, ranges_def);
+        }
+        if (!music_regular) music_regular = tahoma;
+        if (!music_bold)    music_bold = tahoma_bold ? tahoma_bold : tahoma;
 
         io.FontDefault = menu ? menu : (imgui ? imgui : tahoma);
     }

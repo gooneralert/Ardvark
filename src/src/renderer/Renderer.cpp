@@ -1,7 +1,9 @@
 #include "pch.h"
 #include "Renderer.h"
 #include <d3d11.h>
+#include <dxgi1_2.h>
 #include "gui/Menu.h"
+#include "gui/glass.h"
 #include "imgui.h"
 #include "app/Graphics.h"
 #include "core/memory/Memory.h"
@@ -11,6 +13,8 @@
 #include "features/visuals/MeshDxShader.h"
 #include <dwmapi.h>
 #include <windowsx.h>
+
+
 
 #pragma comment(lib, "dwmapi.lib")
 
@@ -218,6 +222,10 @@ namespace Cheat {
             return false;
         }
 
+        // Layered window: overall opacity 255, but the per-pixel alpha channel of
+        // the B8G8R8A8 swapchain still controls transparency so the Windows acrylic
+        // backdrop shows through the transparent pixels (this mirrors the original
+        // working overlay setup).
         SetLayeredWindowAttributes(m_Hwnd, 0, 255, LWA_ALPHA);
 
         MARGINS margins = { -1 };
@@ -276,6 +284,8 @@ namespace Cheat {
 
             if (!m_GameActive)
             {
+                // hide the acrylic backdrop whenever the game is gone / not focused
+                glass::set_menu_rect(0, 0, 0, 0);
                 Visuals::Crosshair::NotifyInactive();
                 Sleep(15);
                 continue;
@@ -421,12 +431,17 @@ namespace Cheat {
 
     bool Renderer::CreateDevice()
     {
+        // Layered windows (WS_EX_LAYERED) are incompatible with the flip-model
+        // swap chain, so use the classic D3D11CreateDeviceAndSwapChain DISCARD
+        // path like before. B8G8R8A8 gives us an alpha channel so the per-pixel
+        // transparency of the layered window still works and the Windows acrylic
+        // backdrop shows through the transparent pixels.
         DXGI_SWAP_CHAIN_DESC sd;
         ZeroMemory(&sd, sizeof(sd));
         sd.BufferCount = 2;
         sd.BufferDesc.Width = 0;
         sd.BufferDesc.Height = 0;
-        sd.BufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+        sd.BufferDesc.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
         sd.BufferDesc.RefreshRate.Numerator = 0;
         sd.BufferDesc.RefreshRate.Denominator = 1;
         sd.Flags = DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH;

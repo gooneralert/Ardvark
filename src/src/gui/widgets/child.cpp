@@ -2,6 +2,7 @@
 #include "widgets.h"
 #include "../colors/colors.h"
 #include "imgui_internal.h"
+#include <cmath>
 #include <vector>
 
 namespace {
@@ -20,21 +21,24 @@ namespace {
             color);
     }
 
-    void paint_vline(ImDrawList* dl, int x, int y0, int y1, ImU32 color)
-    {
-        if (y1 < y0)
-            return;
-        dl->AddRectFilled(
-            ImVec2((float)x, (float)y0),
-            ImVec2((float)(x + 1), (float)(y1 + 1)),
-            color);
-    }
-
     struct child_layout {
         ImRect outer{};
         ImRect inner{};
         ImRect fill{};
     };
+
+    constexpr float k_child_rounding = 8.f;
+
+    // horizontal inset of a rounded corner at `depth` px from the edge
+    float corner_inset(float depth, float radius)
+    {
+        float t = radius - depth;
+        if (t <= 0.f)
+            return 0.f;
+        if (t > radius)
+            t = radius;
+        return radius - sqrtf(radius * radius - t * t);
+    }
 
     std::vector<child_context>& child_stack() {
         static std::vector<child_context> stack;
@@ -63,36 +67,18 @@ namespace {
     }
 
     void draw_inner_border_no_top(const child_layout& layout, ImDrawList* dl, ImU32 color) {
-        const int il = static_cast<int>(layout.inner.Min.x);
-        const int it = static_cast<int>(layout.inner.Min.y);
-        const int ir = static_cast<int>(layout.inner.Max.x) - 1;
-        const int ib = static_cast<int>(layout.inner.Max.y) - 1;
-
-        paint_vline(dl, il, it, ib, color);
-        paint_vline(dl, ir, it, ib, color);
-        paint_hline(dl, il, ir, ib, color);
+        // sides + bottom only: clip away the top line, round the bottom corners
+        const float r = k_child_rounding > 1.f ? k_child_rounding - 1.f : 0.f;
+        dl->PushClipRect(
+            ImVec2(layout.inner.Min.x, layout.inner.Min.y + k_child_rounding),
+            layout.inner.Max, true);
+        dl->AddRect(layout.inner.Min, layout.inner.Max, color, r, ImDrawFlags_RoundCornersBottom);
+        dl->PopClipRect();
     }
-
-    //constexpr int k_child_gradient_rows = 22;
 
     bool has_child_title(const char* title)
     {
         return title != nullptr && title[0] != '\0';
-    }
-
-    void draw_child_gradient_rows(ImDrawList* dl, int fill_l, int fill_t, int fill_r, int fill_b)
-    {
-        int fill_h = fill_b - fill_t + 1;
-        int rows = fill_h;
-        if (rows > 22) rows = 22; // header rows
-
-        for (int i = 0; i < rows; ++i)
-        {
-            dl->AddRectFilled(
-                ImVec2((float)fill_l, (float)(fill_t + i)),
-                ImVec2((float)(fill_r + 1), (float)(fill_t + i + 1)),
-                colors::header_gradient_row(i, 22));
-        }
     }
 
     void draw_child_background(ImDrawList* dl, const child_layout& layout, ImU32 fill_color, bool draw_header) {
@@ -104,13 +90,26 @@ namespace {
         dl->AddRectFilled(
             ImVec2(static_cast<float>(fl), static_cast<float>(ft)),
             ImVec2(static_cast<float>(fr + 1), static_cast<float>(fb + 1)),
-            fill_color);
+            fill_color,
+            k_child_rounding);
 
         if (!draw_header)
             return;
 
+        // header gradient rows, inset near the rounded top corners
         const int header_b = ft + 22 - 1;
-        draw_child_gradient_rows(dl, fl, ft, fr, header_b);
+        for (int y = ft; y <= header_b; ++y)
+        {
+            const float ins = corner_inset(static_cast<float>(y - ft) + 0.5f, k_child_rounding);
+            const int l = fl + static_cast<int>(ins);
+            const int r = fr - static_cast<int>(ins);
+            if (r < l)
+                continue;
+            dl->AddRectFilled(
+                ImVec2(static_cast<float>(l), static_cast<float>(y)),
+                ImVec2(static_cast<float>(r + 1), static_cast<float>(y + 1)),
+                colors::header_gradient_row(y - ft, 22));
+        }
 
         if (fb > header_b) {
             dl->AddRectFilled(
@@ -170,15 +169,7 @@ namespace {
         if (draw_header)
             draw_child_separator(dl, layout, inner_color);
 
-        const int ol = static_cast<int>(layout.outer.Min.x);
-        const int ot = static_cast<int>(layout.outer.Min.y);
-        const int orr = static_cast<int>(layout.outer.Max.x) - 1;
-        const int ob = static_cast<int>(layout.outer.Max.y) - 1;
-
-        paint_hline(dl, ol, orr, ot, outer_color);
-        paint_vline(dl, ol, ot, ob, outer_color);
-        paint_vline(dl, orr, ot, ob, outer_color);
-        paint_hline(dl, ol, orr, ob, outer_color);
+        dl->AddRect(layout.outer.Min, layout.outer.Max, outer_color, k_child_rounding);
 
         draw_inner_border_no_top(layout, dl, inner_color);
         draw_child_title_on_gradient(dl, layout, title, title_font, title_font_size);
@@ -203,7 +194,11 @@ namespace widgets {
         ImDrawList* dl = ImGui::GetWindowDrawList();
         ImU32 outer_col = ImGui::GetColorU32(outer_border ? *outer_border : colors::content_outer_border);
         ImU32 inner_col = ImGui::GetColorU32(inner_border ? *inner_border : colors::content_inner_border);
-        ImU32 fill_col = ImGui::GetColorU32(fill ? *fill : colors::child_fill);
+
+        // translucent fill: lets the frosted-glass backdrop show through
+        ImVec4 fill_v = fill ? *fill : colors::child_fill;
+        fill_v.w *= 0.55f;
+        ImU32 fill_col = ImGui::GetColorU32(fill_v);
 
         draw_child_frame(
             dl, layout, outer_col, inner_col, fill_col,
@@ -216,7 +211,7 @@ namespace widgets {
             header_h = 22.f + 1.f; // hdr rows
         float inset_y = 1.f;
 
-        ImVec4 child_bg = fill ? *fill : colors::child_fill;
+        ImVec4 child_bg = fill_v;
         ImGui::PushStyleColor(ImGuiCol_ChildBg, child_bg);
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.f, 0.f));
 

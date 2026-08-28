@@ -1,4 +1,5 @@
 #include "pch.h"
+#include "glass.h"
 #include "explorer_window.h"
 #include "properties_window.h"
 #include "icons.h"
@@ -261,11 +262,17 @@ namespace
 
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.f, 0.f));
         ImGui::PushStyleColor(ImGuiCol_Border, border_outer);
-        ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.08f, 0.08f, 0.08f, 1.f));
+        ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.055f, 0.06f, 0.07f, 0.34f));  // translucent so the acrylic shows through
         bool visible = ImGui::Begin("##explorer_window", nullptr,
             ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoScrollbar | 0);
         ImGui::PopStyleColor(2);
         ImGui::PopStyleVar();
+        if (visible)
+        {
+            const ImVec2 gp = ImGui::GetWindowPos();
+            const ImVec2 gs = ImGui::GetWindowSize();
+            glass::add_rect(gp.x, gp.y, gs.x, gs.y, 8.f);   // acrylic backdrop for this window
+        }
 
         if (!visible)
         {
@@ -301,7 +308,7 @@ namespace
 
         ImGui::SetCursorPos(ImVec2(margin, body_top));
         ImGui::PushStyleColor(ImGuiCol_Border, border_inner);
-        ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.06f, 0.06f, 0.06f, 1.f));
+        ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.06f, 0.06f, 0.07f, 0.55f));  // translucent - lets the acrylic show
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.f, 0.f));
         ImGui::BeginChild("##explorer_body", ImVec2(body_w, body_h), ImGuiChildFlags_Borders, ImGuiWindowFlags_NoScrollbar);
         ImGui::PopStyleVar();
