@@ -140,20 +140,20 @@ namespace fonts {
             ImFontConfig mreg;
             cfg_aa(mreg, 18.f, true);
             music_regular = io.Fonts->AddFontFromFileTTF(
-                (dir + "..\\..\\src\\music_player\\assets\\fonts\\Inter-Regular.ttf").c_str(),
+                (dir + "..\\..\\src\\music-player\\assets\\fonts\\Inter-Regular.ttf").c_str(),
                 18.f, &mreg, ranges_def);
             if (!music_regular)
                 music_regular = io.Fonts->AddFontFromFileTTF(
-                    "src/music_player/assets/fonts/Inter-Regular.ttf", 18.f, &mreg, ranges_def);
+                    "src/music-player/assets/fonts/Inter-Regular.ttf", 18.f, &mreg, ranges_def);
 
             ImFontConfig mbold;
             cfg_aa(mbold, 18.f, true);
             music_bold = io.Fonts->AddFontFromFileTTF(
-                (dir + "..\\..\\src\\music_player\\assets\\fonts\\Inter-SemiBold.ttf").c_str(),
+                (dir + "..\\..\\src\\music-player\\assets\\fonts\\Inter-SemiBold.ttf").c_str(),
                 18.f, &mbold, ranges_def);
             if (!music_bold)
                 music_bold = io.Fonts->AddFontFromFileTTF(
-                    "src/music_player/assets/fonts/Inter-SemiBold.ttf", 18.f, &mbold, ranges_def);
+                    "src/music-player/assets/fonts/Inter-SemiBold.ttf", 18.f, &mbold, ranges_def);
         }
         if (!music_regular) music_regular = tahoma;
         if (!music_bold)    music_bold = tahoma_bold ? tahoma_bold : tahoma;
