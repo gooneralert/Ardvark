@@ -138,7 +138,7 @@ namespace Cheat {
             float health_text_off{ 0.f };
             int   healthbar_side{ 2 }; // только left/right
 
-            int   font{ 4 }; // verdana
+            int   font{ 0 }; // proxima soft bold
             float font_size{ 13.f };
             int   box_mode{ 0 };
             // 0 parts (тело) 1 mesh (все меши + аксы)
@@ -606,7 +606,7 @@ namespace Cheat {
 
         struct {
             int   theme{ 0 };
-            int   font{ 6 };
+            int   font{ 0 }; // proxima soft bold
             bool  watermark{ false };
             float watermark_x{ 10.f };
             float watermark_y{ 10.f };

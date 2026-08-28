@@ -101,9 +101,9 @@ void ng_tabs::draw_settings_tab(int* menu_kb, bool* kb_skip)
 	ng_tabs::gap();
 	{
 		static const char* font_items[] = {
-			"fredoka one", "tahoma bold", "proggy clean", "visitor", "verdana", "imgui"
+			"proxima soft bold", "fredoka one", "tahoma bold", "proggy clean", "visitor", "verdana", "imgui"
 		};
-		ng_tabs::row_select("##gui_font", "font", &Cheat::g_Settings.gui.font, font_items, 6);
+		ng_tabs::row_select("##gui_font", "font", &Cheat::g_Settings.gui.font, font_items, 7);
 	}
 
 	ng_tabs::gap();

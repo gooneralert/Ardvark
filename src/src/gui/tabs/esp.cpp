@@ -401,7 +401,7 @@ void ng_tabs::draw_esp_tab()
 	begin_panel("##esp_child2", right_w, h);
 	{
 		static const std::vector<const char*> k_esp_fonts = {
-			"fredoka one", "tahoma bold", "proggy clean", "visitor", "verdana", "imgui"
+			"proxima soft bold", "fredoka one", "tahoma bold", "proggy clean", "visitor", "verdana", "imgui"
 		};
 		row_combo("esp font", &g_Settings.esp.font, k_esp_fonts);
 		row_slider_f("esp font size", &g_Settings.esp.font_size, 8.0f, 24.0f, "%.0f");

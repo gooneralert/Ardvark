@@ -2,6 +2,7 @@
 #include "fonts.h"
 #include "misc/imgui_freetype.h"
 #include "font_fredoka_one.h"
+#include "font_proxima_soft_bold.h"
 #include "font_tahoma.h"
 #include "font_tahoma_bold.h"
 #include "font_proggyclean.h"
@@ -12,6 +13,7 @@
 namespace fonts {
 
     ImFont* fredoka_one = nullptr;
+    ImFont* proxima_soft_bold = nullptr;
     ImFont* imgui = nullptr;
     ImFont* tahoma_bold = nullptr;
     ImFont* proggy_clean = nullptr;
@@ -72,6 +74,12 @@ namespace fonts {
         fredoka_one = io.Fonts->AddFontFromMemoryTTF(
             FredokaOne, sizeof(FredokaOne), 15.f, &fk, ranges_def);
         merge_cyr(io, 15.f, ranges_cyr);
+
+        ImFontConfig psb;
+        cfg_aa(psb, 14.f, false);
+        proxima_soft_bold = io.Fonts->AddFontFromMemoryTTF(
+            ProximaSoftBold, sizeof(ProximaSoftBold), 14.f, &psb, ranges_def);
+        merge_cyr(io, 14.f, ranges_cyr);
 
         ImFontConfig tah;
         cfg_aa(tah, 14.f, false);

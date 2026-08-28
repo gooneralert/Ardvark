@@ -599,10 +599,10 @@ void ng_tabs::draw_esp_tab()
 	{
 		{
 			static const char* k_esp_fonts[] = {
-				"fredoka one", "tahoma bold", "proggy clean", "visitor", "verdana", "imgui"
+				"proxima soft bold", "fredoka one", "tahoma bold", "proggy clean", "visitor", "verdana", "imgui"
 			};
 			row_select("##esp_font", "esp font", &g_Settings.esp.font,
-			           k_esp_fonts, 6);
+			           k_esp_fonts, 7);
 		}
 		gap();
 

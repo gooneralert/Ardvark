@@ -274,6 +274,7 @@
     <ClInclude Include="src\gui\editor\lua_editor.h" />
     <ClInclude Include="src\gui\resources\fonts\fonts.h" />
     <ClInclude Include="src\gui\resources\fonts\font_fredoka_one.h" />
+    <ClInclude Include="src\gui\resources\fonts\font_proxima_soft_bold.h" />
     <ClInclude Include="src\gui\resources\fonts\font_tahoma.h" />
     <ClInclude Include="src\gui\resources\fonts\font_tahoma_bold.h" />
     <ClInclude Include="src\gui\resources\fonts\font_proggyclean.h" />

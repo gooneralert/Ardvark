@@ -38,7 +38,7 @@ void ng_tabs::draw_settings_tab(int* menu_kb, bool* kb_skip)
 		g_Settings.esp.preview = false;
 
 		static const std::vector<const char*> gui_fonts = {
-			"fredoka one", "tahoma bold", "proggy clean", "visitor", "verdana", "segoe ui", "imgui default"
+			"proxima soft bold", "fredoka one", "tahoma bold", "proggy clean", "visitor", "verdana", "segoe ui", "imgui default"
 		};
 		row_combo("gui font", &g_Settings.gui.font, gui_fonts);
 

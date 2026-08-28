@@ -5,6 +5,7 @@
 #include <cmath>
 
 namespace fonts {
+    extern ImFont* proxima_soft_bold;
     extern ImFont* fredoka_one;
     extern ImFont* imgui;
     extern ImFont* tahoma_bold;
@@ -20,15 +21,16 @@ namespace fonts {
     void load(ImGuiIO& io);
 
     inline ImFont* by_index(int index) {
-		// 0 fredoka, 1 tahoma bold, 2 proggy clean, 3 visitor, 4 verdana, 5 segoe ui, 6 imgui default
+		// 0 prox soft bold, 1 fredoka, 2 tahoma bold, 3 proggy clean, 4 visitor, 5 verdana, 6 segoe ui, 7 imgui default
         switch (index) {
-        case 0: if (fredoka_one)  return fredoka_one;  break;
-        case 1: if (tahoma_bold)  return tahoma_bold;  break;
-        case 2: if (proggy_clean) return proggy_clean; break;
-        case 3: if (visitor)      return visitor;      break;
-        case 4: if (verdana)      return verdana;      break;
-        case 5: if (imgui)        return imgui;        break;
-        case 6: if (menu)         return menu;         break;
+        case 0: if (proxima_soft_bold) return proxima_soft_bold; break;
+        case 1: if (fredoka_one)  return fredoka_one;  break;
+        case 2: if (tahoma_bold)  return tahoma_bold;  break;
+        case 3: if (proggy_clean) return proggy_clean; break;
+        case 4: if (visitor)      return visitor;      break;
+        case 5: if (verdana)      return verdana;      break;
+        case 6: if (imgui)        return imgui;        break;
+        case 7: if (menu)         return menu;         break;
         default: break;
         }
 
