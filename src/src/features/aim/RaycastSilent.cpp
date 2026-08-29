@@ -18,6 +18,8 @@
 #include <chrono>
 #include <cstddef>
 #include <cmath>
+#include <cstdarg>
+#include "app/Settings.h"
 
 namespace Cheat {
 namespace Features {
@@ -80,6 +82,86 @@ std::uintptr_t g_original = 0;
 auto g_last_fail = std::chrono::steady_clock::time_point{};
 std::uintptr_t g_last_base = 0;
 auto g_last_slot_check = std::chrono::steady_clock::time_point{};
+
+// ---- debug logging -------------------------------------------------------------
+// Toggleable from the silent-aim tab ("raycast debug logs"). Every stage of the
+// shellcode-execution chain prints into the jewsploit console with a [raycast]
+// prefix: descriptor/vtable slot resolution, d3d11.dll code-cave search, cave
+// protection, stub writes, slot patch verify, arm + stub call-counter readback.
+bool g_debug = false;
+
+void sync_debug()
+{
+	const bool want = g_Settings.aim.raycast_debug;
+	if (want == g_debug)
+		return;
+
+	g_debug = want;
+	if (want)
+	{
+		Cheat::Console::Log(Cheat::Console::Color::Yellow,
+		                    "[raycast] debug ON");
+		if (g_hook.installed)
+		{
+			Cheat::Console::Log(Cheat::Console::Color::Green,
+			                    "[raycast] hook installed: %d target(s), "
+			                    "data_block=%p roblox base=%p",
+			                    (int)g_hook.targets.size(),
+			                    (void*)g_hook.data_block,
+			                    (void*)g_hook.module_base);
+			for (const auto& t : g_hook.targets)
+				Cheat::Console::Log(Cheat::Console::Color::Cyan,
+				                    "[raycast]   slot=%p -> stub=%p "
+				                    "(orig=%p, %s ray)",
+				                    (void*)t.slot, (void*)t.stub,
+				                    (void*)t.original,
+				                    t.packed ? "packed" : "open");
+		}
+		else
+		{
+			Cheat::Console::Log(Cheat::Console::Color::Red,
+			                    "[raycast] hook NOT installed "
+			                    "(install will retry every 1.5s)");
+		}
+	}
+	else
+	{
+		Cheat::Console::Log(Cheat::Console::Color::Yellow,
+		                    "[raycast] debug OFF");
+	}
+}
+
+void dbg(Cheat::Console::Color c, const char* fmt, ...)
+{
+	if (!g_debug)
+		return;
+	char buf[384];
+	va_list ap;
+	va_start(ap, fmt);
+	_vsnprintf_s(buf, sizeof(buf), _TRUNCATE, fmt, ap);
+	va_end(ap);
+	Cheat::Console::Log(c, "[raycast] %s", buf);
+}
+
+// Same as dbg but at most once per second per call site (pass a static
+// steady_clock::time_point) so per-frame failure paths can't spam the console.
+void dbg_rate(std::chrono::steady_clock::time_point& last,
+              Cheat::Console::Color c, const char* fmt, ...)
+{
+	if (!g_debug)
+		return;
+	const auto now = std::chrono::steady_clock::now();
+	if (last.time_since_epoch().count() != 0 &&
+		now - last < std::chrono::milliseconds(1000))
+		return;
+	last = now;
+	char buf[384];
+	va_list ap;
+	va_start(ap, fmt);
+	_vsnprintf_s(buf, sizeof(buf), _TRUNCATE, fmt, ap);
+	va_end(ap);
+	Cheat::Console::Log(c, "[raycast] %s", buf);
+}
 
 bool addr_ok(std::uintptr_t a)
 {
@@ -331,11 +413,21 @@ std::uintptr_t find_dll_cave(std::size_t need, std::uintptr_t ignore)
 	{
 		const std::uintptr_t mod = g_Memory.GetModuleBase(pref[i]);
 		if (!mod)
+		{
+			dbg(Cheat::Console::Color::Red,
+			    "cave: %ls is NOT loaded in the target", pref[i]);
 			continue;
+		}
+		dbg(Cheat::Console::Color::Cyan,
+		    "cave: scanning %ls @ %p for %zu bytes of 0x00/0xCC/0x90 padding",
+		    pref[i], (void*)mod, need);
 		const std::uintptr_t cave = find_cave_in_module(mod, need, 0x1000u, ignore);
 		if (cave)
 			return cave;
 	}
+	dbg(Cheat::Console::Color::Red,
+	    "cave: no usable %zu-byte padding run found (shellcode cannot be placed)",
+	    need);
 	return 0;
 }
 
@@ -384,6 +476,7 @@ bool restore_slots()
 	if (module_base() != g_hook.module_base)
 		return false;
 
+	int restored_n = 0;
 	for (const auto& t : g_hook.targets)
 	{
 		if (!t.slot || !t.original)
@@ -391,7 +484,11 @@ bool restore_slots()
 		if (g_Memory.Read<std::uintptr_t>(t.slot) != t.stub)
 			continue;
 		write_protected(t.slot, &t.original, sizeof(t.original));
+		++restored_n;
 	}
+	dbg(Cheat::Console::Color::Cyan,
+	    "restore: %d/%d slot(s) put back to original natives",
+	    restored_n, (int)g_hook.targets.size());
 	return true;
 }
 
@@ -409,11 +506,15 @@ bool install()
 		now - g_last_fail < std::chrono::milliseconds(1500))
 		return false;
 
+	dbg(Cheat::Console::Color::Yellow,
+	    "install: attempting (roblox base=%p, process alive)", (void*)base);
+
 	// Resolve every target slot + original native first (fail fast).
 	struct Resolved {
 		std::uintptr_t slot;
 		std::uintptr_t orig;
 		bool packed;
+		const char* name;
 	};
 	std::vector<Resolved> res;
 	res.reserve(k_target_count);
@@ -421,14 +522,31 @@ bool install()
 	{
 		const std::uintptr_t slot = find_slot(k_targets[i].name);
 		if (!slot)
+		{
+			dbg(Cheat::Console::Color::Red,
+			    "resolve: '%s' descriptor NOT found (no function slot)",
+			    k_targets[i].name);
 			continue;
+		}
 		const std::uintptr_t orig = g_Memory.Read<std::uintptr_t>(slot);
 		if (!addr_ok(orig) || !region_exec(orig))
+		{
+			dbg(Cheat::Console::Color::Red,
+			    "resolve: '%s' slot=%p but native %p is invalid/not executable",
+			    k_targets[i].name, (void*)slot, (void*)orig);
 			continue;
-		res.push_back({ slot, orig, k_targets[i].packed_ray });
+		}
+		dbg(Cheat::Console::Color::Green,
+		    "resolve: '%s' slot=%p -> native=%p (%s ray)",
+		    k_targets[i].name, (void*)slot, (void*)orig,
+		    k_targets[i].packed_ray ? "packed" : "open");
+		res.push_back({ slot, orig, k_targets[i].packed_ray, k_targets[i].name });
 	}
 	if (res.empty())
 	{
+		dbg(Cheat::Console::Color::Red,
+		    "install FAILED: no raycast descriptors resolved "
+		    "(Workspace missing or reflection offsets stale)");
 		g_last_fail = now;
 		return false;
 	}
@@ -441,19 +559,29 @@ bool install()
 		g_last_fail = now;
 		return false;
 	}
+	dbg(Cheat::Console::Color::Green,
+	    "cave: found at %p (data block + %d stub slots)", (void*)cave, (int)res.size());
 
 	DWORD old = 0;
 	if (!protect_remote(cave, need, PAGE_EXECUTE_READWRITE, &old))
 	{
+		dbg(Cheat::Console::Color::Red,
+		    "install FAILED: VirtualProtectEx(RWX) on cave %p denied", (void*)cave);
 		g_last_fail = now;
 		return false;
 	}
+	dbg(Cheat::Console::Color::Cyan,
+	    "cave: protection flipped to RWX (old=0x%lX)", (unsigned long)old);
 
 	std::uint8_t zero_block[data_block_bytes]{};
 	if (!w_mem(cave, zero_block, sizeof(zero_block)))
 	{
 		if (old)
 			protect_remote(cave, need, old, nullptr);
+		dbg(Cheat::Console::Color::Red,
+		    "install FAILED: could not zero the data block @ %p "
+		    "(raw write denied -- shellcode would run with garbage state)",
+		    (void*)cave);
 		g_last_fail = now;
 		return false;
 	}
@@ -465,13 +593,36 @@ bool install()
 		const std::uintptr_t stub = cave + data_block_bytes + i * stub_slot_bytes;
 		auto bytes = build_stub(cave, res[i].orig, res[i].packed);
 		if (bytes.size() > stub_slot_bytes)
+		{
+			dbg(Cheat::Console::Color::Red,
+			    "stub: '%s' generated %zu bytes, slot only holds %d -- skipped",
+			    res[i].name, bytes.size(), (int)stub_slot_bytes);
 			continue;
+		}
 		if (!write_protected(stub, bytes.data(), bytes.size()))
+		{
+			dbg(Cheat::Console::Color::Red,
+			    "stub: write FAILED @ %p for '%s'", (void*)stub, res[i].name);
 			continue;
+		}
 		if (!write_protected(res[i].slot, &stub, sizeof(stub)))
+		{
+			dbg(Cheat::Console::Color::Red,
+			    "hook: slot patch FAILED @ %p for '%s' (stub written but never called)",
+			    (void*)res[i].slot, res[i].name);
 			continue;
+		}
 		if (g_Memory.Read<std::uintptr_t>(res[i].slot) != stub)
+		{
+			dbg(Cheat::Console::Color::Red,
+			    "hook: slot verify mismatch @ %p for '%s' "
+			    "(something reverted the patch)",
+			    (void*)res[i].slot, res[i].name);
 			continue;
+		}
+		dbg(Cheat::Console::Color::Green,
+		    "hook: '%s' slot=%p -> stub=%p OK",
+		    res[i].name, (void*)res[i].slot, (void*)stub);
 		installed_av.push_back({ res[i].slot, stub, res[i].orig, res[i].packed });
 	}
 
@@ -480,6 +631,8 @@ bool install()
 		if (old)
 			protect_remote(cave, need, old, nullptr);
 		w_mem(cave, zero_block, sizeof(zero_block));
+		dbg(Cheat::Console::Color::Red,
+		    "install FAILED: no targets were hooked, cave restored");
 		g_last_fail = now;
 		return false;
 	}
@@ -493,6 +646,11 @@ bool install()
 	g_hook.installed = true;
 	g_hook.active = false;
 	g_hook.wallbang = false;
+
+	dbg(Cheat::Console::Color::Green,
+	    "install OK: %d target(s) hooked, shellcode live in d3d11.dll "
+	    "(data_block=%p, call counter at +0x00)",
+	    (int)g_hook.targets.size(), (void*)g_hook.data_block);
 	return true;
 }
 
@@ -510,6 +668,7 @@ bool Install()
 
 void Remove()
 {
+	dbg(Cheat::Console::Color::Yellow, "Remove: unhooking and restoring slots");
 	deactivate();
 	restore_slots();
 	g_hook.installed = false;
@@ -524,6 +683,8 @@ void Remove()
 
 void Ensure(bool want)
 {
+	sync_debug();
+
 	const std::uintptr_t base = module_base();
 	const bool alive = g_Memory.GetHandle() && g_Memory.IsAlive();
 
@@ -568,6 +729,9 @@ void Ensure(bool want)
 			}
 			if (!intact)
 			{
+				dbg(Cheat::Console::Color::Red,
+				    "slot check: a hooked slot was stomped/reverted "
+				    "-- marking for reinstall");
 				g_hook.installed = false;
 				g_hook.module_base = 0;
 			}
@@ -586,8 +750,16 @@ void SetActive(bool on, const Vector3& world_target, bool wallbang)
 		return;
 	}
 
+	sync_debug();
+
 	if (!g_hook.installed || !g_hook.data_block)
+	{
+		static auto s_last = std::chrono::steady_clock::time_point{};
+		dbg_rate(s_last, Cheat::Console::Color::Red,
+		         "SetActive: hook not installed, silent ray dropped "
+		         "(install keeps retrying every 1.5s)");
 		return;
+	}
 
 	Vector3 cam{};
 	bool have_cam = false;
@@ -603,6 +775,9 @@ void SetActive(bool on, const Vector3& world_target, bool wallbang)
 	}
 	if (!have_cam)
 	{
+		static auto s_last = std::chrono::steady_clock::time_point{};
+		dbg_rate(s_last, Cheat::Console::Color::Red,
+		         "SetActive: no camera position readable -- cannot arm");
 		deactivate();
 		return;
 	}
@@ -613,6 +788,9 @@ void SetActive(bool on, const Vector3& world_target, bool wallbang)
 	const float len = std::sqrt(dx * dx + dy * dy + dz * dz);
 	if (len <= 0.001f)
 	{
+		static auto s_last = std::chrono::steady_clock::time_point{};
+		dbg_rate(s_last, Cheat::Console::Color::Red,
+		         "SetActive: zero-length ray (target == camera) -- cannot arm");
 		deactivate();
 		return;
 	}
@@ -650,6 +828,65 @@ void SetActive(bool on, const Vector3& world_target, bool wallbang)
 	w_mem(g_hook.data_block + off_new_direction, dir, sizeof(dir));
 	w_mem(g_hook.data_block + off_override_origin, &one, sizeof(one));
 	w_mem(g_hook.data_block + off_override_direction, &one, sizeof(one));
+
+	// debug: verify the override block actually landed and watch the stub's
+	// own call counter -- that counter only moves when the shellcode in the
+	// d3d11.dll cave really executes inside Roblox.
+	if (g_debug)
+	{
+		const bool first_arm = !g_hook.active;
+
+		std::uint32_t ovr_dir_rb = 0, ovr_org_rb = 0;
+		read_val(g_hook.data_block + off_override_direction, &ovr_dir_rb, sizeof(ovr_dir_rb));
+		read_val(g_hook.data_block + off_override_origin, &ovr_org_rb, sizeof(ovr_org_rb));
+
+		if (first_arm)
+		{
+			dbg(Cheat::Console::Color::Green,
+			    "ARMED origin=(%.1f,%.1f,%.1f) dir=(%.1f,%.1f,%.1f) wallbang=%d",
+			    org[0], org[1], org[2], dir[0], dir[1], dir[2],
+			    (int)wallbang);
+			dbg(ovr_dir_rb == 1 && ovr_org_rb == 1
+			        ? Cheat::Console::Color::Green
+			        : Cheat::Console::Color::Red,
+			    "override flag readback: dir=%u origin=%u %s",
+			    ovr_dir_rb, ovr_org_rb,
+			    ovr_dir_rb == 1 && ovr_org_rb == 1
+			        ? "(writes to the data block work)"
+			        : "(READBACK MISMATCH -- writes are not landing!)");
+		}
+
+		static auto s_last_stub_check = std::chrono::steady_clock::time_point{};
+		static std::uint64_t s_last_calls = 0;
+		const auto now = std::chrono::steady_clock::now();
+		if (s_last_stub_check.time_since_epoch().count() == 0 ||
+			now - s_last_stub_check >= std::chrono::milliseconds(2000))
+		{
+			s_last_stub_check = now;
+			std::uint64_t calls = 0;
+			if (read_val(g_hook.data_block + off_call_counter, &calls, sizeof(calls)))
+			{
+				if (calls != s_last_calls)
+					dbg(Cheat::Console::Color::Green,
+					    "shellcode EXECUTING: call counter %llu -> %llu "
+					    "(hooked raycast natives are running the stub)",
+					    (unsigned long long)s_last_calls,
+					    (unsigned long long)calls);
+				else if (first_arm)
+					dbg(Cheat::Console::Color::Red,
+					    "shellcode NOT executing yet: call counter stuck at %llu "
+					    "(Roblox hasn't raycast through the hooked slot)",
+					    (unsigned long long)calls);
+				s_last_calls = calls;
+			}
+			else
+			{
+				dbg(Cheat::Console::Color::Red,
+				    "cannot read stub call counter @ %p (data block unreadable)",
+				    (void*)(g_hook.data_block + off_call_counter));
+			}
+		}
+	}
 
 	g_hook.active = true;
 	g_hook.wallbang = wallbang;

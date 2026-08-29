@@ -357,6 +357,7 @@ namespace Cheat {
             bool force_magic_bullet{ false };
             int  force_magic_key{ 0 };
             int  force_magic_mode{ 0 };
+            bool raycast_debug{ false }; // [raycast] stage-by-stage logs in the console
             bool target_bots{ true }; // havoc нпц из кэша
 
             AimbotConfig mouse;

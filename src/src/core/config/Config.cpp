@@ -499,6 +499,7 @@ bool Save(const std::string& name)
     PutBool(out, "aim.force_magic_bullet", s.aim.force_magic_bullet);
     PutInt(out, "aim.force_magic_key", s.aim.force_magic_key);
     PutInt(out, "aim.force_magic_mode", s.aim.force_magic_mode);
+    PutBool(out, "aim.raycast_debug", s.aim.raycast_debug);
     PutBool(out, "aim.target_bots", s.aim.target_bots);
     WriteAimCfg(out, "aim.mouse", s.aim.mouse);
     WriteAimCfg(out, "aim.camera", s.aim.camera);
@@ -862,6 +863,7 @@ bool Load(const std::string& name)
     GetBool(kv, "aim.force_magic_bullet", s.aim.force_magic_bullet);
     GetInt(kv, "aim.force_magic_key", s.aim.force_magic_key);
     GetInt(kv, "aim.force_magic_mode", s.aim.force_magic_mode);
+    GetBool(kv, "aim.raycast_debug", s.aim.raycast_debug);
     GetBool(kv, "aim.target_bots", s.aim.target_bots);
     ReadAimCfg(kv, "aim.mouse", s.aim.mouse);
     ReadAimCfg(kv, "aim.camera", s.aim.camera);

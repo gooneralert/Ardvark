@@ -186,6 +186,14 @@ void ng_tabs::draw_aim_tab()
 			gap();
 		}
 
+		if (!pf_aim &&
+		    g_Settings.aim.silent_uses_raycast_hook())
+		{
+			pad();
+			ng::checkbox("raycast debug logs", &g_Settings.aim.raycast_debug);
+			gap();
+		}
+
 		static const char* k_starget[] = {
 			"fov center", "distance", "lowest hp"
 		};
