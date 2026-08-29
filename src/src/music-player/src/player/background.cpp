@@ -382,7 +382,7 @@ void ResetPaletteState() {
 void DrawPlayerBackground(ImDrawList* dl, const ImVec2& min, const ImVec2& size,
                           bool playing, bool showLyrics, bool artworkView,
                           bool fullScreen, bool haveArt, float hover,
-                          float uiScale) {
+                          float uiScale, bool windowFull) {
     (void)uiScale;   // geometry below is already derived from `size`
     UpdatePalette();
     const MusicPalette& p = s_paletteCurrent;
@@ -391,7 +391,9 @@ void DrawPlayerBackground(ImDrawList* dl, const ImVec2& min, const ImVec2& size,
     if (playing) s_motion += dt * 0.32f;
 
     // Matcha's card corners are noticeably rounder than ours were.
-    const float rounding = Px(fullScreen ? 20.f : 15.f);
+    // While the card owns the whole viewport the corners go square so the
+    // background reaches the actual screen edges.
+    const float rounding = Px(windowFull ? 0.f : (fullScreen ? 20.f : 15.f));
     const bool compactSurface = !fullScreen && !showLyrics && !artworkView;
     dl->AddRectFilled(min, max, IM_COL32(4, 5, 8, 255), rounding);
 

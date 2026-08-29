@@ -276,6 +276,7 @@
     <ClInclude Include="src\gui\players_window.h" />
     <ClInclude Include="src\gui\esp_preview_window.h" />
     <ClInclude Include="src\gui\explorer_window.h" />
+<ClInclude Include="src\gui\servers_window.h" />
     <ClInclude Include="src\gui\properties_window.h" />
     <ClInclude Include="src\gui\editor\lua_editor.h" />
     <ClInclude Include="src\gui\resources\fonts\fonts.h" />
@@ -762,10 +763,12 @@
     <ClCompile Include="src\gui\players_window.cpp" />
     <ClCompile Include="src\gui\esp_preview_window.cpp" />
     <ClCompile Include="src\gui\explorer_window.cpp" />
+<ClCompile Include="src\gui\servers_window.cpp" />
     <ClCompile Include="src\gui\properties_window.cpp" />
     <ClCompile Include="src\gui\editor\lua_editor.cpp" />
     <ClCompile Include="src\gui\widgets\button.cpp" />
     <ClCompile Include="src\gui\widgets\checkbox.cpp" />
+<ClCompile Include="src\gui\widgets\watermark.cpp" />
     <ClCompile Include="src\gui\widgets\colorpicker.cpp" />
     <ClCompile Include="src\gui\widgets\combo.cpp" />
     <ClCompile Include="src\gui\widgets\input.cpp" />

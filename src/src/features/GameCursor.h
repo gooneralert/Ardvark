@@ -1,6 +1,7 @@
 #pragma once
 
 #include <windows.h>
+#include <chrono>
 #include <cmath>
 #include <cstdint>
 #include <cstring>
@@ -11,23 +12,24 @@
 #include "core/roblox/offsets/Offsets.h"
 #include "core/roblox/classes/Classes.h"
 
-// Курсор для всего, что «целится» мышью:
-// - GameWindow()/Cursor() — точный порт gelato _input_window/_input_cursor
-//   (src/core/cheat/features/combat/aimbot/helpers.h): GetCursorPos +
-//   ScreenToClient на окне WINDOWSCLIENT.
-// - AimCursor() — слоистый курсор (один источник для аимбота, триггербота,
-//   трейсеров и т.д.):
-//     1) мышь игры из памяти (MouseService::MousePosition — порт gelato
-//        c_mouse_service::get_mouse_position): в first person / mouse-lock
-//        игра пинит её в центре вьюпорта, поэтому она не дрейфует за скрытым
-//        системным курсором;
-//     2) first person → центр вьюпорта (прицел всегда в центре);
-//     3) фолбэк — OS-курсор, как в gelato.
+// 1:1 порт курсора gelato (src/core/cheat/features/combat/aimbot/helpers.h):
+//   _input_window - find WINDOWSCLIENT by the roblox pid, cached
+//   _input_cursor - GetCursorPos + ScreenToClient(WINDOWSCLIENT)
+// gelato reads ONLY the OS cursor for everything that aims with the mouse.
+//
+// ONE deliberate deviation (the only one): in first person Roblox pins the
+// physical cursor to the viewport center ONLY when the game actually locks the
+// mouse (MouseBehavior = LockCenter). Many games do first person through custom
+// camera scripts with the cursor left free and hidden - there the raw OS cursor
+// drifts anywhere and is useless as an aim reference. Detection is physical
+// (camera within 2 studs of the local head), so it works no matter HOW the game
+// implements first person: use the viewport center as the crosshair, which is
+// exactly what the player sees. Everything else is pure gelato _input_cursor.
 
 namespace Cheat {
 namespace GameCursor {
 
-// как gelato _input_window: найти WINDOWSCLIENT по пиду роблокса, кэшировать
+// like gelato _input_window: find WINDOWSCLIENT by the roblox pid, cached
 inline HWND GameWindow()
 {
     static HWND cached = nullptr;
@@ -62,7 +64,7 @@ inline HWND GameWindow()
     return cached;
 }
 
-// как gelato _input_cursor: позиция курсора в клиентских координатах WINDOWSCLIENT
+// like gelato _input_cursor: cursor position in WINDOWSCLIENT client coords
 inline bool Cursor(float& out_x, float& out_y)
 {
     POINT point{};
@@ -75,106 +77,72 @@ inline bool Cursor(float& out_x, float& out_y)
     return true;
 }
 
-// мышь игры из памяти — порт gelato c_mouse_service::get_mouse_position
-inline bool GameMouse(float& out_x, float& out_y)
+// local HumanoidRootPart address, refreshed at most twice a second
+inline std::uint64_t LocalRoot()
 {
-    static std::uint64_t s_mouse_service = 0;
+    static std::uint64_t s_hrp = 0;
+    static std::chrono::steady_clock::time_point s_next{};
 
-    if (!s_mouse_service || !g_Memory.IsValid(s_mouse_service))
-    {
-        s_mouse_service = 0;
+    const auto now = std::chrono::steady_clock::now();
+    if (s_hrp && g_Memory.IsValid(s_hrp) && now < s_next)
+        return s_hrp;
 
-        if (!Globals::InstanceDataModel.address ||
-            !g_Memory.IsValid(Globals::InstanceDataModel.address))
-            return false;
+    s_hrp = 0;
+    s_next = now + std::chrono::milliseconds(500);
 
-        auto ms = Instance(Globals::InstanceDataModel.address).FindFirstChild("MouseService");
-        if (!ms || !g_Memory.IsValid(ms->address))
-            return false;
-
-        s_mouse_service = ms->address;
-    }
-
-    auto pos = g_Memory.Read<Vector2>(s_mouse_service + ::MouseService::MousePosition);
-    if (!std::isfinite(pos.x) || !std::isfinite(pos.y))
-        return false;
-
-    out_x = pos.x;
-    out_y = pos.y;
-    return true;
-}
-
-// позиция HumanoidRootPart локального персонажа (для first-person эвристики)
-inline bool LocalRootPosition(Vector3& out)
-{
     if (!Globals::Players || !g_Memory.IsValid(Globals::Players->address))
-        return false;
+        return 0;
 
     auto lp = g_Memory.Read<std::uint64_t>(Globals::Players->address + ::Player::LocalPlayer);
     if (!lp || !g_Memory.IsValid(lp))
-        return false;
+        return 0;
 
     auto model = g_Memory.Read<std::uint64_t>(lp + ::Player::ModelInstance);
     if (!model || !g_Memory.IsValid(model))
-        return false;
+        return 0;
 
     auto hrp = Instance(model).FindFirstChild("HumanoidRootPart");
     if (!hrp || !g_Memory.IsValid(hrp->address))
-        return false;
+        return 0;
 
-    out = BasePart(hrp->address).GetPosition();
-    return std::isfinite(out.x) && std::isfinite(out.y) && std::isfinite(out.z);
+    s_hrp = hrp->address;
+    return s_hrp;
 }
 
-// слоистый курсор: мышь игры → центр вьюпорта в first person → OS-курсор
+// gelato _input_cursor + first-person correction:
+// camera sits at the local head -> the crosshair IS the viewport center
 inline bool AimCursor(float& out_x, float& out_y)
 {
-    // камера + вьюпорт
-    Camera cam{ 0 };
-    float vw = 0.0f, vh = 0.0f;
     if (Globals::Workspace && g_Memory.IsValid(Globals::Workspace->address))
     {
         if (auto cam_inst = Globals::Workspace->GetCurrentCamera())
         {
             if (g_Memory.IsValid(cam_inst->address))
             {
-                cam = Camera(cam_inst->address);
+                Camera cam{ cam_inst->address };
+
                 Vector2 vp = cam.GetViewportSize();
                 if (std::isfinite(vp.x) && std::isfinite(vp.y) &&
                     vp.x > 1.0f && vp.y > 1.0f)
                 {
-                    vw = vp.x;
-                    vh = vp.y;
+                    if (std::uint64_t hrp = LocalRoot())
+                    {
+                        Vector3 head = BasePart(hrp).GetPosition();
+                        Vector3 cam_pos = cam.GetPosition();
+                        if (std::isfinite(head.x) && std::isfinite(head.y) &&
+                            std::isfinite(head.z) &&
+                            (cam_pos - head).Length() < 2.0f)
+                        {
+                            out_x = vp.x * 0.5f;
+                            out_y = vp.y * 0.5f;
+                            return true;
+                        }
+                    }
                 }
             }
         }
     }
 
-    // 1) мышь игры из памяти (в first person она запинена в центр)
-    float gx = 0.0f, gy = 0.0f;
-    if (GameMouse(gx, gy) &&
-        (vw <= 0.0f || (gx >= -8.0f && gy >= -8.0f &&
-                        gx <= vw + 8.0f && gy <= vh + 8.0f)))
-    {
-        out_x = gx;
-        out_y = gy;
-        return true;
-    }
-
-    // 2) first person: камера у головы локального персонажа → прицел в центре
-    if (vw > 0.0f)
-    {
-        Vector3 cam_pos = cam.GetPosition();
-        Vector3 hrp{};
-        if (LocalRootPosition(hrp) && (cam_pos - hrp).Length() < 2.0f)
-        {
-            out_x = vw * 0.5f;
-            out_y = vh * 0.5f;
-            return true;
-        }
-    }
-
-    // 3) фолбэк — gelato _input_cursor
     return Cursor(out_x, out_y);
 }
 

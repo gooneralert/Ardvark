@@ -18,9 +18,11 @@ struct NowPlaying {
     bool         shuffleActive = false;
     bool         repeatActive = false;
     // The source that produced this snapshot. The UI uses this to report a
-    // real Spotify connection instead of guessing from the current title.
+    // real Spotify/Apple Music connection instead of guessing from the
+    // current title.
     bool         sourceConnected = false;
     bool         sourceIsSpotify = false;
+    bool         sourceIsAppleMusic = false;
     char         sourceApp[96] = {};
     char         title[160]  = {};
     char         artist[160] = {};
@@ -74,7 +76,8 @@ void RequestSeek(double positionSec);
 void RequestLyricsRefresh();
 
 // Spotify is preferred by default. Turning this off permits any Windows media
-// session to become the active source.
+// session to become the active source. Apple Music (and iTunes) count as
+// preferred sources too and are used when Spotify has no active session.
 void SetSpotifyOnly(bool enabled);
 bool IsSpotifyOnly();
 

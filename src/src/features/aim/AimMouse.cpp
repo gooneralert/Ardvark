@@ -28,7 +28,16 @@ namespace Cheat {
             constexpr float k_humanize_strength  = 1.0f;   // gelato default
             constexpr float k_humanize_fatigue   = 0.3f;   // gelato default
             constexpr float k_gelato_tick_hz     = 240.0f; // gelato worker тикает на 240Hz
-            constexpr int   k_style_exponential  = 2;      // gelato aim_style_t::exponential (дефолт)
+
+            // наш выбор кривой (GUI): 0 linear, 1 exponential (дефолт), 2 spring, 3 bezier
+            constexpr int k_curve_linear      = 0;
+            constexpr int k_curve_exponential = 1;
+            constexpr int k_curve_spring      = 2;
+            constexpr int k_curve_bezier      = 3;
+
+            // индексы gelato aim_style_t: linear=0, spring=1, exponential=2, cubed=3,
+            // bezier=4, humanized=5
+            constexpr int k_style_exponential = 2;
 
             // ----------------------------------------------------------------
             // gelato sdk/math/math.h — alpha-функции
@@ -88,6 +97,36 @@ namespace Cheat {
                 default: return alpha_linear(t);     // linear
                 }
             }
+
+            // наша кривая (0..3) → стиль gelato
+            int curve_to_style(int curve)
+            {
+                switch (curve)
+                {
+                case k_curve_linear:      return 0; // linear
+                case k_curve_spring:      return 1; // spring
+                case k_curve_bezier:      return 4; // bezier
+                case k_curve_exponential:
+                default:                  return 2; // exponential (дефолт)
+                }
+            }
+
+            // gelato spring_update — 1:1
+            void spring_update(float& pos, float& vel, float target,
+                               float stiffness, float damping, float dt)
+            {
+                if (dt <= 0.0f)
+                    dt = 0.016f;
+                float force = -stiffness * (pos - target) - damping * vel;
+                vel += force * dt;
+                pos += vel * dt;
+            }
+
+            // состояние пружины на ось (px/s), живёт между тиками
+            float s_spring_vx = 0.0f;
+            float s_spring_vy = 0.0f;
+            constexpr float k_spring_stiffness = 140.0f;
+            constexpr float k_spring_damping   = 16.0f;
 
             // ----------------------------------------------------------------
             // gelato state (aimbot_feature_t поля, mouse-часть) — трогает ТОЛЬКО worker
@@ -162,6 +201,8 @@ namespace Cheat {
                     s_last_tick = {};
                     s_accum_x = 0.0f;
                     s_accum_y = 0.0f;
+                    s_spring_vx = 0.0f;
+                    s_spring_vy = 0.0f;
                 }
 
                 auto hold_ms =
@@ -185,7 +226,7 @@ namespace Cheat {
                         float lambda = std::log(2.0f) / std::max(half_life, 0.001f);
                         float t = std::clamp(
                             1.0f - std::exp(-lambda * dt * k_speed_multiplier), 0.005f, 1.0f);
-                        a = alpha_from_style(k_style_exponential, t);
+                        a = alpha_from_style(curve_to_style(cfg.aim_curve), t);
                     }
                     // smoothing выключен — сырой инстант-двиг (alpha = 1)
 
@@ -211,9 +252,29 @@ namespace Cheat {
                 float alpha_x = make_alpha(cfg.smooth_x);
                 float alpha_y = make_alpha(cfg.smooth_y);
 
-                // gelato mouse branch: delta до цели, умноженный на alpha
-                float dx = (best_screen.x - cursor_x) * alpha_x;
-                float dy = (best_screen.y - cursor_y) * alpha_y;
+                // gelato mouse branch: delta до цели, умноженный на alpha.
+                // spring-кривая — исключение: gelato spring_update гоняем прямо на
+                // остаточной ошибке (позицию синхроним с фактической, скорость
+                // копим между тиками — получается честный пружинный довод).
+                float err_x = best_screen.x - cursor_x;
+                float err_y = best_screen.y - cursor_y;
+                float dx, dy;
+
+                if (cfg.smooth_enabled && cfg.aim_curve == k_curve_spring)
+                {
+                    float px = err_x, py = err_y;
+                    spring_update(px, s_spring_vx, 0.0f,
+                                  k_spring_stiffness, k_spring_damping, dt);
+                    spring_update(py, s_spring_vy, 0.0f,
+                                  k_spring_stiffness, k_spring_damping, dt);
+                    dx = err_x - px;
+                    dy = err_y - py;
+                }
+                else
+                {
+                    dx = err_x * alpha_x;
+                    dy = err_y * alpha_y;
+                }
 
                 // gelato humanize jitter — 1:1
                 if (cfg.humanize)
@@ -229,6 +290,11 @@ namespace Cheat {
                     dy *= scale(rng);
                     dy += noise(rng);
                 }
+
+                // sensitivity — множитель скорости довода
+                const float sens = std::clamp(cfg.aim_sensitivity, 0.05f, 5.0f);
+                dx *= sens;
+                dy *= sens;
 
                 // gelato: max_step = max(speed*8, 1) px на тик 240Hz
                 float max_step = std::max(k_speed_multiplier * 8.0f, 1.0f);

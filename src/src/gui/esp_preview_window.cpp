@@ -30,19 +30,14 @@ namespace gui
 
         ImGui::PushStyleVar(ImGuiStyleVar_Alpha, anim);
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.f, 0.f));
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.f);   // border is drawn manually so it gets masked too
         ImGui::PushStyleColor(ImGuiCol_Border, border_outer);
-        ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.055f, 0.06f, 0.07f, 0.34f));  // translucent so the acrylic shows through
+        ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.f, 0.f, 0.f, 0.f));  // bg drawn manually so it can be masked
         bool visible = ImGui::Begin("##esp_preview_window", nullptr,
             ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoScrollbar
             | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove);
         ImGui::PopStyleColor(2);
-        ImGui::PopStyleVar();
-        if (visible)
-        {
-            const ImVec2 gp = ImGui::GetWindowPos();
-            const ImVec2 gs = ImGui::GetWindowSize();
-            glass::add_rect(gp.x, gp.y, gs.x, gs.y, 8.f);   // acrylic backdrop for this window
-        }
+        ImGui::PopStyleVar(2);   // border size + padding
 
         if (!visible)
         {
@@ -55,11 +50,29 @@ namespace gui
         ImVec2 ws = ImGui::GetWindowSize();
         ImDrawList* draw = ImGui::GetWindowDrawList();
 
-        draw->AddRectFilled(wp, ImVec2(wp.x + ws.x, wp.y + title_h), IM_COL32(20, 20, 20, 255));
+        // Mask: nothing is drawn left of the menu's right edge, so the panel
+        // looks like it slides out from underneath the menu instead of showing
+        // through its translucent backdrop.
+        const float reveal_x = anchor_pos.x + anchor_size.x;
+        const ImVec2 clip_min(reveal_x, wp.y - 2.f);
+        const ImVec2 clip_max(wp.x + ws.x + 2.f, wp.y + ws.y + 2.f);
+        draw->PushClipRect(clip_min, clip_max, false);
+
+        draw->AddRectFilled(wp, ImVec2(wp.x + ws.x, wp.y + ws.y),
+            IM_COL32(14, 15, 18, (int)(255.f * 0.34f * anim)), 8.f);
+        draw->AddRect(wp, ImVec2(wp.x + ws.x, wp.y + ws.y),
+            IM_COL32(33, 33, 33, (int)(255 * anim)), 8.f, 0, 1.2f);
+
+        // acrylic backdrop for this window (only once fully revealed; the
+        // OS-level blur region cannot be clipped by the mask)
+        if (anim > 0.99f)
+            glass::add_rect(wp.x, wp.y, ws.x, ws.y, 8.f);
+
+        draw->AddRectFilled(wp, ImVec2(wp.x + ws.x, wp.y + title_h), IM_COL32(20, 20, 20, (int)(255 * anim)));
         ImVec2 title_ts = ImGui::CalcTextSize("esp preview");
         widgets::text_outlined(draw,
             ImVec2(wp.x + (ws.x - title_ts.x) * 0.5f, wp.y + (title_h - title_ts.y) * 0.5f),
-            IM_COL32(230, 230, 230, 255), "esp preview");
+            IM_COL32(230, 230, 230, (int)(255 * anim)), "esp preview");
 
         ImVec2 xsz = ImGui::CalcTextSize("X");
         ImVec2 xmin(wp.x + ws.x - xsz.x - 14.f, wp.y);
@@ -69,7 +82,8 @@ namespace gui
         if (ImGui::IsItemClicked())
             *open = false;
         widgets::text_outlined(draw, ImVec2(xmin.x + 7.f, wp.y + (title_h - xsz.y) * 0.5f),
-            xhov ? IM_COL32(255, 255, 255, 255) : IM_COL32(160, 160, 160, 255), "X");
+            xhov ? IM_COL32(255, 255, 255, (int)(255 * anim))
+                 : IM_COL32(160, 160, 160, (int)(255 * anim)), "X");
 
         float body_top = title_h + margin;
         float body_h = ws.y - body_top - margin;
@@ -81,10 +95,16 @@ namespace gui
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.f, 0.f));
         ImGui::BeginChild("##esp_preview_body", ImVec2(body_w, body_h),
             ImGuiChildFlags_None, ImGuiWindowFlags_NoScrollbar);
+        // the child has its own draw list, so the mask has to be applied to it
+        // as well, otherwise the preview would bleed over the menu
+        ImGui::GetWindowDrawList()->PushClipRect(clip_min, clip_max, false);
         Cheat::Visuals::ESPPreview::Render();
+        ImGui::GetWindowDrawList()->PopClipRect();
         ImGui::EndChild();
         ImGui::PopStyleVar();
 
+        draw->PopClipRect();
         ImGui::End();
+        ImGui::PopStyleVar();   // alpha
     }
 }

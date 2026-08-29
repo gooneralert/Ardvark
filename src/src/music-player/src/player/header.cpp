@@ -270,7 +270,7 @@ void DrawNotPlayingMessage(ImDrawList* dl, ImFont* regular, ImFont* bold,
     ImVec2 c(wp.x + ws.x * 0.5f, wp.y + ws.y * 0.42f);
     DrawNotPlayingIcon(dl, c, IM_COL32(255, 255, 255, 120), 1.2f);
     const char* line1 = "Not playing";
-    const char* line2 = "Start Spotify or another media app";
+    const char* line2 = "Start Spotify, Apple Music, or another media app";
     ImVec2 s1 = music_host::Measure(bold, 13.f, line1);
     ImVec2 s2 = music_host::Measure(regular, 11.5f, line2);
     music_host::DrawText(dl, bold, 13.f,

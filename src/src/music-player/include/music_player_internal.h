@@ -26,7 +26,7 @@ ImU32 LyricHighlightColor();
 void DrawPlayerBackground(ImDrawList* drawList, const ImVec2& position,
                           const ImVec2& size, bool playing, bool showLyrics,
                           bool artworkView, bool fullScreen, bool haveArt,
-                          float hoverAmount, float uiScale);
+                          float hoverAmount, float uiScale, bool windowFull);
 void ReleaseVisualAssets();
 
 void FlattenSvgPath(const char* d, std::vector<std::vector<ImVec2>>& outSubpaths);

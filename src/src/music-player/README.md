@@ -9,7 +9,7 @@ This repository contains only the player, media backend, and preview host. It do
 ## Features
 
 - Reads the active media session through Windows GSMTC
-- Prioritizes Spotify Desktop, with an option to accept other media apps
+- Prioritizes Spotify Desktop, then Apple Music / iTunes, with an option to accept other media apps
 - Loads synchronized lyrics from LRCLIB
 - Uses GSMTC album art immediately, then upgrades it with higher-resolution catalog artwork
 - Extracts three dominant cover colors for a blurred, animated background

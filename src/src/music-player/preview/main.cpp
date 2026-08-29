@@ -61,7 +61,7 @@ void DrawBackdrop() {
                       "Native Music Player Preview");
     drawList->AddText(font, 11.0f, ImVec2(min.x + 20.0f, min.y + 39.0f),
                       IM_COL32(255, 255, 255, 55),
-                      "Start playback in Spotify or another Windows media app");
+                      "Start playback in Spotify, Apple Music, or another Windows media app");
 }
 
 } // namespace

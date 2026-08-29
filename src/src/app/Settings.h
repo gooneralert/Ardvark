@@ -254,6 +254,10 @@ namespace Cheat {
             float smooth_y{ 1.0f };
             bool  smooth_enabled{ false }; // layuh smoothing toggle
 
+            // кривая замедления (aim mouse): 0 linear, 1 exponential (default), 2 spring, 3 bezier
+            int   aim_curve{ 1 };
+            float aim_sensitivity{ 1.0f }; // множитель скорости довода
+
             bool  humanize{ false };
             float reaction_ms{ 60.0f };
             bool  sticky{ false };
@@ -562,6 +566,7 @@ namespace Cheat {
             bool  explorer{ false };
             bool  esp_preview{ true };   // ESP preview is on by default
             bool  players{ false }; // island -> float players_ui
+            bool  servers{ false }; // navbar -> server explorer window
 bool  music{ false };   // music player window
             bool  mcp{ false }; // localhost bridge для cursor mcp
             bool  custom_support{ false };

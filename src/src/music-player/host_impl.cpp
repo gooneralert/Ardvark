@@ -151,14 +151,27 @@ float PressPulse(ImGuiID id, bool triggered) {
 
 namespace overlay {
 
+namespace {
+
+// Simulated OS-fullscreen state for the player card. The overlay window
+// already spans the whole game client rect, so "fullscreen" just means the
+// card is laid out to fill the overlay's work area instead of its normal
+// floating size (player.cpp handles this via IsFullscreenWindow()).
+bool g_playerWindowFull = false;
+
+} // namespace
+
 HWND GetOverlayWindow() { return Cheat::Renderer::GetHwnd(); }
 void* GetD3DDevice() { return Cheat::Renderer::GetDevice(); }
 
 // The overlay window's geometry is owned by Renderer (it follows the game
-// client rect), so a true fullscreen toggle of the overlay window is not
-// supported here. The player's fullscreen *layout* still works.
-void ToggleFullscreenWindow() {}
-bool IsFullscreenWindow() { return false; }
+// client rect), so there is no separate OS window to make borderless. Instead
+// this toggles the player's in-overlay fullscreen state: the restore button in
+// the fullscreen header acts like a maximize/restore pair.
+void ToggleFullscreenWindow() {
+    g_playerWindowFull = !g_playerWindowFull;
+}
+bool IsFullscreenWindow() { return g_playerWindowFull; }
 
 ImFont* GetFont(int index) {
     if (index == 0) return fonts::music_regular ? fonts::music_regular : ImGui::GetFont();

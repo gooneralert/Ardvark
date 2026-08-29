@@ -31,6 +31,13 @@ namespace
 		if (show_smooth)
 		{
 			row_checkbox("smoothing", &cfg.smooth_enabled);
+
+			static const std::vector<const char*> k_curve = {
+				"linear", "exponential", "spring", "bezier"
+			};
+			row_combo("aim curve", &cfg.aim_curve, k_curve);
+			row_slider_f("sensitivity", &cfg.aim_sensitivity, 0.05f, 3.0f, "%.2f");
+
 			row_slider_f("smoothness x", &cfg.smooth_x, 0.1f, 5.0f, "%.2f");
 			row_slider_f("smoothness y", &cfg.smooth_y, 0.1f, 5.0f, "%.2f");
 		}

@@ -3,6 +3,7 @@
 #include "lua_window.h"
 #include "players_window.h"
 #include "explorer_window.h"
+#include "servers_window.h"
 #include "esp_preview_window.h"
 #include "tabs/aim.h"
 #include "tabs/esp.h"
@@ -26,6 +27,7 @@
 #include <cmath>
 #include <string>
 #include <vector>
+#include <unordered_map>
 #include <windows.h>
 
 namespace gui
@@ -43,6 +45,7 @@ namespace gui
     static bool lua_open = false;
     static bool players_open = false;
     static bool explorer_open = false;
+    static bool servers_open = false;
     static bool esp_preview_open = false;
     static bool music_open = false;
     static bool music_media_inited = false;
@@ -87,6 +90,10 @@ namespace gui
 
     bool point_over_ui(float x, float y)
     {
+        // the watermark is draggable, so the cursor must count as over the UI there
+        if (widgets::watermark_hit_test(x, y))
+            return true;
+
         static const char* names[] = {
             "##navbar",
             "menu",
@@ -94,6 +101,7 @@ namespace gui
             "##lua_errors",
             "##players_window",
             "##explorer_window",
+            "##servers_window",
             "##esp_preview_window",
             "##properties_window",
             "##decompiled_window",
@@ -236,7 +244,7 @@ namespace gui
     }
 
     // launcher pill icon kinds
-    enum { NICON_GUI = 0, NICON_LUA, NICON_PLAYERS, NICON_EXPLORER, NICON_MUSIC };
+    enum { NICON_MUSIC = 0, NICON_GUI, NICON_LUA, NICON_PLAYERS, NICON_EXPLORER, NICON_SERVERS, NICON_WATERMARK };
 
     static void draw_launcher_icon(ImDrawList* dl, int kind, ImVec2 c, ImU32 col)
     {
@@ -279,10 +287,61 @@ namespace gui
             dl->AddLine(ImVec2(c.x + 0.3f, c.y + 5.f), ImVec2(c.x + 0.3f, c.y - 7.f), col, t);
             dl->AddBezierCubic(ImVec2(c.x + 0.3f, c.y - 7.f), ImVec2(c.x + 5.5f, c.y - 5.f), ImVec2(c.x + 6.f, c.y - 3.f), ImVec2(c.x + 6.5f, c.y + 0.5f), col, t);
             break;
+        case NICON_SERVERS: // globe
+        {
+            dl->AddCircle(c, 7.5f, col, 0, t);
+            dl->AddEllipse(c, ImVec2(3.2f, 7.5f), col, 0.0f, 0, t);
+            dl->AddLine(ImVec2(c.x - 7.5f, c.y), ImVec2(c.x + 7.5f, c.y), col, t);
+            dl->PathArcTo(ImVec2(c.x, c.y + 12.5f), 11.8f, IM_PI * 1.18f, IM_PI * 1.82f, 12);
+            dl->PathStroke(col, 0, t);
+            break;
         }
+        case NICON_WATERMARK: // badge (rounded card with text lines)
+            dl->AddRect(ImVec2(c.x - 7.5f, c.y - 5.5f), ImVec2(c.x + 7.5f, c.y + 5.5f), col, 2.5f, 0, t);
+            dl->AddLine(ImVec2(c.x - 4.f, c.y - 1.8f), ImVec2(c.x + 4.f, c.y - 1.8f), col, t);
+            dl->AddLine(ImVec2(c.x - 4.f, c.y + 1.8f), ImVec2(c.x + 1.5f, c.y + 1.8f), col, t);
+            break;
+        }
+        }
+
+    // Scales the alpha channel of a hardcoded IM_COL32 color (style.Alpha does
+    // not affect direct draw-list calls).
+    static ImU32 fade_color(ImU32 c, float a)
+    {
+        const int alpha = (int)(((c >> IM_COL32_A_SHIFT) & 0xFF) * a);
+        return (c & ~IM_COL32_A_MASK) | ((ImU32)alpha << IM_COL32_A_SHIFT);
     }
 
-    static void render_navbar()
+    // 0..1 open/close animation state, keyed per window id. Exponential ease
+    // towards the target so opening and closing both animate smoothly.
+    static float window_anim(const char* id, bool open, float speed = 14.f)
+    {
+        static std::unordered_map<ImGuiID, float> s_anims;
+        const float dt = ImGui::GetIO().DeltaTime > 0.f ? ImGui::GetIO().DeltaTime : 1.f / 60.f;
+        const float target = open ? 1.f : 0.f;
+        float& v = s_anims[ImHashStr(id)];
+        v += (target - v) * (1.f - std::exp(-speed * dt));
+        if (std::fabs(target - v) < 0.002f)
+            v = target;
+        return v;
+    }
+
+    // Renders one of the tool windows with an open/close fade. The window
+    // keeps rendering (fading out) after its open flag goes false, and a
+    // close-button click during the fade is still forwarded to `open`.
+    static void render_window_faded(const char* id, bool& open, void (*fn)(bool*))
+    {
+        const float a = window_anim(id, open);
+        if (a <= 0.01f)
+            return;
+        bool flag = open;
+        ImGui::PushStyleVar(ImGuiStyleVar_Alpha, a);
+        fn(&flag);
+        ImGui::PopStyleVar();
+        open = flag;
+    }
+
+    static void render_navbar(float anim)
     {
         ImGuiViewport* vp = ImGui::GetMainViewport();
 
@@ -290,8 +349,10 @@ namespace gui
         constexpr float pill_h  = 40.f;   // pill height (icons + active-dot zone)
         constexpr float pad_x   = 10.f;
 
-        const float pill_w = pad_x * 2.f + cell * 5.f;
-        const ImVec2 pos(vp->Pos.x + (vp->Size.x - pill_w) * 0.5f, vp->Pos.y + 10.f);
+        const float pill_w = pad_x * 2.f + cell * 7.f;
+        // slides down from behind the top edge while fading in
+        const ImVec2 pos(vp->Pos.x + (vp->Size.x - pill_w) * 0.5f,
+                         vp->Pos.y + 10.f - (1.f - anim) * 24.f);
         ImGui::SetNextWindowPos(pos, ImGuiCond_Always);
         ImGui::SetNextWindowSize(ImVec2(pill_w, pill_h), ImGuiCond_Always);
 
@@ -306,21 +367,23 @@ namespace gui
         const ImVec2 wp = ImGui::GetWindowPos();
 
         // pill background
-        draw->AddRectFilled(wp, ImVec2(wp.x + pill_w, wp.y + pill_h), IM_COL32(16, 16, 18, 235), pill_h * 0.5f);
-        draw->AddRect(wp, ImVec2(wp.x + pill_w, wp.y + pill_h), IM_COL32(255, 255, 255, 22), pill_h * 0.5f, 0, 1.2f);
+        draw->AddRectFilled(wp, ImVec2(wp.x + pill_w, wp.y + pill_h), fade_color(IM_COL32(16, 16, 18, 235), anim), pill_h * 0.5f);
+        draw->AddRect(wp, ImVec2(wp.x + pill_w, wp.y + pill_h), fade_color(IM_COL32(255, 255, 255, 22), anim), pill_h * 0.5f, 0, 1.2f);
 
         struct Item { const char* id; const char* tip; int kind; };
-        const Item items[5] = {
+        const Item items[7] = {
             { "nav_menu",     "menu",     NICON_GUI },
             { "nav_lua",      "lua",      NICON_LUA },
             { "nav_players",  "players",  NICON_PLAYERS },
             { "nav_explorer", "explorer", NICON_EXPLORER },
+            { "nav_servers",  "servers",  NICON_SERVERS },
+            { "nav_watermark", "watermark", NICON_WATERMARK },
             { "nav_music",    "music",    NICON_MUSIC },
         };
 
         const float icon_cy = wp.y + (pill_h - 6.f) * 0.5f;
 
-        for (int i = 0; i < 5; ++i)
+        for (int i = 0; i < 7; ++i)
         {
             const float x0 = wp.x + pad_x + cell * i;
             ImGui::SetCursorScreenPos(ImVec2(x0, wp.y + 2.f));
@@ -339,13 +402,15 @@ namespace gui
             case 1: if (clicked) Cheat::g_Settings.lua.executor = !Cheat::g_Settings.lua.executor;   active = Cheat::g_Settings.lua.executor; break;
             case 2: if (clicked) Cheat::g_Settings.misc.players = !Cheat::g_Settings.misc.players;   active = Cheat::g_Settings.misc.players; break;
             case 3: if (clicked) Cheat::g_Settings.misc.explorer = !Cheat::g_Settings.misc.explorer; active = Cheat::g_Settings.misc.explorer; break;
-            case 4: if (clicked) { Cheat::g_Settings.misc.music = !Cheat::g_Settings.misc.music; Cheat::Console::Log(Cheat::Console::Color::Gray, "[music] toggled -> %d", (int)Cheat::g_Settings.misc.music); } active = Cheat::g_Settings.misc.music; break;
+            case 4: if (clicked) Cheat::g_Settings.misc.servers = !Cheat::g_Settings.misc.servers; active = Cheat::g_Settings.misc.servers; break;
+            case 5: if (clicked) Cheat::g_Settings.gui.watermark = !Cheat::g_Settings.gui.watermark; active = Cheat::g_Settings.gui.watermark; break;
+            case 6: if (clicked) { Cheat::g_Settings.misc.music = !Cheat::g_Settings.misc.music; Cheat::Console::Log(Cheat::Console::Color::Gray, "[music] toggled -> %d", (int)Cheat::g_Settings.misc.music); } active = Cheat::g_Settings.misc.music; break;
             }
 
             if (hovered)
-                draw->AddRectFilled(ImVec2(x0 + 2.f, wp.y + 3.f), ImVec2(x0 + cell - 2.f, wp.y + pill_h - 3.f), IM_COL32(255, 255, 255, 14), 8.f);
+                draw->AddRectFilled(ImVec2(x0 + 2.f, wp.y + 3.f), ImVec2(x0 + cell - 2.f, wp.y + pill_h - 3.f), fade_color(IM_COL32(255, 255, 255, 14), anim), 8.f);
 
-            const ImU32 col = ImGui::GetColorU32(active ? ImVec4(1.f, 1.f, 1.f, 1.f) : (hovered ? ImVec4(0.85f, 0.85f, 0.85f, 1.f) : ImVec4(0.55f, 0.55f, 0.55f, 1.f)));
+            const ImU32 col = fade_color(ImGui::GetColorU32(active ? ImVec4(1.f, 1.f, 1.f, 1.f) : (hovered ? ImVec4(0.85f, 0.85f, 0.85f, 1.f) : ImVec4(0.55f, 0.55f, 0.55f, 1.f))), anim);
             draw_launcher_icon(draw, items[i].kind, ImVec2(x0 + cell * 0.5f, icon_cy), col);
 
             // active dot under the icon (like the reference pill)
@@ -367,7 +432,7 @@ namespace gui
         return b && std::strcmp(w->Name, b) == 0;
     }
 
-    static void render_menu_window();
+    static void render_menu_window(float anim);
 
     static void handle_menu_key()
     {
@@ -402,15 +467,18 @@ namespace gui
         lua_open = Cheat::g_Settings.lua.executor;
         players_open = Cheat::g_Settings.misc.players;
         explorer_open = Cheat::g_Settings.misc.explorer;
+        servers_open = Cheat::g_Settings.misc.servers;
         esp_preview_open = Cheat::g_Settings.misc.esp_preview;
         music_open = Cheat::g_Settings.misc.music;
 
-        if (s_menu_open)
-            render_navbar();
+        const float menu_a = window_anim("##menu", s_menu_open, 20.f);
+        if (menu_a > 0.01f)
+            render_navbar(menu_a);
 
         lua_open = Cheat::g_Settings.lua.executor;
         players_open = Cheat::g_Settings.misc.players;
         explorer_open = Cheat::g_Settings.misc.explorer;
+        servers_open = Cheat::g_Settings.misc.servers;
         esp_preview_open = Cheat::g_Settings.misc.esp_preview;
         music_open = Cheat::g_Settings.misc.music;   // re-sync after navbar clicks
 
@@ -426,21 +494,22 @@ namespace gui
                 render_esp_preview_window(&esp_preview_open, s_menu_pos, s_menu_size, s_esp_anim);
         }
 
-        if (s_menu_open)
-            render_menu_window();
+        if (menu_a > 0.01f)
+            render_menu_window(menu_a);
         else
-            glass::set_menu_rect(0, 0, 0, 0);   // hide the acrylic backdrop when the menu closes
+            glass::set_menu_rect(0, 0, 0, 0);   // hide the acrylic backdrop once the fade-out finishes
 
         // Ã‘â€¡ÃÂµÃÂºÃÂ±ÃÂ¾ÃÂºÃ‘Â ÃÂ¿Ã‘â‚¬ÃÂµÃÂ²Ã‘Å’Ã‘Å½ ÃÂ¶ÃÂ¸ÃÂ²Ã‘â€˜Ã‘â€š ÃÂ²ÃÂ¾ ÃÂ²ÃÂºÃÂ»ÃÂ°ÃÂ´ÃÂºÃÂµ esp, Ã‘â€šÃÂ¾ ÃÂµÃ‘ÂÃ‘â€šÃ‘Å’ ÃÂ²ÃÂ½Ã‘Æ’Ã‘â€šÃ‘â‚¬ÃÂ¸ ÃÂ¼ÃÂµÃÂ½Ã‘Å½, ÃÂ¿ÃÂ¾Ã‘ÂÃ‘â€šÃÂ¾ÃÂ¼Ã‘Æ’
         // ÃÂµÃÂ³ÃÂ¾ ÃÂ·ÃÂ½ÃÂ°Ã‘â€¡ÃÂµÃÂ½ÃÂ¸ÃÂµ ÃÂ¿ÃÂ¾ÃÂ´Ã‘â€¦ÃÂ²ÃÂ°Ã‘â€šÃ‘â€¹ÃÂ²ÃÂ°ÃÂµÃÂ¼ Ã‘Æ’ÃÂ¶ÃÂµ ÃÂ¿ÃÂ¾Ã‘ÂÃÂ»ÃÂµ ÃÂ¾Ã‘â€šÃ‘â‚¬ÃÂ¸Ã‘ÂÃÂ¾ÃÂ²ÃÂºÃÂ¸
         esp_preview_open = Cheat::g_Settings.misc.esp_preview;
 
-        if (s_menu_open && lua_open)
-            render_lua_window(&lua_open);
-        if (s_menu_open && players_open)
-            render_players_window(&players_open);
-        if (s_menu_open && explorer_open)
-            render_explorer_window(&explorer_open);
+        if (menu_a > 0.01f)
+        {
+            render_window_faded("##lua_window", lua_open, render_lua_window);
+            render_window_faded("##players_window", players_open, render_players_window);
+            render_window_faded("##explorer_window", explorer_open, render_explorer_window);
+            render_window_faded("##servers_window", servers_open, render_servers_window);
+        }
         // music keeps running even when the menu itself is closed
         if (music_open)
         {
@@ -448,7 +517,8 @@ namespace gui
             {
                 try { media::Init(); }
                 catch (...) { Cheat::Console::Log(Cheat::Console::Color::Gray, "[music] media init failed"); }
-                // spawn the card in the top right (the player clamps these into range)
+                // spawn the card in the top right corner (the player clamps
+                // these into range)
                 ImGuiViewport* mvp = ImGui::GetMainViewport();
                 native_music_player::g_playerOptions.x = mvp->WorkSize.x;
                 native_music_player::g_playerOptions.y = 14.f;
@@ -467,17 +537,46 @@ namespace gui
         Cheat::g_Settings.lua.executor = lua_open;
         Cheat::g_Settings.misc.players = players_open;
         Cheat::g_Settings.misc.explorer = explorer_open;
+        Cheat::g_Settings.misc.servers = servers_open;
         Cheat::g_Settings.misc.esp_preview = esp_preview_open;
         Cheat::g_Settings.misc.music = music_open;
+
+        // watermark badge: like the music player it lives on the overlay and
+        // keeps rendering even when the menu itself is closed
+        if (Cheat::g_Settings.gui.watermark)
+            widgets::watermark(1.f);
+
     glass::commit();   // size/position the acrylic backdrop over every collected rect
     }
 
-    static void render_menu_window()
+    static void render_menu_window(float anim)
     {
         ImVec2 center = ImGui::GetMainViewport()->GetCenter();
-        ImGui::SetNextWindowPos(center, ImGuiCond_Once, ImVec2(0.5f, 0.5f));
+        // fade + rise-in. The position is only forced while the entry
+        // animation is actually rising; once it settles the menu can be
+        // dragged and resized freely (forcing it every frame would override
+        // the custom drag). The last rendered position is saved in our own
+        // static (ImGui may recreate the window between sessions and forget
+        // its position), so the menu always rises from where it was left.
+        static bool   s_menuPlaced = false;   // menu has rendered at least once
+        static ImVec2 s_riseBase{};
+        static bool   s_riseValid = false;
+        static bool   s_wasOpen = false;
+        const bool opening = s_menu_open && !s_wasOpen;   // just (re)opened
+        s_wasOpen = s_menu_open;
+        if (opening)
+        {
+            // entry animation starting: rise from wherever the menu was last
+            s_riseBase = s_menuPlaced ? s_menu_pos
+                : ImVec2(center.x - 289.f, center.y - 252.f);   // centered (578x504)
+            s_riseValid = true;
+        }
+        if (s_riseValid && anim < 0.999f && s_menu_open)
+            ImGui::SetNextWindowPos(ImVec2(s_riseBase.x, s_riseBase.y + (1.f - anim) * 20.f),
+                ImGuiCond_Always);
         ImGui::SetNextWindowSize(ImVec2(578.f, 504.f), ImGuiCond_Once);
 
+        ImGui::PushStyleVar(ImGuiStyleVar_Alpha, anim);
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.f, 0.f));
         ImGui::PushStyleColor(ImGuiCol_Border, border_color_outer);
         ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.05f, 0.055f, 0.065f, 0.30f));
@@ -501,6 +600,7 @@ namespace gui
 
         s_menu_pos = win_pos;
         s_menu_size = win_size;
+        s_menuPlaced = true;
 
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.f, 0.f));
         ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.f, 0.f, 0.f, 0.f));
@@ -626,5 +726,6 @@ namespace gui
         }
 
         ImGui::End();
+        ImGui::PopStyleVar();   // alpha
     }
 }

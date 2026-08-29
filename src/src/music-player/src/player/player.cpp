@@ -33,7 +33,7 @@ struct WindowState {
     bool modeTransition = false;
     ImVec2 fullScreenPos{-1.f, -1.f};
     bool fullScreenPosValid = false;
-    float userScale = 1.10f;      // 10% larger by default
+    float userScale = 1.32f;      // ~20% larger than the old 1.10 default
     float fold = 0.f;             // 0 = controls shown, 1 = bottom cropped away
 };
 
@@ -88,7 +88,10 @@ ImVec2 DesiredSize(const ImGuiViewport* vp, bool fullScreen, bool artworkView,
     constexpr float kArtworkWidth = 293.f;
     constexpr float kArtworkHeight = 303.f;
     if (music_host::overlay::IsFullscreenWindow()) {
-        outFull = vp->WorkSize;
+        // Fill the whole overlay viewport. The work area can be smaller than
+        // the real client area (taskbar/monitor work-area offsets), which
+        // left margins around the fullscreen card.
+        outFull = vp->Size;
     } else {
         const float fullWidth = std::min(806.f,
             std::max(360.f, vp->WorkSize.x - 36.f));
@@ -145,7 +148,7 @@ void DrawMusicPlayer() {
     const int mode = fullScreen ? 2 : (artworkMode ? 3 : (expandedMode ? 1 : 0));
 
     float defX = std::clamp(g_playerOptions.x, 8.f,
-        std::max(8.f, vp->WorkSize.x - 304.f - 8.f));
+        std::max(8.f, vp->WorkSize.x - desiredSize.x - 8.f));
     float defY = g_playerOptions.y < 0.f
         ? std::max(14.f, vp->WorkSize.y - desiredSize.y - 14.f)
         : std::clamp(g_playerOptions.y, 8.f,
@@ -219,7 +222,7 @@ void DrawMusicPlayer() {
     }
     if (fullScreen) {
         if (windowFull) {
-            ImGui::SetNextWindowPos(vp->WorkPos, ImGuiCond_Always);
+            ImGui::SetNextWindowPos(vp->Pos, ImGuiCond_Always);
         } else if (firstFrame || modeChanged || st.wasWindowFull) {
             const ImVec2 centered(
                 vp->WorkPos.x + (vp->WorkSize.x - requestedSize.x) * 0.5f,
@@ -267,7 +270,9 @@ void DrawMusicPlayer() {
     st.previousMode = mode;
     st.wasWindowFull = windowFull;
 
-    if (!resizing) {
+    // Skip the on-screen clamp while the card owns the whole viewport:
+    // clamping a viewport-sized window would nudge it off the exact edge.
+    if (!resizing && !windowFull) {
         ImVec2 clampedPos(
             std::clamp(wp.x, vp->WorkPos.x + 8.f,
                 std::max(vp->WorkPos.x + 8.f,
@@ -307,8 +312,13 @@ void DrawMusicPlayer() {
         wp = target;
     }
     if (fullScreen) {
-        st.fullScreenPos = wp;
-        st.fullScreenPosValid = true;
+        // The fullscreen layout has its own remembered position; never write
+        // it into g_playerOptions (the normal card's position), or leaving
+        // fullscreen would relocate the card to the layout's centered spot.
+        if (!windowFull) {
+            st.fullScreenPos = wp;
+            st.fullScreenPosValid = true;
+        }
     } else {
         g_playerOptions.x = wp.x - vp->WorkPos.x;
         g_playerOptions.y = wp.y - vp->WorkPos.y;
@@ -360,11 +370,23 @@ void DrawMusicPlayer() {
         wp, ImVec2(wp.x + ws.x, wp.y + ws.y), false);
     const float hover = music_host::animation::Anim(
         ImGui::GetID("##music_card_hover"), hovered, 11.f);
-    music_host::DrawShadow(ImGui::GetBackgroundDrawList(), wp,
-               ImVec2(wp.x + ws.x, wp.y + ws.y),
-               16.f + hover * 8.f, 10, 11.f, 0.40f + hover * 0.14f);
+    if (fullScreen) {
+        // Soft, blurred shadow for the large fullscreen card: many more
+        // layers with a wider spread and lower per-layer strength, so the
+        // falloff reads as a blur instead of stacked hard edges. While the
+        // card owns the whole viewport the corners are square.
+        music_host::DrawShadow(ImGui::GetBackgroundDrawList(), wp,
+                   ImVec2(wp.x + ws.x, wp.y + ws.y),
+                   windowFull ? 0.f : 16.f + hover * 8.f,
+                   26, 34.f, 0.30f + hover * 0.10f);
+    } else {
+        music_host::DrawShadow(ImGui::GetBackgroundDrawList(), wp,
+                   ImVec2(wp.x + ws.x, wp.y + ws.y),
+                   16.f + hover * 8.f, 10, 11.f, 0.40f + hover * 0.14f);
+    }
     detail::DrawPlayerBackground(dl, wp, ws, playing, showLyrics, artworkView,
-                                  fullScreen, haveArt, hover, g_uiScale);
+                                  fullScreen, haveArt, hover, g_uiScale,
+                                  windowFull);
 
     if (!hasTrack) {
         detail::DrawNotPlayingMessage(dl, regular, bold, wp, ws);

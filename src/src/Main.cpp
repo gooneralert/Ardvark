@@ -156,9 +156,40 @@ static void OnRobloxAttached(bool reattached)
         Cheat::Console::DumpLastCrash();
 }
 
+#ifndef DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2
+#define DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2 ((DPI_AWARENESS_CONTEXT)-4)
+#endif
+
 int main()
 {
-    SetProcessDPIAware();
+    // gelato живёт ВНУТРИ процесса Roblox (per-monitor DPI aware v2), поэтому его
+    // GetCursorPos всегда в физических пикселях вьюпорта игры. Мы внешние — без
+    // выравнивания DPI на мониторах с масштабом 125/150% GetCursorPos/ScreenToClient
+    // возвращают виртуализованные (масштабированные) координаты, и курсор живёт
+    // в другой системе координат, чем W2S-цель из памяти. Ставим per-monitor v2,
+    // с фолбэками для старых систем (повторные вызовы после успешного — безвредны).
+    {
+        if (HMODULE user32 = GetModuleHandleA("user32.dll"))
+        {
+            using set_ctx_fn = BOOL(WINAPI*)(DPI_AWARENESS_CONTEXT);
+            if (auto fn = reinterpret_cast<set_ctx_fn>(
+                    GetProcAddress(user32, "SetProcessDpiAwarenessContext")))
+            {
+                fn(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+            }
+        }
+        if (HMODULE shcore = LoadLibraryA("shcore.dll"))
+        {
+            using set_awareness_fn = HRESULT(WINAPI*)(int);
+            if (auto fn = reinterpret_cast<set_awareness_fn>(
+                    GetProcAddress(shcore, "SetProcessDpiAwareness")))
+            {
+                fn(2 /* PROCESS_PER_MONITOR_DPI_AWARE */);
+            }
+        }
+        SetProcessDPIAware();
+    }
+
     SetUnhandledExceptionFilter(CrashFilter);
     std::set_terminate(TerminateLog);
     std::thread(HeartbeatThread).detach();

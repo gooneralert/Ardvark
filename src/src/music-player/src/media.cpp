@@ -688,18 +688,46 @@ void Init() {
                 }
                 auto session = mgr.GetCurrentSession();
                 auto sessions = mgr.GetSessions();
+                // Find preferred sources by AppUserModelId. Spotify Desktop
+                // publishes "Spotify" in its AUMID; Apple Music for Windows
+                // (Store app) publishes "AppleInc.AppleMusicWin_...", and the
+                // legacy iTunes desktop app publishes "iTunes".
                 wmc::GlobalSystemMediaTransportControlsSession spotifySession{ nullptr };
+                wmc::GlobalSystemMediaTransportControlsSession appleSession{ nullptr };
                 for (auto const& candidate : sessions) {
                     std::string source = winrt::to_string(candidate.SourceAppUserModelId());
                     std::transform(source.begin(), source.end(), source.begin(),
                         [](unsigned char ch) { return (char)std::tolower(ch); });
-                    if (source.find("spotify") != std::string::npos) {
+                    if (!spotifySession && source.find("spotify") != std::string::npos) {
                         spotifySession = candidate;
-                        break;
+                    } else if (!appleSession &&
+                               (source.find("applemusic") != std::string::npos ||
+                                source.find("itunes") != std::string::npos)) {
+                        appleSession = candidate;
                     }
+                    if (spotifySession && appleSession) break;
                 }
-                if (spotifySession) {
+                // Preferred order: a *playing* preferred source wins over a
+                // paused one (e.g. Spotify open but paused while Apple Music
+                // is actively playing). Otherwise Spotify first, then Apple
+                // Music/iTunes. Other apps are only accepted when the
+                // preferred-only filter is turned off.
+                auto sessionPlaying = [](wmc::GlobalSystemMediaTransportControlsSession const& s) {
+                    try {
+                        return s.GetPlaybackInfo().PlaybackStatus() ==
+                            wmc::GlobalSystemMediaTransportControlsSessionPlaybackStatus::Playing;
+                    } catch (...) { return false; }
+                };
+                const bool spotifyPlaying = spotifySession && sessionPlaying(spotifySession);
+                const bool applePlaying = appleSession && sessionPlaying(appleSession);
+                if (spotifyPlaying) {
                     session = spotifySession;
+                } else if (applePlaying) {
+                    session = appleSession;
+                } else if (spotifySession) {
+                    session = spotifySession;
+                } else if (appleSession) {
+                    session = appleSession;
                 } else if (s_spotifyOnly.load()) {
                     session = nullptr;
                 } else if (!session && sessions.Size() > 0) {
@@ -708,12 +736,15 @@ void Init() {
 
                 std::string sourceApp;
                 bool sourceIsSpotify = false;
+                bool sourceIsAppleMusic = false;
                 if (session) {
                     sourceApp = winrt::to_string(session.SourceAppUserModelId());
                     std::string sourceLower = sourceApp;
                     std::transform(sourceLower.begin(), sourceLower.end(), sourceLower.begin(),
                         [](unsigned char ch) { return (char)std::tolower(ch); });
                     sourceIsSpotify = sourceLower.find("spotify") != std::string::npos;
+                    sourceIsAppleMusic = sourceLower.find("applemusic") != std::string::npos ||
+                                         sourceLower.find("itunes") != std::string::npos;
                 }
 
                 if (session != s_boundSession) {
@@ -729,6 +760,7 @@ void Init() {
                     s_state.playing = false;
                     s_state.sourceConnected = false;
                     s_state.sourceIsSpotify = false;
+                    s_state.sourceIsAppleMusic = false;
                     s_state.sourceApp[0] = 0;
                     s_state.snapshotTickMs = nowT;
                     if (nowT - emptyStateStartTick > kStickyMs) {
@@ -903,6 +935,7 @@ void Init() {
                     s_state.repeatActive = repeatActive;
                     s_state.sourceConnected = true;
                     s_state.sourceIsSpotify = sourceIsSpotify;
+                    s_state.sourceIsAppleMusic = sourceIsAppleMusic;
                     std::strncpy(s_state.sourceApp, sourceApp.c_str(), sizeof(s_state.sourceApp) - 1);
                     s_state.sourceApp[sizeof(s_state.sourceApp) - 1] = 0;
                     std::strncpy(s_state.title, title.c_str(), sizeof(s_state.title) - 1);
@@ -945,6 +978,7 @@ void Init() {
                 s_state.playing = false;
                 s_state.sourceConnected = false;
                 s_state.sourceIsSpotify = false;
+                s_state.sourceIsAppleMusic = false;
                 s_state.sourceApp[0] = 0;
                 s_state.snapshotTickMs = nowT;
                 if (nowT - emptyStateStartTick > kStickyMs) {
@@ -962,6 +996,7 @@ void Init() {
                 s_state.playing = false;
                 s_state.sourceConnected = false;
                 s_state.sourceIsSpotify = false;
+                s_state.sourceIsAppleMusic = false;
                 s_state.sourceApp[0] = 0;
                 s_state.snapshotTickMs = nowT;
                 if (nowT - emptyStateStartTick > kStickyMs) {

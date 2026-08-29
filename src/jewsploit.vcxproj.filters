@@ -331,6 +331,9 @@
     <ClInclude Include="src\gui\explorer_window.h">
       <Filter>src\gui</Filter>
     </ClInclude>
+    <ClInclude Include="src\gui\servers_window.h">
+      <Filter>src\gui</Filter>
+    </ClInclude>
     <ClInclude Include="src\gui\properties_window.h">
       <Filter>src\gui</Filter>
     </ClInclude>
@@ -651,6 +654,9 @@
     <ClCompile Include="src\gui\explorer_window.cpp">
       <Filter>src\gui</Filter>
     </ClCompile>
+    <ClCompile Include="src\gui\servers_window.cpp">
+      <Filter>src\gui</Filter>
+    </ClCompile>
     <ClCompile Include="src\gui\properties_window.cpp">
       <Filter>src\gui</Filter>
     </ClCompile>
@@ -661,6 +667,9 @@
       <Filter>src\gui\widgets</Filter>
     </ClCompile>
     <ClCompile Include="src\gui\widgets\checkbox.cpp">
+      <Filter>src\gui\widgets</Filter>
+    </ClCompile>
+    <ClCompile Include="src\gui\widgets\watermark.cpp">
       <Filter>src\gui\widgets</Filter>
     </ClCompile>
     <ClCompile Include="src\gui\widgets\colorpicker.cpp">
