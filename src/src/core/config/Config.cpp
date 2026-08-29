@@ -628,6 +628,7 @@ bool Save(const std::string& name)
     PutBool(out, "misc.explorer", s.misc.explorer);
     PutBool(out, "misc.esp_preview", s.misc.esp_preview);
     PutBool(out, "misc.mcp", s.misc.mcp);
+    PutBool(out, "misc.hybrid_mode", s.misc.hybrid_mode);
     PutBool(out, "misc.arsenal_flick_fix", s.misc.arsenal_flick_fix);
     PutBool(out, "misc.desync", s.misc.desync);
     PutBool(out, "lua.executor", s.lua.executor);
@@ -1043,6 +1044,7 @@ bool Load(const std::string& name)
     GetBool(kv, "misc.explorer", s.misc.explorer);
     GetBool(kv, "misc.esp_preview", s.misc.esp_preview);
     GetBool(kv, "misc.mcp", s.misc.mcp);
+    GetBool(kv, "misc.hybrid_mode", s.misc.hybrid_mode);
     GetBool(kv, "misc.arsenal_flick_fix", s.misc.arsenal_flick_fix);
     GetBool(kv, "misc.desync", s.misc.desync);
     GetBool(kv, "lua.executor", s.lua.executor);
@@ -1050,6 +1052,16 @@ bool Load(const std::string& name)
     GetFloat(kv, "lua.ticks_ms", s.lua.ticks_ms);
     if (s.lua.ticks_ms < 1.f) s.lua.ticks_ms = 1.f;
     if (s.lua.ticks_ms > 15.f) s.lua.ticks_ms = 15.f;
+
+    // hybrid mode off -> detectable features must not stay enabled
+    if (!s.misc.hybrid_mode)
+    {
+        s.lua.internal_print = false;
+        s.aim.force_magic_bullet = false;
+        if (s.aim.silent_method == Settings::SILENT_RAYCAST ||
+            s.aim.silent_method == Settings::SILENT_MAGIC_BULLET)
+            s.aim.silent_method = Settings::SILENT_VIEWPORT;
+    }
 
     GetInt(kv, "gui.theme", s.gui.theme);
     GetInt(kv, "gui.font", s.gui.font);

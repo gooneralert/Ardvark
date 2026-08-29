@@ -6,6 +6,7 @@
 #include "widgets/widgets.h"
 #include "app/Settings.h"
 #include "core/config/Config.h"
+#include "features/lua/vm/CallGate.h"
 #include "features/mcp/McpBridge.h"
 
 #include <cstdio>
@@ -69,7 +70,54 @@ void ng_tabs::draw_settings_tab(int* menu_kb, bool* kb_skip)
 
 		row_checkbox("custom support", &g_Settings.misc.custom_support);
 
-		row_checkbox("internal print - BANABLE", &g_Settings.lua.internal_print);
+		{
+			bool prev = g_Settings.misc.hybrid_mode;
+			row_checkbox("hybrid mode", &g_Settings.misc.hybrid_mode);
+			if (g_Settings.misc.hybrid_mode != prev)
+			{
+				if (g_Settings.misc.hybrid_mode)
+				{
+					// don't enable until the user confirms the warning modal
+					g_Settings.misc.hybrid_mode = false;
+					ImGui::OpenPopup("hybrid mode");
+				}
+				else
+				{
+					// hybrid off -> kill every gated feature
+					Features::CallGate::Remove();
+					g_Settings.lua.internal_print = false;
+					g_Settings.aim.force_magic_bullet = false;
+					if (g_Settings.aim.silent_method == Settings::SILENT_RAYCAST ||
+					    g_Settings.aim.silent_method == Settings::SILENT_MAGIC_BULLET)
+						g_Settings.aim.silent_method = Settings::SILENT_VIEWPORT;
+				}
+			}
+		}
+
+		ImGui::SetNextWindowSize(ImVec2(380.f, 0.f));
+		if (ImGui::BeginPopupModal("hybrid mode", nullptr, ImGuiWindowFlags_NoCollapse))
+		{
+			ImGui::TextWrapped(
+				"Roblox may start detecting these features soon so use at "
+				"your own risk as you may get banned");
+			ImGui::Spacing();
+
+			ImGui::PushItemWidth(90.f);
+			if (widgets::button("##enable"))
+			{
+				g_Settings.misc.hybrid_mode = true;
+				ImGui::CloseCurrentPopup();
+			}
+			ImGui::SameLine();
+			if (widgets::button("##cancel"))
+				ImGui::CloseCurrentPopup();
+			ImGui::PopItemWidth();
+
+			ImGui::EndPopup();
+		}
+
+		if (g_Settings.misc.hybrid_mode)
+			row_checkbox("internal print - BANABLE", &g_Settings.lua.internal_print);
 
 		row_slider_f("lua tick (ms)", &g_Settings.lua.ticks_ms, 1.f, 15.f, "%.0f");
 

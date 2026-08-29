@@ -570,6 +570,10 @@ namespace Cheat {
 bool  music{ false };   // music player window
             bool  mcp{ false }; // localhost bridge для cursor mcp
             bool  custom_support{ false };
+            // hybrid mode: master gate for the easily-detectable features
+            // (raycast / magic bullet silent, force magic bullet, internal
+            // print, lua call gate). hidden + unusable while off.
+            bool  hybrid_mode{ false };
 
             int   freecam_key{ 0 };
             int   freecam_mode{ 0 };

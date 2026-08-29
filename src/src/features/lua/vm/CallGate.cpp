@@ -1,6 +1,7 @@
 #include "pch.h"
 #include "CallGate.h"
 #include "Reflect.h"
+#include "app/Settings.h"
 #include "core/console/Console.h"
 #include "core/memory/Memory.h"
 #include "core/roblox/offsets/Offsets.h"
@@ -397,7 +398,12 @@ std::vector<std::uint8_t> build_stub(std::uintptr_t state, std::uintptr_t orig)
 
 } // namespace
 
-bool Ready() { return g_gate.installed; }
+// hybrid mode off -> the gate is treated as not installed, lua-side users
+// (Instance.new, gatecall, ...) get "no call gate" / install failure
+bool Ready()
+{
+	return g_gate.installed && Cheat::g_Settings.misc.hybrid_mode;
+}
 int LastFail() { return g_last_fail; }
 std::uint64_t SlotAddress() { return g_gate.slot; }
 std::uint64_t Scratch() { return g_gate.state ? g_gate.state + st_scratch : 0; }
@@ -594,6 +600,13 @@ static bool install_impl(const char* method_name, std::size_t from)
 
 bool Install(const char* method_name)
 {
+	// hybrid mode disabled -> never install / re-install the gate
+	if (!Cheat::g_Settings.misc.hybrid_mode)
+	{
+		g_last_fail = 13;
+		return false;
+	}
+
 	const bool was = g_gate.installed;
 	const bool ok = install_impl(method_name, 0);
 	if (!was)

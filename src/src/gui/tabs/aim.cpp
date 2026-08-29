@@ -137,6 +137,7 @@ void ng_tabs::draw_aim_tab()
 		            &g_Settings.aim.silent_bind, &g_Settings.aim.silent_bind_mode);
 
 		const bool pf_aim = Games::PhantomForces::IsActivePlace();
+		const bool hybrid = g_Settings.misc.hybrid_mode;
 
 		if (pf_aim)
 		{
@@ -150,17 +151,39 @@ void ng_tabs::draw_aim_tab()
 			if (g_Settings.aim.silent_method == Settings::SILENT_PHANTOM)
 				g_Settings.aim.silent_method = Settings::SILENT_RAYCAST;
 
-			static const std::vector<const char*> k_silent = {
+			// raycast / magic bullet silent are hybrid-mode gated: without it
+			// only viewport / mouse stay visible and selectable
+			if (!hybrid &&
+			    (g_Settings.aim.silent_method == Settings::SILENT_RAYCAST ||
+			     g_Settings.aim.silent_method == Settings::SILENT_MAGIC_BULLET))
+				g_Settings.aim.silent_method = Settings::SILENT_VIEWPORT;
+
+			static const char* k_names[] = {
 				"viewport", "mouse", "raycast", "magic bullet"
 			};
+			static const int k_vals[] = {
+				Settings::SILENT_VIEWPORT, Settings::SILENT_MOUSE,
+				Settings::SILENT_RAYCAST,  Settings::SILENT_MAGIC_BULLET
+			};
+			const int count = hybrid ? 4 : 2;
+
 			int method = g_Settings.aim.silent_method;
-			if (method < 0 || method >= Settings::SILENT_PHANTOM)
-				method = Settings::SILENT_RAYCAST;
-			row_combo("silent method", &method, k_silent);
-			g_Settings.aim.silent_method = method;
+			int sel = 0;
+			for (int i = 0; i < count; i++)
+			{
+				if (k_vals[i] == method)
+				{
+					sel = i;
+					break;
+				}
+			}
+
+			std::vector<const char*> items(k_names, k_names + count);
+			row_combo("silent method", &sel, items);
+			g_Settings.aim.silent_method = k_vals[sel];
 		}
 
-		if (!pf_aim && g_Settings.aim.silent_method == Settings::SILENT_RAYCAST)
+		if (!pf_aim && hybrid && g_Settings.aim.silent_method == Settings::SILENT_RAYCAST)
 		{
 			row_checkbox_keybind("force magic bullet", &g_Settings.aim.force_magic_bullet,
 			                    &g_Settings.aim.force_magic_key);
