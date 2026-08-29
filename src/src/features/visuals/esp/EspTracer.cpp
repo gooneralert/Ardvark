@@ -14,10 +14,10 @@ ImVec2 TracerOrigin(float overlay_w, float overlay_h, int mode)
 
 	if (mode == 2)
 	{
-		// курсор как в gelato: GetCursorPos + ScreenToClient(WINDOWSCLIENT),
-		// корректно работает в first-person mouse-lock
+		// слоистый курсор — тот же источник, что у аимбота: мышь игры из памяти
+		// → центр вьюпорта в first person → OS-курсор (gelato _input_cursor)
 		float x = 0.f, y = 0.f;
-		if (Cheat::GameCursor::Cursor(x, y))
+		if (Cheat::GameCursor::AimCursor(x, y))
 			return ImVec2(x, y);
 
 		ImVec2 m = ImGui::GetIO().MousePos;

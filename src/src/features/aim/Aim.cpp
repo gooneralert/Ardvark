@@ -1270,10 +1270,7 @@ namespace Cheat {
 
 			if (aim_fire && !flick_skip && g_Settings.aim.type == 0)
 			{
-				// first person: камера сидит у головы локального персонажа
-				// (в third person дистанция камеры до HRP заметно больше)
-				bool first_person = (sc.cam_pos - sc.local_pos).Length() < 2.0f;
-				AimMouse::Publish(aim_cfg, screen, sc.viewport, first_person);
+				AimMouse::Publish(aim_cfg, screen);
 			}
 
 			else if (aim_fire && !flick_skip && g_Settings.aim.type == 1)

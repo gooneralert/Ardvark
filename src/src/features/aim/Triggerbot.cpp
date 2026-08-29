@@ -81,13 +81,14 @@ key_gate_t key_gate(int key, int mode, bool& toggled, bool& was_down)
     return { down, just };
 }
 
-// курсор — ровно как в gelato (_input_cursor): GetCursorPos + ScreenToClient
-// на окне WINDOWSCLIENT. При mouse-lock (first person) системный курсор держится
-// в центре WINDOWSCLIENT, поэтому позиция всегда в нужном месте и не «уезжает».
+// слоистый курсор — тот же источник, что и у аимбота: мышь игры из памяти
+// (MouseService) → центр вьюпорта в first person → OS-курсор (gelato
+// _input_cursor). При mouse-lock (first person) игра пинит мышь игры в центре,
+// поэтому позиция стабильна и не «уезжает» за скрытым системным курсором.
 bool cursor_screen(Vector2& out)
 {
     float x = 0.f, y = 0.f;
-    if (GameCursor::Cursor(x, y))
+    if (GameCursor::AimCursor(x, y))
     {
         out = Vector2(x, y);
         return true;

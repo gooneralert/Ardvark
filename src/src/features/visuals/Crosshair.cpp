@@ -2,6 +2,7 @@
 #include "Crosshair.h"
 
 #include "app/Settings.h"
+#include "features/GameCursor.h"
 #include "imgui.h"
 #include "renderer/Renderer.h"
 
@@ -63,6 +64,13 @@ ImVec2 OverlaySize()
 ImVec2 CursorClient()
 {
     ImVec2 sz = OverlaySize();
+
+    // слоистый курсор — тот же источник, что у аимбота: мышь игры из памяти
+    // → центр вьюпорта в first person → OS-курсор
+    float ax = 0.f, ay = 0.f;
+    if (GameCursor::AimCursor(ax, ay))
+        return ImVec2(ax, ay);
+
     POINT p{};
     if (!GetCursorPos(&p))
         return ImVec2(sz.x * 0.5f, sz.y * 0.5f);

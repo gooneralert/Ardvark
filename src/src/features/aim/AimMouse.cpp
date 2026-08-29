@@ -4,11 +4,6 @@
 
 #include "features/GameCursor.h"
 
-#include "core/globals/Globals.h"
-#include "core/memory/Memory.h"
-#include "core/roblox/offsets/Offsets.h"
-#include "core/roblox/classes/Classes.h"
-
 #include <Windows.h>
 #include <algorithm>
 #include <atomic>
@@ -114,74 +109,12 @@ namespace Cheat {
             bool s_has_target = false;
             std::atomic<bool> s_worker_started{ false };
 
-            // вьюпорт + first-person флаг (публикуются из рендер-потока каждый кадр)
-            std::atomic<float> s_vp_w{ 1920.0f };
-            std::atomic<float> s_vp_h{ 1080.0f };
-            std::atomic<bool>  s_first_person{ false };
-
-            // gelato c_mouse_service::get_mouse_position — курсор САМОЙ игры из памяти
-            // (MouseService + MousePosition). В first person / mouse-lock Roblox пинит
-            // его в центр вьюпорта, поэтому он не дрейфует за скрытым системным
-            // курсором, который игра двигает «под капотом».
-            std::uint64_t g_mouse_service = 0;
-
-            std::uint64_t resolve_mouse_service()
-            {
-                if (g_mouse_service && g_Memory.IsValid(g_mouse_service))
-                    return g_mouse_service;
-
-                if (!Globals::InstanceDataModel.address ||
-                    !g_Memory.IsValid(Globals::InstanceDataModel.address))
-                    return 0;
-
-                auto ms = Instance(Globals::InstanceDataModel.address).FindFirstChild("MouseService");
-                if (!ms || !g_Memory.IsValid(ms->address))
-                    return 0;
-
-                g_mouse_service = ms->address;
-                return g_mouse_service;
-            }
-
-            bool game_mouse_position(float& out_x, float& out_y)
-            {
-                auto ms = resolve_mouse_service();
-                if (!ms)
-                    return false;
-
-                auto pos = g_Memory.Read<Vector2>(ms + ::MouseService::MousePosition);
-                if (!std::isfinite(pos.x) || !std::isfinite(pos.y))
-                    return false;
-
-                // мусор/мусорный офсет отсекаем границами вьюпорта
-                float vw = s_vp_w.load(std::memory_order_relaxed);
-                float vh = s_vp_h.load(std::memory_order_relaxed);
-                if (pos.x < -8.0f || pos.y < -8.0f ||
-                    pos.x > vw + 8.0f || pos.y > vh + 8.0f)
-                    return false;
-
-                out_x = pos.x;
-                out_y = pos.y;
-                return true;
-            }
-
             // gelato get_cursor: ОДИН источник курсора и для выбора цели, и для движения.
-            // 1) мышь игры из памяти (стабильна в first person / mouse-lock);
-            // 2) first person → прицел всегда в центре вьюпорта (игра пинит мышь туда);
-            // 3) фолбэк — gelato _input_cursor: GetCursorPos + ScreenToClient на
-            //    WINDOWSCLIENT.
+            // Слои в GameCursor::AimCursor: мышь игры из памяти → центр вьюпорта в
+            // first person → OS-курсор (gelato _input_cursor).
             bool get_cursor(float& out_x, float& out_y)
             {
-                if (game_mouse_position(out_x, out_y))
-                    return true;
-
-                if (s_first_person.load(std::memory_order_relaxed))
-                {
-                    out_x = s_vp_w.load(std::memory_order_relaxed) * 0.5f;
-                    out_y = s_vp_h.load(std::memory_order_relaxed) * 0.5f;
-                    return true;
-                }
-
-                return GameCursor::Cursor(out_x, out_y);
+                return GameCursor::AimCursor(out_x, out_y);
             }
 
             // gelato _input_move_mouse — 1:1
@@ -353,19 +286,13 @@ namespace Cheat {
             }
 
             // рендер-поток: публикуем цель, worker подхватит на ближайшем тике
-            void Publish(const Config& cfg, const Vector2& best_screen,
-                         const Vector2& viewport, bool first_person)
+            void Publish(const Config& cfg, const Vector2& best_screen)
             {
                 ensure_worker();
-                {
-                    std::lock_guard<std::mutex> lock(s_state_mutex);
-                    s_published_cfg = cfg;
-                    s_published_screen = best_screen;
-                    s_has_target = true;
-                }
-                s_vp_w.store(viewport.x, std::memory_order_relaxed);
-                s_vp_h.store(viewport.y, std::memory_order_relaxed);
-                s_first_person.store(first_person, std::memory_order_relaxed);
+                std::lock_guard<std::mutex> lock(s_state_mutex);
+                s_published_cfg = cfg;
+                s_published_screen = best_screen;
+                s_has_target = true;
             }
 
             // цель потеряна / ключ отпущен — worker сбросит лок-стейт на следующем тике

@@ -5,6 +5,7 @@
 #include "core/memory/Memory.h"
 #include "core/roblox/offsets/Offsets.h"
 #include "core/roblox/classes/Classes.h"
+#include "features/GameCursor.h"
 #include "renderer/Renderer.h"
 
 #include <Windows.h>
@@ -123,7 +124,19 @@ bool mouse_in_viewport(const Vector2& dims, Vector2& out)
     }
 
     POINT pt{};
-    if (!GetCursorPos(&pt) || !ScreenToClient(hwnd, &pt))
+    bool have_pt = false;
+
+    // слоистый курсор — тот же источник, что у аимбота: мышь игры из памяти
+    // → центр вьюпорта в first person → OS-курсор
+    float gx = 0.f, gy = 0.f;
+    if (GameCursor::AimCursor(gx, gy))
+    {
+        pt.x = (LONG)gx;
+        pt.y = (LONG)gy;
+        have_pt = true;
+    }
+
+    if (!have_pt && (!GetCursorPos(&pt) || !ScreenToClient(hwnd, &pt)))
     {
         return false;
     }

@@ -1,5 +1,6 @@
 #include "pch.h"
 #include "AimFov.h"
+#include "features/GameCursor.h"
 #include "renderer/Renderer.h"
 #include "imgui.h"
 #include <Windows.h>
@@ -28,8 +29,19 @@ namespace AimFov {
 
 	ImVec2 CursorClient()
 	{
-		POINT p{};
 		ImVec2 sz = OverlaySize();
+
+		// слоистый курсор — тот же источник, что у аимбота: мышь игры из памяти
+		// → центр вьюпорта в first person → OS-курсор
+		float ax = 0.f, ay = 0.f;
+		if (GameCursor::AimCursor(ax, ay))
+		{
+			if (ax >= 0.f && ay >= 0.f && ax <= sz.x && ay <= sz.y)
+				return ImVec2(ax, ay);
+			return ImVec2(sz.x * 0.5f, sz.y * 0.5f);
+		}
+
+		POINT p{};
 		if (!GetCursorPos(&p))
 		{
 			return ImVec2(sz.x * 0.5f, sz.y * 0.5f);

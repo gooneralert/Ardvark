@@ -14,8 +14,7 @@ namespace Cheat {
         // публикует цель, вся математика движения крутится в worker-потоке.
         namespace AimMouse {
             // рендер-поток: опубликовать цель (экранная точка) на этот кадр
-            void Publish(const Settings::AimbotConfig& cfg, const Vector2& best_screen,
-                         const Vector2& viewport, bool first_person);
+            void Publish(const Settings::AimbotConfig& cfg, const Vector2& best_screen);
 
             // цель потеряна / ключ отпущен — сброс лока (аналог gelato clear_target)
             void Reset();
