@@ -351,7 +351,7 @@ namespace Cheat {
             int  type{ 0 }; // 0 mouse, 1 camera, 2 off (без аимбота, silent отдельно)
             int  silent_method{ SILENT_RAYCAST };
             bool silent_enabled{ true }; // всегда on, рубит silent key
-            int  silent_bind{ 0 }; // 0 = тот же что aim.bind
+            int  silent_bind{ 0 }; // 0 = нет бинда — silent выключен
             int  silent_bind_mode{ 0 };
 
             bool force_magic_bullet{ false };

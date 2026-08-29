@@ -33,6 +33,7 @@ inline void WriteAimCfg(std::ostringstream& out, const char* prefix, const Setti
     PutFloat(out, k("hitchance"), c.hitchance);
     PutFloat(out, k("smooth_x"), c.smooth_x);
     PutFloat(out, k("smooth_y"), c.smooth_y);
+    PutBool(out, k("smooth_enabled"), c.smooth_enabled);
     PutBool(out, k("humanize"), c.humanize);
     PutFloat(out, k("reaction_ms"), c.reaction_ms);
     PutBool(out, k("sticky"), c.sticky);
@@ -77,6 +78,7 @@ inline void ReadAimCfg(const KV& kv, const char* prefix, Settings::AimbotConfig&
     GetFloat(kv, k("hitchance"), c.hitchance);
     GetFloat(kv, k("smooth_x"), c.smooth_x);
     GetFloat(kv, k("smooth_y"), c.smooth_y);
+    GetBool(kv, k("smooth_enabled"), c.smooth_enabled);
     GetBool(kv, k("humanize"), c.humanize);
     GetFloat(kv, k("reaction_ms"), c.reaction_ms);
     GetBool(kv, k("sticky"), c.sticky);

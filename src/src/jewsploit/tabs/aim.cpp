@@ -34,6 +34,8 @@ void ng_tabs::draw_aim_tab()
 
 		if (g_Settings.aim.type == 0 || g_Settings.aim.type == 1)
 		{
+			ng::checkbox("smoothing", &cfg.smooth_enabled);
+			gap();
 			row_slider("##smooth_x", "smoothness x", &cfg.smooth_x, 0.1f, 5.0f);
 			gap();
 			row_slider("##smooth_y", "smoothness y", &cfg.smooth_y, 0.1f, 5.0f);

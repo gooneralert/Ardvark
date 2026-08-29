@@ -1,6 +1,7 @@
 #include "pch.h"
 #define NOMINMAX
 #include "Aim.h"
+#include "AimMouse.h"
 #include "RaycastSilent.h"
 #include "MagicBullet.h"
 #include "ViewportSilent.h"
@@ -46,72 +47,8 @@ namespace Cheat {
             Vector3 s_aim_point{};
             std::uint32_t s_rng = 0xA341316Cu;
 
-            // --- layuh mouselock helpers ---
-            struct MouseSettings {
-                float baseDPI = 800.0f;
-                float currentDPI = 800.0f;
-                float dpiScaleFactor = 1.0f;
-                bool dpiAutoDetected = false;
-
-                void updateDPIScale() {
-                    dpiScaleFactor = baseDPI / currentDPI;
-                }
-
-                float getDPIAdjustedSensitivity() const {
-                    return dpiScaleFactor;
-                }
-            } s_mouse_settings;
-
-            bool detect_mouse_dpi()
-            {
-                HWND robloxWindow = FindWindowA(nullptr, "Roblox");
-                if (!robloxWindow)
-                    return false;
-
-                HDC hdc = GetDC(robloxWindow);
-                const int dpiX = GetDeviceCaps(hdc, LOGPIXELSX);
-                const int dpiY = GetDeviceCaps(hdc, LOGPIXELSY);
-                ReleaseDC(robloxWindow, hdc);
-
-                HKEY hkey;
-                DWORD sensitivity = 10;
-                DWORD size = sizeof(DWORD);
-                if (RegOpenKeyExA(HKEY_CURRENT_USER, "Control Panel\\Mouse", 0,
-                                  KEY_READ, &hkey) == ERROR_SUCCESS)
-                {
-                    RegQueryValueExA(hkey, "MouseSensitivity", nullptr, nullptr,
-                                     (LPBYTE)&sensitivity, &size);
-                    RegCloseKey(hkey);
-                }
-
-                const float estimatedDPI =
-                    800.0f * (sensitivity / 10.0f) * (dpiX / 96.0f);
-                s_mouse_settings.currentDPI =
-                    std::max(400.0f, std::min(3200.0f, estimatedDPI));
-                s_mouse_settings.updateDPIScale();
-                s_mouse_settings.dpiAutoDetected = true;
-                return true;
-            }
-
-            // easing из layuh aimbot (linear по умолчанию)
-            static float apply_easing(float t, int style)
-            {
-                if (t < 0.0f) t = 0.0f;
-                if (t > 1.0f) t = 1.0f;
-                switch (style)
-                {
-                case 2:  return t * t;                                                              // EaseInQuad
-                case 3:  return t * (2.0f - t);                                                     // EaseOutQuad
-                case 4:  return (t < 0.5f) ? (2.0f * t * t) : (1.0f - std::pow(-2.0f * t + 2.0f, 2.0f) / 2.0f);
-                case 5:  return t * t * t;                                                          // EaseInCubic
-                case 6:  return 1.0f - std::pow(1.0f - t, 3.0f);                                    // EaseOutCubic
-                case 7:  return (t < 0.5f) ? (4.0f * t * t * t) : (1.0f - std::pow(-2.0f * t + 2.0f, 3.0f) / 2.0f);
-                case 8:  return 1.0f - std::cos((t * 3.14159265f) / 2.0f);                          // EaseInSine
-                case 9:  return std::sin((t * 3.14159265f) / 2.0f);                                 // EaseOutSine
-                case 10: return -(std::cos(3.14159265f * t) - 1.0f) / 2.0f;                         // EaseInOutSine
-                default: return t;                                                                  // None/Linear
-                }
-            }
+            // (layuh MouseSettings / detect_mouse_dpi / apply_easing удалены —
+            //  mouse aimbot теперь порт gelato, см. AimMouse.h)
 
             // --- arsenal flick fix state (layuh) ---
             bool          s_flick_has_baseline = false;
@@ -124,7 +61,7 @@ namespace Cheat {
             std::uint64_t s_flick_last_ms = 0;
             std::uint64_t s_flick_target = 0;
 
-            // объявлено раньше apply_mouse — используется в select_target (якорь по курсору)
+            // используется в select_target (якорь по курсору)
             bool current_cursor_overlay(float& out_x, float& out_y);
 
             // restore курсор на baseline (для mouse)
@@ -1013,6 +950,11 @@ namespace Cheat {
             // клиентскую область игры 1:1 — это то же самое пространство, что layuh).
             bool current_cursor_overlay(float& out_x, float& out_y)
             {
+                // сначала мышь игры из памяти (MouseService) — стабильна в first person,
+                // когда системный курсор скрыт и дрейфует; тот же источник, что и движение
+                if (AimMouse::CursorPos(out_x, out_y))
+                    return true;
+
                 POINT p{};
                 if (!GetCursorPos(&p))
                     return false;
@@ -1024,59 +966,8 @@ namespace Cheat {
                 return true;
             }
 
-            // layuh performMouseAimbot — точный порт
-            void apply_mouse(const Config& cfg, const Vector2& target_screen)
-            {
-                if (!s_mouse_settings.dpiAutoDetected)
-                    detect_mouse_dpi();
-
-                float cursorX, cursorY;
-                if (!current_cursor_overlay(cursorX, cursorY))
-                    return;
-
-                float deltaX = target_screen.x - cursorX;
-                float deltaY = target_screen.y - cursorY;
-
-                if (cfg.smooth_enabled)
-                {
-                    // layuh: 1/(smooth*0.05) → наш слайдер 0.1..5 = layuh 1..50
-                    float baseX = std::clamp(1.0f / (cfg.smooth_x * 0.5f), 0.01f, 1.0f);
-                    float baseY = std::clamp(1.0f / (cfg.smooth_y * 0.5f), 0.01f, 1.0f);
-                    float easedX = apply_easing(baseX, 1); // linear (layuh default style)
-                    float easedY = apply_easing(baseY, 1);
-
-                    const float dpi = s_mouse_settings.getDPIAdjustedSensitivity();
-                    const float userSens = 1.0f; // layuh mouse_sensitivity default
-                    easedX = std::clamp(easedX * dpi * userSens, 0.0f, 1.0f);
-                    easedY = std::clamp(easedY * dpi * userSens, 0.0f, 1.0f);
-
-                    deltaX *= easedX;
-                    deltaY *= easedY;
-                }
-                // else: smoothing выключен — сырой инстант-двиг, как в layuh
-
-                // жёсткий предохранитель на один кадр, чтобы мышь не «улетала»
-                const float maxMovePerFrame = 80.0f;
-                if (deltaX >  maxMovePerFrame) deltaX =  maxMovePerFrame;
-                if (deltaX < -maxMovePerFrame) deltaX = -maxMovePerFrame;
-                if (deltaY >  maxMovePerFrame) deltaY =  maxMovePerFrame;
-                if (deltaY < -maxMovePerFrame) deltaY = -maxMovePerFrame;
-
-                // минимальный порог — без микро-джиттера
-                const float minMovementThreshold = 0.5f;
-                if (!std::isfinite(deltaX) || !std::isfinite(deltaY))
-                    return;
-                if (fabsf(deltaX) <= minMovementThreshold &&
-                    fabsf(deltaY) <= minMovementThreshold)
-                    return;
-
-                INPUT input{ 0 };
-                input.type = INPUT_MOUSE;
-                input.mi.dx = static_cast<LONG>(deltaX);
-                input.mi.dy = static_cast<LONG>(deltaY);
-                input.mi.dwFlags = MOUSEEVENTF_MOVE;
-                SendInput(1, &input, sizeof(input));
-            }
+            // (layuh apply_mouse удалён — mouse aimbot теперь точный порт gelato,
+            //  см. AimMouse.cpp: alpha/make_alpha/humanize jitter/move_mouse)
 
             void apply_camera(const Config& cfg, const Scene& sc, const Vector3& target_world)
             {
@@ -1208,33 +1099,29 @@ namespace Cheat {
 				s_toggled = false;
 			}
 
-			// silent key (0 = тот же aim.bind, шарим состояние)
+			// silent key: без назначенного бинда silent ВЫКЛЮЧЕН.
+			// (раньше 0 = «общий бинд с аимом» — silent работал всегда вместе
+			//  с аимботом и дёргал камеру; теперь под silent нужен свой бинд)
 			bool silent_on = false;
 			{
 				int sk = g_Settings.aim.silent_bind;
 				int sm = g_Settings.aim.silent_bind_mode;
+
 				if (sk == 0)
 				{
-					sk = g_Settings.aim.bind;
-					sm = g_Settings.aim.bind_mode;
-				}
-
-				if (sk != 0 && g_Settings.aim.silent_bind == 0 &&
-				    g_Settings.aim.type != 2)
-				{
-					// один бинд с аимом — не дёргаем второй toggle
-					silent_on = aim_on;
-					s_silent_was = s_was_pressed;
-					s_silent_tog = s_toggled;
+					// бинд не назначен — silent off
+					s_silent_was = false;
+					s_silent_tog = false;
 				}
 
 				else if (sm == 2)
 				{
+					// always-on (явный выбор юзера при назначенном бинде)
 					silent_on = true;
 					s_silent_was = false;
 				}
 
-				else if (sk != 0)
+				else
 				{
 					bool pressed = (GetAsyncKeyState(sk) & 0x8000) != 0;
 					if (sm == 1)
@@ -1250,12 +1137,6 @@ namespace Cheat {
 					}
 					s_silent_was = pressed;
 				}
-
-				else
-				{
-					s_silent_was = false;
-					s_silent_tog = false;
-				}
 			}
 
             if (!aim_on && !silent_on)
@@ -1266,6 +1147,7 @@ namespace Cheat {
                 MagicBullet::SetActive(false);
                 clear_silents();
                 release_cursor_clip();
+                AimMouse::Reset();
                 flick_reset_state();
                 return;
             }
@@ -1278,6 +1160,7 @@ namespace Cheat {
                 MagicBullet::SetActive(false);
                 clear_silents();
                 release_cursor_clip();
+                AimMouse::Reset();
                 flick_reset_state();
                 return;
             }
@@ -1294,6 +1177,7 @@ namespace Cheat {
                 MagicBullet::SetActive(false);
                 clear_silents();
                 release_cursor_clip();
+                AimMouse::Reset();
                 flick_reset_state();
                 return;
             }
@@ -1309,6 +1193,7 @@ namespace Cheat {
 				MagicBullet::SetActive(false);
 				clear_silents();
 				release_cursor_clip();
+				AimMouse::Reset();
 				return;
 			}
 
@@ -1385,18 +1270,23 @@ namespace Cheat {
 
 			if (aim_fire && !flick_skip && g_Settings.aim.type == 0)
 			{
-				apply_mouse(aim_cfg, screen);
+				// first person: камера сидит у головы локального персонажа
+				// (в third person дистанция камеры до HRP заметно больше)
+				bool first_person = (sc.cam_pos - sc.local_pos).Length() < 2.0f;
+				AimMouse::Publish(aim_cfg, screen, sc.viewport, first_person);
 			}
 
 			else if (aim_fire && !flick_skip && g_Settings.aim.type == 1)
 			{
 				release_cursor_clip();
+				AimMouse::Reset();
 				apply_camera(aim_cfg, sc, world);
 			}
 
 			else if (!aim_fire)
 			{
 				release_cursor_clip();
+				AimMouse::Reset();
 			}
 
 			// успешный кадр аима — кэшируем last-good и позицию цели

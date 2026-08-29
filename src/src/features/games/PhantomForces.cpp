@@ -86,9 +86,9 @@ std::uint64_t LocalPlayerAddr()
 
 std::string ReadGuiText(std::uint64_t label)
 {
-    // ::GuiObject::Text was removed in the updated offsets header — disabled.
-    (void)label;
-    return {};
+    if (!g_Memory.IsValid(label))
+        return {};
+    return g_Memory.ReadString(label + ::TextLabel::Text);
 }
 
 Color3 ReadPartColor(std::uint64_t part)
@@ -184,10 +184,19 @@ std::string ReadModelBillboardName(const Instance& model)
 
 bool ReadModelBillboardColor(const Instance& model, Color3& out)
 {
-    // ::GuiObject::TextColor3 was removed in the updated offsets header — disabled.
-    (void)model;
-    (void)out;
-    return false;
+    const std::uint64_t label = FindBillboardTextLabel(model);
+    if (!g_Memory.IsValid(label))
+        return false;
+    out = g_Memory.Read<Color3>(label + ::TextLabel::TextColor3);
+    if (!std::isfinite(out.r) || !std::isfinite(out.g) || !std::isfinite(out.b))
+        return false;
+    if (out.r < 0.f) out.r = 0.f;
+    if (out.r > 1.f) out.r = 1.f;
+    if (out.g < 0.f) out.g = 0.f;
+    if (out.g > 1.f) out.g = 1.f;
+    if (out.b < 0.f) out.b = 0.f;
+    if (out.b > 1.f) out.b = 1.f;
+    return true;
 }
 
 // PF enemy nametag ≈ RGB(255, 10, 20); тиммейты — cyan
@@ -673,10 +682,13 @@ bool IsActivePlace()
     // only real Phantom Forces is ever treated as PF.
     const bool id_match = Globals::InstanceDataModel.GetPlaceId() == kPlaceId;
     const bool on = id_match && HasPfWorkspaceStructure();
-    static bool s_was_on = false;
-    if (on && !s_was_on)
+    // PF team check overrides the default teamcheck: the universal Player.Team
+    // comparison can't work here (PF teams are Workspace.Players folders), so
+    // while PF is active the PF team check is always applied — same override
+    // model as the silent aim method (SILENT_PHANTOM). Forcing every call, not
+    // just on transition, so it can't be turned off while in PF.
+    if (on)
         g_Settings.misc.teamcheck = true;
-    s_was_on = on;
     if (!on) {
         g_sticky_side = SideUnknown;
         g_sticky_team_folder = 0;

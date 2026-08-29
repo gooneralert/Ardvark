@@ -240,6 +240,9 @@
     <ClInclude Include="src\features\aim\Aim.h">
       <Filter>src\features\aim</Filter>
     </ClInclude>
+    <ClInclude Include="src\features\aim\AimMouse.h">
+      <Filter>src\features\aim</Filter>
+    </ClInclude>
     <ClInclude Include="src\features\aim\RaycastSilent.h">
       <Filter>src\features\aim</Filter>
     </ClInclude>
@@ -558,6 +561,9 @@
       <Filter>src\features\visuals</Filter>
     </ClCompile>
     <ClCompile Include="src\features\aim\Aim.cpp">
+      <Filter>src\features\aim</Filter>
+    </ClCompile>
+    <ClCompile Include="src\features\aim\AimMouse.cpp">
       <Filter>src\features\aim</Filter>
     </ClCompile>
     <ClCompile Include="src\features\aim\RaycastSilent.cpp">
