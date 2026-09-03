@@ -21,17 +21,16 @@
 #   -TheosUrl   : URL for theos offsets (default: https://offsets.imtheo.lol/offsets.hpp)
 #   -JonahUrl   : explicit Jonah URL (default: auto-built from version)
 #                 a local file path is also accepted (e.g. C:\offsets\jonah.h)
-#   -UseLocalJonah : switch that skips downloading Jonah entirely and instead
-#                 reads the local src\core\roblox\offsets\jonah_offsets.h file
-#                 next to this script. Takes precedence over -JonahUrl.
 #   -Version    : explicit version string (default: extracted from theos)
+#
+# Automatic fallback: if the Jonah download fails, this script falls back to
+# the local src\core\roblox\offsets\jonah_offsets.h shipped next to it.
 
 [CmdletBinding()]
 param(
     [string]$OutputFile   = 'src\core\roblox\offsets\Offsets.h',
     [string]$TheosUrl     = 'https://offsets.imtheo.lol/offsets.hpp',
     [string]$JonahUrl     = '',
-    [switch]$UseLocalJonah,
     [string]$Version      = ''
 )
 
@@ -95,15 +94,7 @@ if (-not $JonahUrl -and -not $version) {
 }
 
 # Build Jonah URL
-if ($UseLocalJonah) {
-    # Local jonah_offsets.h shipped inside this src folder - no download.
-    $localJonah = Join-Path (Split-Path -Parent $MyInvocation.MyCommand.Path) 'src\core\roblox\offsets\jonah_offsets.h'
-    if (-not (Test-Path -LiteralPath $localJonah -PathType Leaf)) {
-        throw "UseLocalJonah: local Jonah file not found: $localJonah"
-    }
-    $primaryUrl = $localJonah
-    Write-Host "Using local Jonah file (download skipped): $primaryUrl"
-} elseif ($JonahUrl) {
+if ($JonahUrl) {
     Write-Host "Using explicit Jonah URL: $JonahUrl"
     $primaryUrl = $JonahUrl
 } elseif ($version) {
@@ -121,8 +112,19 @@ if ($primaryUrl -match '^[a-zA-Z]+://') {
     Write-Host "Downloading Jonah offsets (secondary source) from $primaryUrl ..."
     $tmpJonah = Join-Path $env:TEMP 'offsets_jonah.h'
     curl.exe -L --fail --silent --show-error -A "Mozilla/5.0" -o $tmpJonah $primaryUrl
-    if ($LASTEXITCODE -ne 0) { throw "Failed to download Jonah offsets (curl exit code $LASTEXITCODE)." }
-    $jonahContent = Get-Content -Path $tmpJonah -Raw
+    if ($LASTEXITCODE -ne 0) {
+        # Download failed - fall back to the local jonah_offsets.h shipped with src.
+        $localJonah = Join-Path (Split-Path -Parent $MyInvocation.MyCommand.Path) 'src\core\roblox\offsets\jonah_offsets.h'
+        if (Test-Path -LiteralPath $localJonah -PathType Leaf) {
+            Write-Host "[!] Failed to download Jonah offsets (curl exit code $LASTEXITCODE)."
+            Write-Host "[!] Falling back to local file: $localJonah"
+            $jonahContent = Get-Content -Path $localJonah -Raw
+        } else {
+            throw "Failed to download Jonah offsets (curl exit code $LASTEXITCODE) and no local fallback found at $localJonah."
+        }
+    } else {
+        $jonahContent = Get-Content -Path $tmpJonah -Raw
+    }
 } else {
     # Local file: try as-is, then relative to this script's directory.
     $jonahFile = $primaryUrl
