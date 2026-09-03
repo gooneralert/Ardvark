@@ -11,6 +11,8 @@
 #   -TheosUrl   : URL for theos offsets (default: https://offsets.imtheo.lol/offsets.hpp)
 #   -JonahUrl   : explicit Jonah URL (default: auto-built from version)
 #                        a local file path is also accepted (e.g. "C:\offsets\jonah.h")
+#   -UseLocalJonah : switch - read the local jonah_offsets.h inside src instead of
+#                        downloading Jonah (forwarded to Part 2)
 #   -Version    : explicit version string (default: extracted from theos)
 
 [CmdletBinding()]
@@ -18,6 +20,7 @@ param(
     [string]$OutputFile = 'src\src\core\roblox\offsets\Offsets.h',
     [string]$TheosUrl     = 'https://offsets.imtheo.lol/offsets.hpp',
     [string]$JonahUrl     = '',
+    [switch]$UseLocalJonah,
     [string]$Version      = ''
 )
 
@@ -89,5 +92,5 @@ Write-Host '[+] Part 1 complete - src installed.'
 Write-Host "[*] Booting Part 2 from installed src: $part2"
 Write-Host ''
 
-& $part2 -OutputFile $OutputFile -TheosUrl $TheosUrl -JonahUrl $JonahUrl -Version $Version
+& $part2 -OutputFile $OutputFile -TheosUrl $TheosUrl -JonahUrl $JonahUrl -UseLocalJonah:$UseLocalJonah -Version $Version
 

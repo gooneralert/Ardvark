@@ -21,13 +21,17 @@
 #   -TheosUrl   : URL for theos offsets (default: https://offsets.imtheo.lol/offsets.hpp)
 #   -JonahUrl   : explicit Jonah URL (default: auto-built from version)
 #                 a local file path is also accepted (e.g. C:\offsets\jonah.h)
+#   -UseLocalJonah : switch that skips downloading Jonah entirely and instead
+#                 reads the local src\core\roblox\offsets\jonah_offsets.h file
+#                 next to this script. Takes precedence over -JonahUrl.
 #   -Version    : explicit version string (default: extracted from theos)
 
 [CmdletBinding()]
 param(
     [string]$OutputFile   = 'src\core\roblox\offsets\Offsets.h',
     [string]$TheosUrl     = 'https://offsets.imtheo.lol/offsets.hpp',
-    [string]$JonahUrl     = 'C:\Users\blake\Downloads\Ardvark-new\src\src\core\roblox\offsets\jonah_offsets.h',
+    [string]$JonahUrl     = '',
+    [switch]$UseLocalJonah,
     [string]$Version      = ''
 )
 
@@ -91,7 +95,15 @@ if (-not $JonahUrl -and -not $version) {
 }
 
 # Build Jonah URL
-if ($JonahUrl) {
+if ($UseLocalJonah) {
+    # Local jonah_offsets.h shipped inside this src folder - no download.
+    $localJonah = Join-Path (Split-Path -Parent $MyInvocation.MyCommand.Path) 'src\core\roblox\offsets\jonah_offsets.h'
+    if (-not (Test-Path -LiteralPath $localJonah -PathType Leaf)) {
+        throw "UseLocalJonah: local Jonah file not found: $localJonah"
+    }
+    $primaryUrl = $localJonah
+    Write-Host "Using local Jonah file (download skipped): $primaryUrl"
+} elseif ($JonahUrl) {
     Write-Host "Using explicit Jonah URL: $JonahUrl"
     $primaryUrl = $JonahUrl
 } elseif ($version) {
