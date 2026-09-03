@@ -27,7 +27,7 @@
 param(
     [string]$OutputFile   = 'src\core\roblox\offsets\Offsets.h',
     [string]$TheosUrl     = 'https://offsets.imtheo.lol/offsets.hpp',
-    [string]$JonahUrl     = '',
+    [string]$JonahUrl     = 'C:\Users\blake\Downloads\Ardvark-new\src\src\core\roblox\offsets\jonah_offsets.h',
     [string]$Version      = ''
 )
 
