@@ -18,6 +18,10 @@ namespace glass
     // blur radius 0..100 — (kept for API compatibility; DWM acrylic blur is fixed)
     void set_blur(float f);
 
+    // glass tint color (rgb 0..1) + tint strength (a 0..1).
+    // rgb drives the DWM acrylic tint / wash color, a scales how much of it is applied.
+    void set_tint(float r, float g, float b, float a);
+
     // sizes/positions the OS-level acrylic backdrop window to the menu rect each frame
     // (legacy single-window entry point; internally uses add_rect/commit)
     void set_menu_rect(float x, float y, float w, float h);

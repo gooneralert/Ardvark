@@ -9,33 +9,23 @@
 
 #include <vector>
 
-void ng_tabs::draw_trigger_tab()
+// triggerbot rows (rendered inside the combat tab's trigger panel)
+void ng_tabs::draw_trigger_rows()
 {
     using namespace Cheat;
     using namespace ng_tabs;
 
     Settings::TriggerbotConfig& cfg = g_Settings.triggerbot;
 
-    float left_w = 0.f, right_w = 0.f, h = 0.f;
-    begin_columns(&left_w, &right_w, &h);
+    row_keybind("##trigger_kb", "trigger key", &cfg.key, &cfg.key_mode);
+    row_checkbox("enabled", &cfg.enabled);
 
-    begin_panel("##trigger_child1", left_w, h);
-    {
-        row_keybind("##trigger_kb", "trigger key", &cfg.key, &cfg.key_mode);
-        row_checkbox("enabled", &cfg.enabled);
+    row_slider_f("delay (ms)", &cfg.delay_ms, 1.0f, 300.0f, "%.0f");
+    row_slider_f("click duration", &cfg.click_duration_ms, 1.0f, 500.0f, "%.0f");
+    row_slider_f("hit chance", &cfg.hitchance, 1.0f, 100.0f, "%.0f");
+    row_slider_f("max distance", &cfg.max_distance, 1.0f, 2000.0f, "%.0f");
 
-        row_slider_f("delay (ms)", &cfg.delay_ms, 1.0f, 300.0f, "%.0f");
-        row_slider_f("click duration", &cfg.click_duration_ms, 1.0f, 500.0f, "%.0f");
-        row_slider_f("hit chance", &cfg.hitchance, 1.0f, 100.0f, "%.0f");
-        row_slider_f("max distance", &cfg.max_distance, 1.0f, 2000.0f, "%.0f");
-    }
-    end_panel();
-
-    ImGui::SameLine(0.f, panel_gap);
-
-    begin_panel("##trigger_right", right_w, h);
-    {
-        // выбор части тела: 0 whole, 1 head, 2 torso, 3 arms, 4 legs, 5 hrp
+    // выбор части тела: 0 whole, 1 head, 2 torso, 3 arms, 4 legs, 5 hrp
         static const std::vector<const char*> k_hitboxes = {
             "whole body", "head", "torso", "arms", "legs", "hrp"
         };
@@ -76,6 +66,4 @@ void ng_tabs::draw_trigger_tab()
             row_slider_f("pred y", &cfg.prediction_y, 0.0f, 3.0f, "%.2f");
             row_checkbox("draw prediction", &cfg.draw_prediction);
         }
-    }
-    end_panel();
 }

@@ -645,6 +645,9 @@ bool Save(const std::string& name)
         std::snprintf(key, sizeof(key), "gui.watermark_fields_%d", i);
         PutBool(out, key, s.gui.watermark_fields[i]);
     }
+    PutF4(out, "gui.tint", s.gui.tint);
+    PutFloat(out, "gui.frost", s.gui.frost);
+    PutFloat(out, "gui.blur", s.gui.blur);
     PutF4(out, "gui.accent", s.gui.accent);
     PutF4(out, "gui.text_active", s.gui.text_active);
     PutF4(out, "gui.text_inactive", s.gui.text_inactive);
@@ -1073,6 +1076,9 @@ bool Load(const std::string& name)
         std::snprintf(key, sizeof(key), "gui.watermark_fields_%d", i);
         GetBool(kv, key, s.gui.watermark_fields[i]);
     }
+    GetF4(kv, "gui.tint", s.gui.tint);
+    GetFloat(kv, "gui.frost", s.gui.frost);
+    GetFloat(kv, "gui.blur", s.gui.blur);
     GetF4(kv, "gui.accent", s.gui.accent);
     GetF4(kv, "gui.text_active", s.gui.text_active);
     GetF4(kv, "gui.text_inactive", s.gui.text_inactive);

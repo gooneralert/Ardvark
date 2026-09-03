@@ -124,6 +124,8 @@ void ng_tabs::draw_settings_tab(int* menu_kb, bool* kb_skip)
 		row_slider_f("glass blur", &g_Settings.gui.blur, 0.f, 100.f, "%.0f");
 
 		row_slider_f("glass frost", &g_Settings.gui.frost, 0.f, 1.f, "%.2f");
+
+		row_color("glass tint", g_Settings.gui.tint);
 	}
 	end_panel();
 

@@ -25,12 +25,13 @@ namespace ng_tabs
 		if (out_h) *out_h = avail.y;
 	}
 
-	bool begin_panel(const char* id, float width, float height)
+	bool begin_panel(const char* id, float width, float height, bool scrollable)
 	{
 		ImGui::PushStyleColor(ImGuiCol_Border, k_border);
 		ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.f, 0.f));
-		ImGui::PushStyleVar(ImGuiStyleVar_ScrollbarSize, 0.f);
-		ImGui::BeginChild(id, ImVec2(width, height), ImGuiChildFlags_Borders, ImGuiWindowFlags_NoScrollbar);
+		ImGui::PushStyleVar(ImGuiStyleVar_ScrollbarSize, scrollable ? 3.f : 0.f);
+		ImGui::BeginChild(id, ImVec2(width, height), ImGuiChildFlags_Borders,
+			scrollable ? ImGuiWindowFlags_None : ImGuiWindowFlags_NoScrollbar);
 		ImGui::PopStyleVar(2);
 
 		float content_w = ImGui::GetWindowSize().x - content_pad * 2.f;
@@ -165,5 +166,44 @@ namespace ng_tabs
 		ImGui::Dummy(ImVec2(0.f, ImGui::GetFontSize() + 2.f));
 		pad();
 		return widgets::multicombo(id, selected, items);
+	}
+
+	// label with a color swatch on the right — clicking the swatch opens the
+	// matcha-style color picker (sv square + hue bar + alpha bar)
+	bool row_color(const char* label, float col[4])
+	{
+		if (!col) return false;
+
+		pad();
+		ImVec2 pos = ImGui::GetCursorScreenPos();
+		float avail_w = ImGui::CalcItemWidth();
+		if (avail_w < 1.f)
+			avail_w = ImGui::GetContentRegionAvail().x;
+
+		ImVec2 ts = ImGui::CalcTextSize(label ? label : "");
+		ImGui::Dummy(ImVec2(avail_w, ts.y));
+		ImDrawList* dl = ImGui::GetWindowDrawList();
+		widgets::text_outlined(dl, pos, ImGui::GetColorU32(ImVec4(0.85f, 0.85f, 0.85f, 1.f)), label ? label : "");
+
+		constexpr float swatch_w = 30.f;
+		ImVec2 smin(pos.x + avail_w - swatch_w, pos.y);
+		ImVec2 smax(smin.x + swatch_w, pos.y + ts.y);
+
+		ImGui::SetCursorScreenPos(smin);
+		ImGui::PushID(label ? label : "##color");
+		bool changed = false;
+		if (ImGui::InvisibleButton("##swatch", ImVec2(swatch_w, ts.y)))
+			ImGui::OpenPopup("##color_pop");
+
+		dl->AddRectFilled(smin, smax, ImGui::GetColorU32(ImVec4(col[0], col[1], col[2], 1.f)), 4.f);
+		dl->AddRect(smin, smax, IM_COL32(255, 255, 255, 46), 4.f);
+
+		if (ImGui::BeginPopup("##color_pop"))
+		{
+			changed = widgets::color_picker("##picker", col);
+			ImGui::EndPopup();
+		}
+		ImGui::PopID();
+		return changed;
 	}
 }

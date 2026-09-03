@@ -10,7 +10,7 @@ namespace ng_tabs
 
 	void pad();
 	void begin_columns(float* out_left_w, float* out_right_w, float* out_h);
-	bool begin_panel(const char* id, float width, float height);
+	bool begin_panel(const char* id, float width, float height, bool scrollable = false);
 	void end_panel();
 
 	void row_keybind(const char* id, const char* label, int* key, int* mode);
@@ -22,4 +22,5 @@ namespace ng_tabs
 	bool row_checkbox_color(const char* label, bool* v, float col[4]);
 	bool row_checkbox_keybind(const char* label, bool* v, int* key);
 	bool row_multicombo(const char* id, const char* label, bool* selected, const std::vector<const char*>& items);
+	bool row_color(const char* label, float col[4]);
 }

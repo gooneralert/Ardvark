@@ -619,7 +619,8 @@ bool  music{ false };   // music player window
             int   theme{ 0 };
             int   font{ 0 }; // proxima soft bold
             float frost{ 0.10f };  // glass milkiness 0..1 (tint + white wash, 0 = clear)
-            float blur{ 10.f };   // glass blur strength 0..100 (default 10, like matcha)
+            float blur{ 6.f };    // glass blur strength 0..100 (default 6)
+            float tint[4]{ 27.f / 255.f, 27.f / 255.f, 29.f / 255.f, 1.f };  // glass tint color (rgb + strength), default #1B1B1DFF
             bool  watermark{ false };
             float watermark_x{ 10.f };
             float watermark_y{ 10.f };

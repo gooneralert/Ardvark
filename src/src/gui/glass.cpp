@@ -578,7 +578,11 @@ namespace glass
         // =====================================================================
         std::unique_ptr<AcrylicCompositor> g_compositor;
         std::atomic<float> g_frost{ 0.5f };
-        std::atomic<float> g_blur{ 10.f };
+        std::atomic<float> g_blur{ 6.f };
+        std::atomic<float> g_tint_r{ 0.055f };
+        std::atomic<float> g_tint_g{ 0.055f };
+        std::atomic<float> g_tint_b{ 0.063f };
+        std::atomic<float> g_tint_a{ 1.f };
         HWND   g_acrylic   = nullptr;
         HWND   g_overlay   = nullptr;
         bool   g_registered = false;
@@ -676,8 +680,10 @@ namespace glass
             AcrylicCompositor::AcrylicEffectParameter param;
             param.blurAmount = g_blur.load();
             param.saturationAmount = 1.0f;
-            const float fa = std::min(0.85f, 0.12f + 0.55f * g_frost.load());
-            param.tintColor = D2D1::ColorF(0.055f, 0.055f, 0.063f, fa);
+            const float ta = g_tint_a.load();
+            const float t_a = ta < 0.f ? 0.f : (ta > 1.f ? 1.f : ta);
+            const float fa = std::min(0.85f, 0.12f + 0.55f * g_frost.load()) * t_a;
+            param.tintColor = D2D1::ColorF(g_tint_r.load(), g_tint_g.load(), g_tint_b.load(), fa);
             param.fallbackColor = D2D1::ColorF(0.10f, 0.10f, 0.10f, 1.0f);
 
             if (g_compositor->SetAcrylicEffect(g_acrylic, AcrylicCompositor::BACKDROP_SOURCE_HOSTBACKDROP, param))
@@ -721,13 +727,16 @@ namespace glass
         g_frost.store(v);
         if (g_compositor && g_dcomp_ok)
         {
-            const float fa = std::min(0.85f, 0.12f + 0.55f * v);
-            g_compositor->SetTintColor(D2D1::ColorF(0.055f, 0.055f, 0.063f, fa), true);
+            const float fa = std::min(0.85f, 0.12f + 0.55f * v) * clampf(g_tint_a.load(), 0.f, 1.f);
+            g_compositor->SetTintColor(D2D1::ColorF(g_tint_r.load(), g_tint_g.load(), g_tint_b.load(), fa), true);
         }
         else if (g_accent_fb && g_acrylic)
         {
             // accent fallback: re-apply with a new tint alpha
-            const BYTE a = (BYTE)(0x40 + 0x90 * v);
+            const BYTE a = (BYTE)((0x40 + 0x90 * v) * clampf(g_tint_a.load(), 0.f, 1.f));
+            const BYTE rb = (BYTE)(clampf(g_tint_r.load(), 0.f, 1.f) * 255.f);
+            const BYTE gb = (BYTE)(clampf(g_tint_g.load(), 0.f, 1.f) * 255.f);
+            const BYTE bb = (BYTE)(clampf(g_tint_b.load(), 0.f, 1.f) * 255.f);
             const auto lib = LoadLibraryW(L"user32.dll");
             if (lib)
             {
@@ -735,13 +744,24 @@ namespace glass
                 const auto fn = (pFn)GetProcAddress(lib, "SetWindowCompositionAttribute");
                 if (fn)
                 {
-                    ACCENTPOLICY policy{ 4, 2, (int)(0x63000000u | ((DWORD)a << 16) | 0x0D05u), 0 };
+                    const DWORD rgb = ((DWORD)bb << 16) | ((DWORD)gb << 8) | (DWORD)rb;
+                    ACCENTPOLICY policy{ 4, 2, (int)(((DWORD)a << 24) | rgb), 0 };
                     WINCOMPATTRDATA data{ 19, &policy, sizeof(ACCENTPOLICY) };
                     fn(g_acrylic, &data);
                 }
                 FreeLibrary(lib);
             }
         }
+    }
+
+    void set_tint(float r, float g, float b, float a)
+    {
+        g_tint_r.store(clampf(r, 0.f, 1.f));
+        g_tint_g.store(clampf(g, 0.f, 1.f));
+        g_tint_b.store(clampf(b, 0.f, 1.f));
+        g_tint_a.store(clampf(a, 0.f, 1.f));
+        // re-apply the frost pass so the new tint rgb takes effect immediately
+        set_frost(g_frost.load());
     }
 
     void set_blur(float f)
@@ -879,8 +899,12 @@ namespace glass
     void draw(ImDrawList* draw_list, const ImVec2& rect_min, const ImVec2& rect_max, float rounding, float alpha)
     {
         if (!draw_list) return;
-        // light wash + top sheen over the DWM acrylic
-        const ImU32 wash = IM_COL32(14, 14, 18, (ImU32)(86 * alpha));
+        // light wash + top sheen over the DWM acrylic (wash uses the glass tint color)
+        const ImU32 wash = IM_COL32(
+            (int)(clampf(g_tint_r.load(), 0.f, 1.f) * 255.f),
+            (int)(clampf(g_tint_g.load(), 0.f, 1.f) * 255.f),
+            (int)(clampf(g_tint_b.load(), 0.f, 1.f) * 255.f),
+            (ImU32)(86 * alpha));
         draw_list->AddRectFilled(rect_min, rect_max, wash, rounding);
         const float sheenH = (rect_max.y - rect_min.y) * 0.35f;
         draw_list->AddRectFilledMultiColor(rect_min, ImVec2(rect_max.x, rect_min.y + sheenH),

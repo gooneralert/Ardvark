@@ -2,6 +2,8 @@
 #include "colorpicker.h"
 #include "text.h"
 #include "imgui.h"
+#include <cstdio>
+#include <cstring>
 
 namespace widgets
 {
@@ -166,6 +168,101 @@ namespace widgets
         ImGui::SetCursorScreenPos(ImVec2(origin.x, origin.y + sv_size + gap));
         if (alpha_bar_h(&color[3], total_w, alpha_h, ImVec4(color[0], color[1], color[2], 1.f)))
             changed = true;
+
+        // --- numeric row: hue (0-360) + alpha %, then a hex field ---------------
+        // lets the color be set/known exactly by numbers instead of dragging
+        const float row1_y = origin.y + sv_size + gap + alpha_h + gap;
+        const float row_h = ImGui::GetFrameHeight();
+        const float row2_y = row1_y + row_h + gap;
+        const float num_w = 54.f;
+
+        ImGui::SetCursorScreenPos(ImVec2(origin.x, row1_y));
+        int hue_deg = (int)(h * 360.f + 0.5f) % 360;
+        if (hue_deg < 0) hue_deg += 360;
+        ImGui::PushItemWidth(num_w);
+        if (ImGui::InputInt("##hue_num", &hue_deg, 0))
+        {
+            hue_deg %= 360;
+            if (hue_deg < 0) hue_deg += 360;
+            h = (float)hue_deg / 360.f;
+            if (h >= 1.f) h = 0.999f;
+            ImGui::ColorConvertHSVtoRGB(h, s, v, color[0], color[1], color[2]);
+            changed = true;
+        }
+        ImGui::PopItemWidth();
+
+        ImGui::SameLine(0.f, gap);
+        int alpha_pct = (int)(color[3] * 100.f + 0.5f);
+        if (alpha_pct < 0) alpha_pct = 0;
+        if (alpha_pct > 100) alpha_pct = 100;
+        ImGui::PushItemWidth(total_w - num_w - gap);
+        if (ImGui::InputScalar("##alpha_pct", ImGuiDataType_S32, &alpha_pct, nullptr, nullptr, "%d%%"))
+        {
+            if (alpha_pct < 0) alpha_pct = 0;
+            if (alpha_pct > 100) alpha_pct = 100;
+            color[3] = (float)alpha_pct / 100.f;
+            changed = true;
+        }
+        ImGui::PopItemWidth();
+
+        // hex field, shown/applied as #RRGGBBAA (matcha-style)
+        static char hex_buf[16] = "";
+        static bool hex_active = false;
+        if (!hex_active)
+        {
+            int ri = (int)(color[0] * 255.f + 0.5f); if (ri < 0) ri = 0; if (ri > 255) ri = 255;
+            int gi = (int)(color[1] * 255.f + 0.5f); if (gi < 0) gi = 0; if (gi > 255) gi = 255;
+            int bi = (int)(color[2] * 255.f + 0.5f); if (bi < 0) bi = 0; if (bi > 255) bi = 255;
+            int ai = (int)(color[3] * 255.f + 0.5f); if (ai < 0) ai = 0; if (ai > 255) ai = 255;
+            snprintf(hex_buf, sizeof(hex_buf), "#%02X%02X%02X%02X", ri, gi, bi, ai);
+        }
+        ImGui::SetCursorScreenPos(ImVec2(origin.x, row2_y));
+        ImGui::PushItemWidth(total_w);
+        const bool hex_enter = ImGui::InputText("##hex_num", hex_buf, sizeof(hex_buf),
+            ImGuiInputTextFlags_CharsNoBlank | ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_AutoSelectAll);
+        const bool hex_done = hex_enter || ImGui::IsItemDeactivatedAfterEdit();
+        hex_active = ImGui::IsItemActive();
+        ImGui::PopItemWidth();
+        if (hex_done)
+        {
+            // strip anything that isn't a hex digit, then parse 6 (RGB) or 8 (RGBA) digits
+            char clean[16];
+            int n = 0;
+            for (const char* p = hex_buf; *p && n < 15; ++p)
+            {
+                char ch = (char)((*p >= 'a' && *p <= 'f') ? (*p - 'a' + 'A') : *p);
+                if ((ch >= '0' && ch <= '9') || (ch >= 'A' && ch <= 'F'))
+                    clean[n++] = ch;
+            }
+            clean[n] = 0;
+
+            if (n == 6 || n == 8)
+            {
+                unsigned long long val = 0;
+                for (int i = 0; i < n; ++i)
+                {
+                    const char ch = clean[i];
+                    const unsigned int d =
+                        (ch >= '0' && ch <= '9') ? (unsigned int)(ch - '0') : (unsigned int)(ch - 'A' + 10);
+                    val = (val << 4) | d;
+                }
+                const unsigned int v32 = (unsigned int)val;
+                if (n == 8)
+                {
+                    color[0] = (float)((v32 >> 24) & 0xFF) / 255.f;
+                    color[1] = (float)((v32 >> 16) & 0xFF) / 255.f;
+                    color[2] = (float)((v32 >> 8) & 0xFF) / 255.f;
+                    color[3] = (float)(v32 & 0xFF) / 255.f;
+                }
+                else
+                {
+                    color[0] = (float)((v32 >> 16) & 0xFF) / 255.f;
+                    color[1] = (float)((v32 >> 8) & 0xFF) / 255.f;
+                    color[2] = (float)(v32 & 0xFF) / 255.f;
+                }
+                changed = true;
+            }
+        }
 
         return changed;
     }

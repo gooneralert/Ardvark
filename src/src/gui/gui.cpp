@@ -227,14 +227,12 @@ namespace gui
         ImGui::PopStyleColor();
 
         if (sidebar_selected == 0)
-            ng_tabs::draw_aim_tab();
+            ng_tabs::draw_aim_tab();          // combat: aimbot + silent + triggerbot
         else if (sidebar_selected == 1)
-            ng_tabs::draw_trigger_tab();
-        else if (sidebar_selected == 2)
             ng_tabs::draw_esp_tab();
-        else if (sidebar_selected == 3)
+        else if (sidebar_selected == 2)
             ng_tabs::draw_misc_tab();
-        else if (sidebar_selected == 4)
+        else if (sidebar_selected == 3)
             ng_tabs::draw_local_tab();
         else
             ng_tabs::draw_settings_tab(&menu_kb, &menu_kb_skip);
@@ -458,9 +456,14 @@ namespace gui
         handle_menu_key();
 
         // frosted-glass look comes from the gui settings:
-        // frost = milkiness (tint + white wash), blur = gaussian blur strength
+        // frost = milkiness (tint + white wash), blur = gaussian blur strength,
+        // tint = configurable glass tint color
         glass::set_frost(Cheat::g_Settings.gui.frost);
         glass::set_blur(Cheat::g_Settings.gui.blur);
+        {
+            const float* t = Cheat::g_Settings.gui.tint;
+            glass::set_tint(t[0], t[1], t[2], t[3]);
+        }
 
         glass::new_frame();   // collect all glass-backed window rects this frame
 
@@ -568,13 +571,13 @@ namespace gui
         {
             // entry animation starting: rise from wherever the menu was last
             s_riseBase = s_menuPlaced ? s_menu_pos
-                : ImVec2(center.x - 289.f, center.y - 252.f);   // centered (578x504)
+                : ImVec2(center.x - 289.f, center.y - 340.f);   // centered (578x680)
             s_riseValid = true;
         }
         if (s_riseValid && anim < 0.999f && s_menu_open)
             ImGui::SetNextWindowPos(ImVec2(s_riseBase.x, s_riseBase.y + (1.f - anim) * 20.f),
                 ImGuiCond_Always);
-        ImGui::SetNextWindowSize(ImVec2(578.f, 504.f), ImGuiCond_Once);
+        ImGui::SetNextWindowSize(ImVec2(578.f, 680.f), ImGuiCond_Once);
 
         ImGui::PushStyleVar(ImGuiStyleVar_Alpha, anim);
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.f, 0.f));
@@ -615,14 +618,18 @@ namespace gui
         ImGui::PopStyleVar();
         ImGui::PopStyleColor();
 
-        static const std::vector<const char*> sidebar_items = { "Aim", "Triggerbot", "Visuals", "Misc", "Local", "Settings" };
+        static const std::vector<const char*> sidebar_items = { "Combat", "Visuals", "Misc", "Local", "Settings" };
+        static const widgets::TabIcon sidebar_icons[] = {
+            widgets::TABICON_CROSSHAIR, widgets::TABICON_EYE, widgets::TABICON_SLIDERS,
+            widgets::TABICON_PERSON,    widgets::TABICON_GEAR
+        };
         constexpr float tab_bar_height = 40.f;
 
         const float inner_w = win_size.x - content_margin * 2.f - inner_padding * 2.f;
 
-        // matcha-style top tab bar
+        // matcha-style top tab bar (with inline icons)
         ImGui::SetCursorPos(ImVec2(inner_padding, subtab_margin));
-        widgets::top_tabs(sidebar_items, &s_sidebar_selected, inner_w, tab_bar_height);
+        widgets::top_tabs(sidebar_items, &s_sidebar_selected, inner_w, tab_bar_height, sidebar_icons);
 
         ImGui::SetCursorPos(ImVec2(inner_padding, subtab_margin + tab_bar_height + subtab_margin));
         render_right_panel(s_sidebar_selected);
