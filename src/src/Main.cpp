@@ -4,6 +4,7 @@
 #include "core/roblox/offsets/Offsets.h"
 #include "core/globals/Globals.h"
 #include "core/player/PlayerHandler.h"
+#include "features/visuals/AvatarLoader.h"
 #include "features/visuals/RaycastEngine.h"
 #include "features/misc/PlayerAvatars.h"
 #include "renderer/Renderer.h"
@@ -202,6 +203,7 @@ int main()
         WaitForRoblox();
         OnRobloxAttached(false);
         Cheat::PlayerHandler::StartCacheThread(); // кэш игроков
+        Cheat::Features::AvatarLoader::Start(); // локальный аватар для esp preview
     }
 
     // роблокс сдох, ждём и цепляемся заново
@@ -226,6 +228,8 @@ int main()
             WaitForRoblox();
             OnRobloxAttached(true);
             Cheat::PlayerHandler::StartCacheThread();
+            Cheat::Features::AvatarLoader::Reset(); // сброс, чтобы не отдал старый аватар
+            Cheat::Features::AvatarLoader::Start();
         }
 
         std::this_thread::sleep_for(std::chrono::milliseconds(500));

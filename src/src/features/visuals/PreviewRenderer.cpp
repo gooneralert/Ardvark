@@ -1,4 +1,4 @@
-#include "pch.h"
+﻿#include "pch.h"
 #define NOMINMAX
 #include "PreviewRenderer.h"
 #include "app/Graphics.h"
@@ -9,6 +9,9 @@
 #include <cmath>
 #include <algorithm>
 #include <cstring>
+#include <map>
+#include <sstream>
+#include <unordered_map>
 
 #pragma comment(lib, "d3dcompiler.lib")
 
@@ -19,6 +22,7 @@ cbuffer CB : register(b0) {
     float4x4 g_MVP;
     float4x4 g_World;
     float4   g_Opacity;
+    float4   g_Diffuse;
 };
 struct VS_In {
     float3 pos : POSITION;
@@ -43,6 +47,7 @@ cbuffer CB : register(b0) {
     float4x4 g_MVP;
     float4x4 g_World;
     float4   g_Opacity;
+    float4   g_Diffuse;
 };
 Texture2D    g_Tex  : register(t0);
 SamplerState g_Sam  : register(s0);
@@ -59,7 +64,7 @@ float4 main(VS_Out v) : SV_Target {
     float ndotl = saturate(dot(n, L));
     float spec = pow(saturate(dot(n, H)), 32.0) * 0.18;
     float wrap = saturate(ndotl * 0.65 + 0.35);
-    float3 lit = tex.rgb * (0.28 + wrap * 0.82) + spec;
+    float3 lit = tex.rgb * g_Diffuse.rgb * (0.28 + wrap * 0.82) + spec;
     lit = saturate((lit - 0.5) * 1.08 + 0.5);
     return float4(lit, saturate(g_Opacity.x));
 }
@@ -72,7 +77,7 @@ static bool CompileShader(const char* src, const char* entry, const char* profil
     ID3DBlob* err = nullptr;
     HRESULT hr = D3DCompile(src, strlen(src), nullptr, nullptr, nullptr,
                             entry, profile, D3DCOMPILE_OPTIMIZATION_LEVEL3, 0, out, &err);
-    if (err) err->Release(); // ╨╛╤ê╨╕╨▒╨║╨╕ ╨╜╨░╨╝ ╨┐╨╛╤ä╨╕╨│, SUCCEEDED ╤à╨▓╨░╤é╨╕╤é
+    if (err) err->Release(); // â•¨â•›â•¤Ãªâ•¨â••â•¨â–’â•¨â•‘â•¨â•• â•¨â•œâ•¨â–‘â•¨â• â•¨â”â•¨â•›â•¤Ã¤â•¨â••â•¨â”‚, SUCCEEDED â•¤Ã â•¨â–“â•¨â–‘â•¤Ã©â•¨â••â•¤Ã©
     return SUCCEEDED(hr);
 }
 
@@ -261,6 +266,34 @@ namespace {
 
 }
 
+// Body-part classification shared by the skeleton + aim hitbox builders.
+// Roblox avatar exports split the body into many small groups; folding them
+// into coarse limbs here keeps overlays from picking a single (often wrong,
+// e.g. foot-sized) part.
+// returns: 0 head, 1 torso, 2 left arm, 3 right arm, 4 left leg, 5 right leg
+static int ClassifyBodyPart(const ModelPartAABB& p, float bx0, float by0, float by1,
+                            float cx, float h, float w)
+{
+    const float pcx = (p.min[0] + p.max[0]) * 0.5f;
+    const float pcy = (p.min[1] + p.max[1]) * 0.5f;
+    const float psy = p.max[1] - p.min[1];
+    const float psx = p.max[0] - p.min[0];
+
+    // head: top region, small vertical span
+    if (pcy > by0 + h * 0.78f && psy < h * 0.45f)
+        return 0;
+
+    // arms: outside the central x-band (catches hands even when they hang low)
+    if (std::fabs(pcx - cx) > w * 0.30f && psx < w * 0.60f)
+        return pcx < cx ? 2 : 3;
+
+    // legs: everything below the torso that is still central
+    if (pcy < by0 + h * 0.58f)
+        return pcx < cx ? 4 : 5;
+
+    return 1; // torso
+}
+
 void PreviewRenderer::BuildR6SkeletonFromParts()
 {
     m_SkelSegCount = 0;
@@ -271,32 +304,27 @@ void PreviewRenderer::BuildR6SkeletonFromParts()
     const float h = (std::max)(0.01f, by1 - by0);
     const float w = (std::max)(0.01f, bx1 - bx0);
 
-    // ╤ì╨▓╤Ç╨╕╤ü╤é╨╕╨║╨░ ╨┐╨╛ aabb, ╨│╨╛╨╗╨╛╨▓╨░/╤Ç╤â╨║╨╕/╨╜╨╛╨│╨╕
-    const ModelPartAABB* torso = nullptr;
-    const ModelPartAABB* lArm = nullptr;
-    const ModelPartAABB* rArm = nullptr;
-    const ModelPartAABB* lLeg = nullptr;
-    const ModelPartAABB* rLeg = nullptr;
-
-    for (const auto& p : m_BodyParts) {
+    // merge every part that belongs to the same limb into one AABB: Roblox
+    // avatar exports (R15) have separate groups per limb segment (upper arm,
+    // lower arm, hand), and a "last match wins" heuristic ends up picking the
+    // feet for the legs (invisible foot-stub bones) and the hands wrong.
+    // Folding each limb gives one full-length bone from shoulder/hip to
+    // hand/foot.
+    ModelPartAABB limbs[6]{}; // 0 head, 1 torso, 2 lArm, 3 rArm, 4 lLeg, 5 rLeg
+    for (const auto& p : m_BodyParts)
+    {
         if (!p.valid) continue;
-        const float pcx = (p.min[0] + p.max[0]) * 0.5f;
-        const float pcy = (p.min[1] + p.max[1]) * 0.5f;
-        const float psy = p.max[1] - p.min[1];
-        const float psx = p.max[0] - p.min[0];
-
-        if (pcy > by0 + h * 0.82f && psy < h * 0.45f)
-            continue; // ╨│╨╛╨╗╨╛╨▓╤â ╨▓ ╤ü╨║╨╡╨╗╨╡╤é ╨╜╨╡ ╨║╨╗╨░╨┤╤æ╨╝
-        if (pcy < by0 + h * 0.45f) {
-            if (pcx < cx) lLeg = &p; else rLeg = &p;
-            continue;
+        const int t = ClassifyBodyPart(p, bx0, by0, by1, cx, h, w);
+        if (t < 0 || t >= 6) continue;
+        if (!limbs[t].valid) { limbs[t] = p; limbs[t].valid = true; }
+        else
+        {
+            for (int i = 0; i < 3; ++i)
+            {
+                limbs[t].min[i] = (std::min)(limbs[t].min[i], p.min[i]);
+                limbs[t].max[i] = (std::max)(limbs[t].max[i], p.max[i]);
+            }
         }
-        if (std::fabs(pcx - cx) > w * 0.28f && psx < w * 0.55f) {
-            if (pcx < cx) lArm = &p; else rArm = &p;
-            continue;
-        }
-        if (std::fabs(pcx - cx) <= w * 0.35f && psy >= h * 0.25f)
-            torso = &p;
     }
 
     auto add = [&](float ax, float ay, float az, float bx, float by, float bz) {
@@ -323,41 +351,38 @@ void PreviewRenderer::BuildR6SkeletonFromParts()
         o[2] = a[2] + (b[2] - a[2]) * t;
     };
 
-    // ╤ç╤â╤é╤î ╨╜╨╕╨╢╨╡ ╨▓╨╡╤Ç╤à╨░ ╤é╨╛╤Ç╤ü╨░
-    float shoulder_drop = 0.18f;
-
-    if (!torso) return;
+    if (!limbs[1].valid) return;
 
     float torso_top[3], torso_bot[3], shoulder_c[3];
-    axis(*torso, torso_top, torso_bot);
-    lerp3(torso_top, torso_bot, shoulder_drop, shoulder_c);
+    axis(limbs[1], torso_top, torso_bot);
+    lerp3(torso_top, torso_bot, 0.18f, shoulder_c);
     add(shoulder_c[0], shoulder_c[1], shoulder_c[2],
         torso_bot[0], torso_bot[1], torso_bot[2]);
 
-    auto arm_bones = [&](const ModelPartAABB* arm) {
-        if (!arm) return;
-
-        const float ax = (arm->min[0] + arm->max[0]) * 0.5f;
-        const float az = (arm->min[2] + arm->max[2]) * 0.5f;
-        const float joint[3] = { ax, shoulder_c[1], az };
-        const float bot[3]   = { ax, arm->min[1], az };
-        add(shoulder_c[0], shoulder_c[1], shoulder_c[2], joint[0], joint[1], joint[2]);
-        add(joint[0], joint[1], joint[2], bot[0], bot[1], bot[2]);
+    auto arm_bones = [&](const ModelPartAABB& arm) {
+        const float ax = (arm.min[0] + arm.max[0]) * 0.5f;
+        const float az = (arm.min[2] + arm.max[2]) * 0.5f;
+        const float elbow[3] = { ax, arm.max[1], az }; // joint near the shoulder
+        const float hand[3]  = { ax, arm.min[1], az }; // lowest arm part = hand
+        add(shoulder_c[0], shoulder_c[1], shoulder_c[2], elbow[0], elbow[1], elbow[2]);
+        add(elbow[0], elbow[1], elbow[2], hand[0], hand[1], hand[2]);
     };
-    arm_bones(lArm);
-    arm_bones(rArm);
+    if (limbs[2].valid) arm_bones(limbs[2]);
+    if (limbs[3].valid) arm_bones(limbs[3]);
 
-    auto leg_bones = [&](const ModelPartAABB* leg) {
-        if (!leg) return;
-        float t[3], b[3];
-        axis(*leg, t, b);
-        add(torso_bot[0], torso_bot[1], torso_bot[2], t[0], t[1], t[2]);
-        add(t[0], t[1], t[2], b[0], b[1], b[2]);
+    auto leg_bones = [&](const ModelPartAABB& leg) {
+        const float ax = (leg.min[0] + leg.max[0]) * 0.5f;
+        const float az = (leg.min[2] + leg.max[2]) * 0.5f;
+        const float hip[3]   = { ax, leg.max[1], az }; // top of the merged leg
+        const float ankle[3] = { ax, leg.min[1], az }; // foot
+        const float knee[3]  = { ax,
+            leg.min[1] + (leg.max[1] - leg.min[1]) * 0.55f, az };
+        add(hip[0], hip[1], hip[2], knee[0], knee[1], knee[2]);
+        add(knee[0], knee[1], knee[2], ankle[0], ankle[1], ankle[2]);
     };
-    leg_bones(lLeg);
-    leg_bones(rLeg);
+    if (limbs[4].valid) leg_bones(limbs[4]);
+    if (limbs[5].valid) leg_bones(limbs[5]);
 }
-
 bool PreviewRenderer::ApplyLoadedModel(LoadedModel& model)
 {
     std::vector<ModelVertex> combined = model.vertices;
@@ -369,7 +394,7 @@ bool PreviewRenderer::ApplyLoadedModel(LoadedModel& model)
     unsigned int total = 0;
     if (!UploadVerts(m_Device, combined, &m_VB, total)) return false;
     if (m_BodyVertCount == 0 && m_WingVertCount > 0) {
-        m_BodyVertCount = 0; // ╤é╨╛╨╗╤î╨║╨╛ ╨║╤Ç╤ï╨╗╤î╤Å, ╨╛╨║
+        m_BodyVertCount = 0; // â•¤Ã©â•¨â•›â•¨â•—â•¤Ã®â•¨â•‘â•¨â•› â•¨â•‘â•¤Ã‡â•¤Ã¯â•¨â•—â•¤Ã®â•¤Ã…, â•¨â•›â•¨â•‘
     }
 
     m_ModelScale = model.scale;
@@ -422,34 +447,23 @@ void PreviewRenderer::BuildAimPartBoxes()
     const float h = (std::max)(0.01f, by1 - by0);
     const float w = (std::max)(0.01f, bx1 - bx0);
 
-    const ModelPartAABB* head = nullptr;
-    const ModelPartAABB* torso = nullptr;
-    const ModelPartAABB* lArm = nullptr;
-    const ModelPartAABB* rArm = nullptr;
-    const ModelPartAABB* lLeg = nullptr;
-    const ModelPartAABB* rLeg = nullptr;
-
-    for (const auto& p : m_BodyParts) {
+    // same limb-merging as the skeleton, so the aim dots/boxes land on the
+    // real head / torso / hands / feet of the (R15) avatar
+    ModelPartAABB limbs[6]{};
+    for (const auto& p : m_BodyParts)
+    {
         if (!p.valid) continue;
-        const float pcx = (p.min[0] + p.max[0]) * 0.5f;
-        const float pcy = (p.min[1] + p.max[1]) * 0.5f;
-        const float psy = p.max[1] - p.min[1];
-        const float psx = p.max[0] - p.min[0];
-
-        if (pcy > by0 + h * 0.82f && psy < h * 0.45f) {
-            head = &p;
-            continue;
+        const int t = ClassifyBodyPart(p, bx0, by0, by1, cx, h, w);
+        if (t < 0 || t >= 6) continue;
+        if (!limbs[t].valid) { limbs[t] = p; limbs[t].valid = true; }
+        else
+        {
+            for (int i = 0; i < 3; ++i)
+            {
+                limbs[t].min[i] = (std::min)(limbs[t].min[i], p.min[i]);
+                limbs[t].max[i] = (std::max)(limbs[t].max[i], p.max[i]);
+            }
         }
-        if (pcy < by0 + h * 0.45f) {
-            if (pcx < cx) lLeg = &p; else rLeg = &p;
-            continue;
-        }
-        if (std::fabs(pcx - cx) > w * 0.28f && psx < w * 0.55f) {
-            if (pcx < cx) lArm = &p; else rArm = &p;
-            continue;
-        }
-        if (std::fabs(pcx - cx) <= w * 0.35f && psy >= h * 0.25f)
-            torso = &p;
     }
 
     auto copy = [](AimPartAABB& dst, const ModelPartAABB& src) {
@@ -460,14 +474,13 @@ void PreviewRenderer::BuildAimPartBoxes()
         dst.valid = true;
     };
 
-    if (head) copy(m_AimParts[0], *head);
-    if (torso) copy(m_AimParts[1], *torso);
-    if (lArm) copy(m_AimParts[4], *lArm);
-    if (rArm) copy(m_AimParts[5], *rArm);
-    if (lLeg) copy(m_AimParts[6], *lLeg);
-    if (rLeg) copy(m_AimParts[7], *rLeg);
+    if (limbs[0].valid) copy(m_AimParts[0], limbs[0]); // head
+    if (limbs[1].valid) copy(m_AimParts[1], limbs[1]); // upper torso
+    if (limbs[2].valid) copy(m_AimParts[4], limbs[2]); // left hand
+    if (limbs[3].valid) copy(m_AimParts[5], limbs[3]); // right hand
+    if (limbs[4].valid) copy(m_AimParts[6], limbs[4]); // left foot
+    if (limbs[5].valid) copy(m_AimParts[7], limbs[5]); // right foot
 }
-
 bool PreviewRenderer::LoadModel(const std::string& obj_path)
 {
     LoadedModel model;
@@ -505,6 +518,317 @@ bool PreviewRenderer::LoadTextureFromMemory(const unsigned char* png, std::size_
     return ok;
 }
 
+// ---------------------------------------------------------------------------
+// Avatar (multi-material) support
+// ---------------------------------------------------------------------------
+namespace {
+
+struct OVec3 { float x = 0.f, y = 0.f, z = 0.f; };
+struct OVec2 { float x = 0.f, y = 0.f; };
+
+struct OFaceVtx {
+    int v = 0, vt = 0, vn = 0;
+};
+
+struct SubMeshData {
+    std::string name;
+    std::vector<ModelVertex> verts;
+};
+
+OFaceVtx ParseObjFaceVtx(const std::string& token)
+{
+    OFaceVtx fv;
+    const size_t first = token.find('/');
+    if (first == std::string::npos)
+    {
+        fv.v = std::stoi(token);
+        return fv;
+    }
+    fv.v = std::stoi(token.substr(0, first));
+    const size_t second = token.find('/', first + 1);
+    if (second == std::string::npos)
+    {
+        fv.vt = std::stoi(token.substr(first + 1));
+    }
+    else
+    {
+        if (second > first + 1)
+            fv.vt = std::stoi(token.substr(first + 1, second - first - 1));
+        fv.vn = std::stoi(token.substr(second + 1));
+    }
+    return fv;
+}
+
+// Splits a Roblox avatar OBJ into one vertex list per material ("usemtl").
+// Positions/normals/UVs kept as-is (same as the standalone avatar-preview
+// tool - Roblox OBJ UVs are already top-origin for D3D).
+std::vector<SubMeshData> ParseSubMeshes(const std::string& obj)
+{
+    std::vector<OVec3> pos;
+    std::vector<OVec2> uv;
+    std::vector<OVec3> nrm;
+
+    std::map<std::string, SubMeshData> meshes;
+    std::string cur = "Default";
+
+    std::istringstream stream(obj);
+    std::string line;
+    while (std::getline(stream, line))
+    {
+        if (!line.empty() && line.back() == '\r')
+            line.pop_back();
+        if (line.empty() || line[0] == '#')
+            continue;
+
+        std::istringstream ls(line);
+        std::string cmd;
+        if (!(ls >> cmd))
+            continue;
+
+        if (cmd == "v")
+        {
+            OVec3 p;
+            ls >> p.x >> p.y >> p.z;
+            pos.push_back(p);
+        }
+        else if (cmd == "vt")
+        {
+            OVec2 t;
+            ls >> t.x >> t.y;
+            uv.push_back(t);
+        }
+        else if (cmd == "vn")
+        {
+            OVec3 n;
+            ls >> n.x >> n.y >> n.z;
+            nrm.push_back(n);
+        }
+        else if (cmd == "usemtl")
+        {
+            ls >> cur;
+        }
+        else if (cmd == "f")
+        {
+            std::vector<OFaceVtx> fv;
+            std::string tok;
+            while (ls >> tok)
+                fv.push_back(ParseObjFaceVtx(tok));
+            if (fv.size() < 3)
+                continue;
+
+            SubMeshData& mesh = meshes[cur];
+            auto emit = [&](const OFaceVtx& f) {
+                ModelVertex mv{};
+                mv.nx = 0.f; mv.ny = 1.f; mv.nz = 0.f;
+                if (f.v > 0 && f.v <= (int)pos.size())
+                {
+                    mv.x = pos[f.v - 1].x;
+                    mv.y = pos[f.v - 1].y;
+                    mv.z = pos[f.v - 1].z;
+                }
+                if (f.vt > 0 && f.vt <= (int)uv.size())
+                {
+                    mv.u = uv[f.vt - 1].x;
+                    // OBJ vt v is top-down (Roblox exporter), while the shader
+                    // samples with v=0 at the top. The standalone avatar-preview
+                    // tool does this flip in its vertex shader
+                    // (output.uv = float2(uv.x, 1.0f - uv.y)); we do the same
+                    // by baking it into the vertex here so the shared shader
+                    // (also used by the premade model) stays untouched.
+                    mv.v = 1.f - uv[f.vt - 1].y;
+                }
+                if (f.vn > 0 && f.vn <= (int)nrm.size())
+                {
+                    mv.nx = nrm[f.vn - 1].x;
+                    mv.ny = nrm[f.vn - 1].y;
+                    mv.nz = nrm[f.vn - 1].z;
+                }
+                mesh.verts.push_back(mv);
+            };
+
+            for (size_t i = 1; i + 1 < fv.size(); ++i)
+            {
+                emit(fv[0]);
+                emit(fv[i]);
+                emit(fv[i + 1]);
+            }
+        }
+    }
+
+    std::vector<SubMeshData> out;
+    out.reserve(meshes.size());
+    for (auto& kv : meshes)
+    {
+        if (!kv.second.verts.empty())
+        {
+            // the material name lives in the map key - it must be copied onto
+            // the submesh, otherwise LoadAvatar's material lookup (which
+            // matches by name against the MTL materials) never succeeds and
+            // the whole avatar renders untextured
+            kv.second.name = kv.first;
+            out.push_back(std::move(kv.second));
+        }
+    }
+    return out;
+}
+
+} // namespace
+
+bool PreviewRenderer::EnsureWhiteTexture()
+{
+    if (m_WhiteSRV)
+        return true;
+
+    unsigned char px[4]{ 0xFF, 0xFF, 0xFF, 0xFF };
+    D3D11_TEXTURE2D_DESC td{};
+    td.Width = 1;
+    td.Height = 1;
+    td.MipLevels = 1;
+    td.ArraySize = 1;
+    td.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    td.SampleDesc.Count = 1;
+    td.Usage = D3D11_USAGE_DEFAULT;
+    td.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+
+    D3D11_SUBRESOURCE_DATA sd{};
+    sd.pSysMem = px;
+    sd.SysMemPitch = 4;
+
+    ID3D11Texture2D* tex = nullptr;
+    if (FAILED(m_Device->CreateTexture2D(&td, &sd, &tex)))
+        return false;
+    if (FAILED(m_Device->CreateShaderResourceView(tex, nullptr, &m_WhiteSRV)))
+    {
+        tex->Release();
+        m_WhiteSRV = nullptr;
+        return false;
+    }
+    tex->Release();
+    return true;
+}
+
+void PreviewRenderer::ClearAvatar()
+{
+    for (auto& sm : m_SubMeshes)
+    {
+        if (sm.vb)  sm.vb->Release();
+        if (sm.srv) sm.srv->Release();
+    }
+    m_SubMeshes.clear();
+}
+
+bool PreviewRenderer::LoadAvatar(const std::string& obj_source,
+                                 const std::vector<PreviewMaterial>& materials)
+{
+    if (!m_Device || !m_Ctx)
+        return false;
+    ClearAvatar();
+
+    // geometry (body parts / skeleton / aim dots / bounds) - the standard
+    // loader ignores "usemtl" lines and keeps the whole mesh in one buffer;
+    // overlays keep working exactly as with the premade model.
+    if (!LoadModelFromMemory(obj_source.data(), obj_source.size()))
+        return false;
+
+    if (!EnsureWhiteTexture())
+        return false;
+
+    const std::vector<SubMeshData> sub = [&]() {
+        try
+        {
+            return ParseSubMeshes(obj_source);
+        }
+        catch (...)
+        {
+            return std::vector<SubMeshData>{};
+        }
+    }();
+    if (sub.empty())
+    {
+        ClearAvatar();
+        return false;
+    }
+
+    for (const auto& s : sub)
+    {
+        const PreviewMaterial* mat = nullptr;
+        for (const auto& m : materials)
+        {
+            if (m.name == s.name)
+            {
+                mat = &m;
+                break;
+            }
+        }
+
+        SubMesh sm;
+        sm.kd[0] = sm.kd[1] = sm.kd[2] = 1.f;
+
+        D3D11_BUFFER_DESC bd{};
+        bd.ByteWidth = (UINT)(s.verts.size() * sizeof(ModelVertex));
+        bd.Usage = D3D11_USAGE_IMMUTABLE;
+        bd.BindFlags = D3D11_BIND_VERTEX_BUFFER;
+
+        D3D11_SUBRESOURCE_DATA vd{};
+        vd.pSysMem = s.verts.data();
+        if (FAILED(m_Device->CreateBuffer(&bd, &vd, &sm.vb)))
+            continue;
+        sm.count = (UINT)s.verts.size();
+
+        if (mat && !mat->png.empty())
+        {
+            int w = 0, h = 0, n = 0;
+            stbi_uc* px = stbi_load_from_memory(mat->png.data(), (int)mat->png.size(),
+                                                &w, &h, &n, 4);
+            if (px)
+            {
+                D3D11_TEXTURE2D_DESC td{};
+                td.Width = (UINT)w;
+                td.Height = (UINT)h;
+                td.MipLevels = 1;
+                td.ArraySize = 1;
+                td.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+                td.SampleDesc.Count = 1;
+                td.Usage = D3D11_USAGE_DEFAULT;
+                td.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+
+                D3D11_SUBRESOURCE_DATA tsd{};
+                tsd.pSysMem = px;
+                tsd.SysMemPitch = (UINT)(w * 4);
+
+                ID3D11Texture2D* tex = nullptr;
+                if (SUCCEEDED(m_Device->CreateTexture2D(&td, &tsd, &tex)))
+                {
+                    if (FAILED(m_Device->CreateShaderResourceView(tex, nullptr, &sm.srv)))
+                        sm.srv = nullptr;
+                    tex->Release();
+                }
+                stbi_image_free(px);
+            }
+            // texture bytes present but failed to decode/upload (bad download,
+            // gpu limits, ...) -> fall back to the material's Kd colour instead
+            // of rendering pure white
+            if (!sm.srv)
+            {
+                sm.kd[0] = mat->kd[0];
+                sm.kd[1] = mat->kd[1];
+                sm.kd[2] = mat->kd[2];
+            }
+        }
+        else if (mat)
+        {
+            sm.kd[0] = mat->kd[0];
+            sm.kd[1] = mat->kd[1];
+            sm.kd[2] = mat->kd[2];
+        }
+
+        m_SubMeshes.emplace_back(sm);
+    }
+
+    m_SceneDirty = true;
+    return !m_SubMeshes.empty();
+}
+
 void PreviewRenderer::AddRotationDelta(float dyaw, float dpitch)
 {
 	m_ManualYaw += dyaw;
@@ -524,7 +848,7 @@ void PreviewRenderer::AddZoom(float delta)
 
 float PreviewRenderer::WingAlpha() const
 {
-	// fade in, hold, out, ╨┐╨░╤â╨╖╨░
+	// fade in, hold, out, â•¨â”â•¨â–‘â•¤Ã¢â•¨â•–â•¨â–‘
 	float fade_in = 1.15f;
 	float hold = 1.60f;
 	float fade_out = 1.15f;
@@ -612,7 +936,7 @@ void PreviewRenderer::Update(float dt)
 	m_LastMVPValid = true;
 	m_CachedBoundsValid = false;
 
-	auto upload_cb = [&](float opacity)
+	auto upload_cb = [&](float opacity, float dr = 1.f, float dg = 1.f, float db = 1.f)
 	{
 		XMMATRIX gpuMVP = XMMatrixTranspose(cpuMVP);
 		XMMATRIX gpuWorld = XMMatrixTranspose(world);
@@ -626,6 +950,10 @@ void PreviewRenderer::Update(float dt)
 			dst[33] = 0.0f;
 			dst[34] = 0.0f;
 			dst[35] = 0.0f;
+			dst[36] = dr;
+			dst[37] = dg;
+			dst[38] = db;
+			dst[39] = 1.0f;
 			m_Ctx->Unmap(m_CB, 0);
 		}
 	};
@@ -646,7 +974,7 @@ void PreviewRenderer::Update(float dt)
     m_Ctx->RSGetViewports(&numVP, &prevVP);
 
     m_Ctx->OMSetRenderTargets(1, &m_RTV, m_DSV);
-	// прозрачный clear — фон идёт из child меню, не чёрный квадрат
+	// Ð¿Ñ€Ð¾Ð·Ñ€Ð°Ñ‡Ð½Ñ‹Ð¹ clear â€” Ñ„Ð¾Ð½ Ð¸Ð´Ñ‘Ñ‚ Ð¸Ð· child Ð¼ÐµÐ½ÑŽ, Ð½Ðµ Ñ‡Ñ‘Ñ€Ð½Ñ‹Ð¹ ÐºÐ²Ð°Ð´Ñ€Ð°Ñ‚
     const float clear_bg[4] = { 0.f, 0.f, 0.f, 0.f };
     m_Ctx->ClearRenderTargetView(m_RTV, clear_bg);
     m_Ctx->ClearDepthStencilView(m_DSV, D3D11_CLEAR_DEPTH, 1.0f, 0);
@@ -659,29 +987,49 @@ void PreviewRenderer::Update(float dt)
     UINT stride = sizeof(ModelVertex), offset = 0;
     m_Ctx->IASetInputLayout(m_IL);
     m_Ctx->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-    m_Ctx->IASetVertexBuffers(0, 1, &m_VB, &stride, &offset);
     m_Ctx->VSSetShader(m_VS, nullptr, 0);
     m_Ctx->VSSetConstantBuffers(0, 1, &m_CB);
     m_Ctx->PSSetShader(m_PS, nullptr, 0);
     m_Ctx->PSSetConstantBuffers(0, 1, &m_CB);
-    if (m_TexSRV) m_Ctx->PSSetShaderResources(0, 1, &m_TexSRV);
     if (m_Sampler) m_Ctx->PSSetSamplers(0, 1, &m_Sampler);
 
     float bf[4]{};
-    upload_cb(1.0f);
     m_Ctx->OMSetDepthStencilState(m_DSState, 0);
     m_Ctx->OMSetBlendState(m_BlendOpaque, bf, 0xFFFFFFFF);
-    if (m_BodyVertCount > 0)
-        m_Ctx->Draw(m_BodyVertCount, 0);
 
-	float wingA = WingAlpha();
-	if (m_WingVertCount > 0 && wingA > 0.001f)
-	{
-		upload_cb(wingA);
-		m_Ctx->OMSetDepthStencilState(m_DSNoWrite, 0);
-		m_Ctx->OMSetBlendState(m_BlendAlpha, bf, 0xFFFFFFFF);
-		m_Ctx->Draw(m_WingVertCount, m_BodyVertCount);
-	}
+    if (!m_SubMeshes.empty())
+    {
+        // avatar: one textured draw per material (real local-player model)
+        ID3D11ShaderResourceView* white = m_WhiteSRV ? m_WhiteSRV : nullptr;
+        for (const auto& sm : m_SubMeshes)
+        {
+            ID3D11ShaderResourceView* srv = sm.srv ? sm.srv : white;
+            if (srv) m_Ctx->PSSetShaderResources(0, 1, &srv);
+            m_Ctx->IASetVertexBuffers(0, 1, &sm.vb, &stride, &offset);
+            upload_cb(1.0f, sm.kd[0], sm.kd[1], sm.kd[2]);
+            m_Ctx->Draw(sm.count, 0);
+        }
+        ID3D11ShaderResourceView* nullSrv = nullptr;
+        m_Ctx->PSSetShaderResources(0, 1, &nullSrv);
+    }
+    else
+    {
+        m_Ctx->IASetVertexBuffers(0, 1, &m_VB, &stride, &offset);
+        if (m_TexSRV) m_Ctx->PSSetShaderResources(0, 1, &m_TexSRV);
+
+        upload_cb(1.0f);
+        if (m_BodyVertCount > 0)
+            m_Ctx->Draw(m_BodyVertCount, 0);
+
+        float wingA = WingAlpha();
+        if (m_WingVertCount > 0 && wingA > 0.001f)
+        {
+            upload_cb(wingA);
+            m_Ctx->OMSetDepthStencilState(m_DSNoWrite, 0);
+            m_Ctx->OMSetBlendState(m_BlendAlpha, bf, 0xFFFFFFFF);
+            m_Ctx->Draw(m_WingVertCount, m_BodyVertCount);
+        }
+    }
 
 	if (m_SampleCount > 1 && m_ResolveTex)
 		m_Ctx->ResolveSubresource(m_ResolveTex, 0, m_RTTex, 0, DXGI_FORMAT_R8G8B8A8_UNORM);
@@ -852,9 +1200,40 @@ bool PreviewRenderer::GetProjectedR6Skeleton(std::vector<float>& out_uv_segs) co
 
 void* PreviewRenderer::GetTextureID() const { return (void*)m_SRV; }
 
+bool PreviewRenderer::ProjectPoint(float x, float y, float z, float& u, float& v) const
+{
+    if (!m_LastMVPValid)
+        return false;
+    return ProjectMVP(m_LastMVP, x, y, z, u, v);
+}
+
+bool PreviewRenderer::GetHeadCenter(float out[3]) const
+{
+    if (!m_AimParts[0].valid)
+        return false;
+    out[0] = (m_AimParts[0].min[0] + m_AimParts[0].max[0]) * 0.5f;
+    out[1] = (m_AimParts[0].min[1] + m_AimParts[0].max[1]) * 0.5f;
+    out[2] = (m_AimParts[0].min[2] + m_AimParts[0].max[2]) * 0.5f;
+    return true;
+}
+
+bool PreviewRenderer::GetHeadRadius(float& r) const
+{
+    if (!m_AimParts[0].valid)
+        return false;
+    const float w = m_AimParts[0].max[0] - m_AimParts[0].min[0];
+    const float d = m_AimParts[0].max[2] - m_AimParts[0].min[2];
+    r = (std::max)(w, d) * 0.5f;
+    return r > 0.001f;
+}
+
 void PreviewRenderer::Shutdown()
 {
     auto rel = [](auto*& p) { if (p) { p->Release(); p = nullptr; } };
+    
+    ClearAvatar();
+    rel(m_WhiteSRV);
+
     rel(m_VB); rel(m_CB); rel(m_IL); rel(m_VS); rel(m_PS);
     rel(m_TexSRV); rel(m_TexRes); rel(m_Sampler);
     rel(m_RS); rel(m_DSState); rel(m_DSNoWrite);

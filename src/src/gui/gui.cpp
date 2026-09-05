@@ -489,7 +489,7 @@ namespace gui
         // underneath the main GUI (rendered before it so the menu covers it)
         {
             const float dt = ImGui::GetIO().DeltaTime > 0.f ? ImGui::GetIO().DeltaTime : 1.f / 60.f;
-            const bool esp_wanted = s_menu_open && s_sidebar_selected == 2 && Cheat::g_Settings.misc.esp_preview;
+            const bool esp_wanted = s_menu_open && s_sidebar_selected == 1 && Cheat::g_Settings.misc.esp_preview;
             s_esp_anim += ((esp_wanted ? 1.f : 0.f) - s_esp_anim) * (1.f - std::exp(-14.f * dt));
             if (!esp_wanted && s_esp_anim < 0.001f)
                 s_esp_anim = 0.f;

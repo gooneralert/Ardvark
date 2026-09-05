@@ -21,6 +21,18 @@ public:
     bool LoadTexture(const std::string& tex_path);
     bool LoadTextureFromMemory(const unsigned char* png, std::size_t png_len);
 
+    // Avatar = real user model: geometry (body parts / skeleton / aim dots)
+    // comes from the standard OBJ loader, rendering uses one textured
+    // sub-mesh per material (like the standalone avatar-preview tool).
+    struct PreviewMaterial {
+        std::string name;               // MTL material name (OBJ "usemtl")
+        std::vector<unsigned char> png; // PNG texture bytes; empty = use kd
+        float kd[3]{ 1.f, 1.f, 1.f };   // diffuse colour fallback
+    };
+    bool LoadAvatar(const std::string& obj_source,
+                    const std::vector<PreviewMaterial>& materials);
+    void ClearAvatar();
+
     void Update(float dt_seconds);
     void AddRotationDelta(float dyaw, float dpitch);
     void AddZoom(float delta);
@@ -44,12 +56,20 @@ public:
     bool IsReady() const { return m_Ready && m_VB != nullptr && m_BodyVertCount > 0; }
     void Shutdown();
 
+    // Avatar preview overlays: project a model-space point to UV (0..1) using
+    // the last rendered camera, and expose the classified head location/size
+    // (drives 2D overlays like the china hat cone).
+    bool ProjectPoint(float x, float y, float z, float& u, float& v) const;
+    bool GetHeadCenter(float out[3]) const;
+    bool GetHeadRadius(float& r) const;
+
 private:
     bool CreateRenderTarget(unsigned int w, unsigned int h);
     bool CreateShaders();
     bool ApplyLoadedModel(LoadedModel& model);
     void BuildR6SkeletonFromParts();
     void BuildAimPartBoxes();
+    bool EnsureWhiteTexture();
     float WingAlpha() const;
 
     struct AimPartAABB {
@@ -104,6 +124,16 @@ private:
     ID3D11Texture2D* m_TexRes = nullptr;
     ID3D11ShaderResourceView* m_TexSRV = nullptr;
     ID3D11SamplerState* m_Sampler = nullptr;
+
+    // per-material avatar sub-meshes (one VB + own texture per material)
+    struct SubMesh {
+        ID3D11Buffer* vb = nullptr;
+        UINT count = 0;
+        ID3D11ShaderResourceView* srv = nullptr;
+        float kd[3]{ 1.f, 1.f, 1.f };
+    };
+    std::vector<SubMesh> m_SubMeshes;
+    ID3D11ShaderResourceView* m_WhiteSRV = nullptr;
 
     ID3D11RasterizerState* m_RS = nullptr;
     ID3D11DepthStencilState* m_DSState = nullptr;

@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="Debug|Win32">
@@ -214,14 +214,13 @@
     <ClInclude Include="src\features\visuals\MeshDxShader.h" />
     <ClInclude Include="src\features\visuals\KillEffects.h" />
     <ClInclude Include="src\features\visuals\ESPPreview.h" />
+    <ClInclude Include="src\features\visuals\AvatarLoader.h" />
     <ClInclude Include="src\features\visuals\boxfill\BoxFill.h" />
     <ClInclude Include="src\features\visuals\HavocWorldEsp.h" />
     <ClInclude Include="src\features\games\PhantomForces.h" />
     <ClInclude Include="src\features\games\ApocalypseRising.h" />
     <ClInclude Include="src\features\visuals\ModelLoader.h" />
     <ClInclude Include="src\features\visuals\PreviewRenderer.h" />
-    <ClInclude Include="assets\preview_model\preview_model_obj.h" />
-    <ClInclude Include="assets\preview_model\preview_model_texture.h" />
     <ClInclude Include="src\features\aim\Aim.h" />
     <ClInclude Include="src\features\aim\AimMouse.h" />
     <ClInclude Include="src\features\aim\RaycastSilent.h" />
@@ -357,6 +356,7 @@
     <ClCompile Include="src\features\visuals\MeshDxShader.cpp" />
     <ClCompile Include="src\features\visuals\KillEffects.cpp" />
     <ClCompile Include="src\features\visuals\ESPPreview.cpp" />
+    <ClCompile Include="src\features\visuals\AvatarLoader.cpp" />
     <ClCompile Include="src\features\visuals\ModelLoader.cpp" />
     <ClCompile Include="src\features\visuals\PreviewRenderer.cpp" />
     <ClCompile Include="src\features\aim\Aim.cpp" />

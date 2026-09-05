@@ -4,10 +4,9 @@
 #include "ESPPreview.h"
 #include "EspLayout.h"
 #include "PreviewRenderer.h"
+#include "AvatarLoader.h"
 #include "ShaderChams.h"
 #include "features/visuals/boxfill/BoxFill.h"
-#include "preview_model/preview_model_obj.h"
-#include "preview_model/preview_model_texture.h"
 #include "app/Graphics.h"
 #include "app/Settings.h"
 #include "gui/colors/colors.h"
@@ -521,11 +520,6 @@ void ESPPreview::Initialize()
     if (!g_Renderer.Initialize(Cheat::Core::g_Device, Cheat::Core::g_DeviceContext, 600, 900))
         return;
 
-    if (g_PreviewModelOBJSize > 0)
-        g_Renderer.LoadModelFromMemory(g_PreviewModelOBJData, g_PreviewModelOBJSize);
-    if (g_PreviewModelTextureSize > 0)
-        g_Renderer.LoadTextureFromMemory(g_PreviewModelTexture, g_PreviewModelTextureSize);
-
     g_InitDone = true;
 }
 
@@ -539,6 +533,30 @@ void ESPPreview::Shutdown()
 void ESPPreview::Render()
 {
     if (!g_InitDone) Initialize();
+
+    // The real local-player avatar is downloaded in the background at launch;
+    // once ready, swap out the premade model (the premade one stays as a
+    // fallback if the fetch failed or the game hasn't been joined yet).
+    {
+        Cheat::Features::AvatarLoader::Model av;
+        if (Cheat::Features::AvatarLoader::ConsumeReady(av))
+        {
+            std::vector<Cheat::Core::PreviewRenderer::PreviewMaterial> mats;
+            mats.reserve(av.materials.size());
+            for (auto& m : av.materials)
+            {
+                Cheat::Core::PreviewRenderer::PreviewMaterial pm;
+                pm.name = std::move(m.name);
+                pm.png = std::move(m.png);
+                pm.kd[0] = m.kd[0];
+                pm.kd[1] = m.kd[1];
+                pm.kd[2] = m.kd[2];
+                mats.push_back(std::move(pm));
+            }
+            if (!av.obj.empty() && !mats.empty())
+                g_Renderer.LoadAvatar(av.obj, mats);
+        }
+    }
 
     auto& s = Cheat::g_Settings;
     float now = (float)ImGui::GetTime();
@@ -749,7 +767,7 @@ void ESPPreview::Render()
     const ImVec2 imgMax(origin.x + avail.x, origin.y + modelH);
 
     if (!g_Renderer.IsReady()) {
-        const char* msg = "preview model missing";
+        const char* msg = "fetching your avatar...";
         const ImVec2 tsz = font->CalcTextSizeA(fs, FLT_MAX, 0.0f, msg);
         dl->AddText(font, fs,
             ImVec2(imgMin.x + (avail.x - tsz.x) * 0.5f, imgMin.y + modelH * 0.45f),
@@ -836,6 +854,71 @@ void ESPPreview::Render()
                                 UV(segs[i + 2], segs[i + 3]),
                                 bone, skel_t, skel_ol);
                         }
+                    }
+                }
+            }
+
+            // china hat (layuh): 3d-конус над головой
+            if (s.esp.china_hat) {
+                float headCenter[3];
+                if (g_Renderer.GetHeadCenter(headCenter)) {
+                    float hr = 0.55f;
+                    g_Renderer.GetHeadRadius(hr);
+                    const float hatR = hr * 1.35f;
+                    const float hatH = hr * 1.05f;
+                    const float baseY = headCenter[1] + hr; // top of head
+                    const int segs = 24;
+
+                    // vertices: [0]=apex, [1..segs+1]=base ring, +3 inner rings
+                    std::vector<ImVec2> screen;
+                    screen.reserve(1 + (segs + 1) * 4);
+                    auto push = [&](float x, float y, float z) {
+                        float u, v;
+                        if (!g_Renderer.ProjectPoint(x, y, z, u, v))
+                            return false;
+                        screen.push_back(UV(u, v));
+                        return true;
+                    };
+                    bool allOk = true;
+                    if (!push(headCenter[0], baseY + hatH, headCenter[2])) allOk = false;
+                    for (int i = 0; i <= segs && allOk; ++i) {
+                        const float a = i * 2.0f * 3.14159265f / segs;
+                        if (!push(headCenter[0] + hatR * std::cos(a), baseY,
+                                  headCenter[2] + hatR * std::sin(a))) allOk = false;
+                    }
+                    for (int ring = 1; ring <= 3 && allOk; ++ring) {
+                        const float r = hatR * (ring / 4.0f);
+                        const float y = baseY + hatH * (1.0f - ring / 4.0f);
+                        for (int i = 0; i <= segs && allOk; ++i) {
+                            const float a = i * 2.0f * 3.14159265f / segs;
+                            if (!push(headCenter[0] + r * std::cos(a), y,
+                                      headCenter[2] + r * std::sin(a))) allOk = false;
+                        }
+                    }
+                    if (allOk) {
+                        const ImU32 hcol = Col(s.esp.china_hat_color);
+                        // spokes: apex -> base ring
+                        for (int i = 1; i <= segs; ++i)
+                            dl->AddLine(screen[0], screen[i], hcol, 1.0f);
+                        // base ring
+                        for (int i = 1; i <= segs; ++i) {
+                            const int nxt = (i == segs) ? 1 : i + 1;
+                            dl->AddLine(screen[i], screen[nxt], hcol, 1.0f);
+                        }
+                        // inner rings
+                        for (int ring = 1; ring <= 3; ++ring) {
+                            const int ringStart = 1 + ring * (segs + 1);
+                            for (int i = 0; i < segs; ++i)
+                                dl->AddLine(screen[ringStart + i],
+                                            screen[ringStart + ((i + 1) % (segs + 1))],
+                                            hcol, 0.8f);
+                        }
+                        // vertical struts (every other base vertex)
+                        for (int i = 0; i < segs; i += 2)
+                            for (int ring = 0; ring < 3; ++ring)
+                                dl->AddLine(screen[1 + ring * (segs + 1) + i],
+                                            screen[1 + (ring + 1) * (segs + 1) + i],
+                                            hcol, 0.7f);
                     }
                 }
             }

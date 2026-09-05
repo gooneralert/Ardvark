@@ -313,7 +313,8 @@ void menu::draw()
 	const float prev_w = w * 0.42f; // чуть шире чем раньше
 	const float prev_h = h * 0.68f;
 	const float dock_gap = 14.f;
-	const bool show_prev = Cheat::g_Settings.esp.preview;
+	static int tab = 0; // active tab (aim/trigger/esp/misc/settings), driven by the tab bar
+	const bool show_prev = (tab == 2); // preview next to the menu on the esp tab
 	float total_w = w;
 	if (show_prev)
 	{
@@ -358,7 +359,6 @@ void menu::draw()
 	static ImVec2 rs_mouse{};
 	static ImVec2 rs_pos{};
 	static ImVec2 rs_sz{};
-	static int tab = 0;
 
 	if (!inited)
 	{
