@@ -239,17 +239,86 @@ $mergedNs       = [ordered]@{}
 $mergedEnums    = [ordered]@{}
 $mergedOrder    = @()
 
+# ---- Built-in baseline: namespaces/critical offsets that this repo's code
+# ---- depends on, but which are NOT always present in theos or jonah (or in
+# ---- the local jonah_offsets.h fallback once a Jonah download 404s). Theore
+# ---- values are still authoritative and override these; these only fill the
+# ---- gaps so a stale/missing upstream never produces a non-compiling Offsets.h.
+# Note: values mirror the committed src/core/roblox/offsets/Offsets.h.
+$baselineNsOrder = @(
+    'MeshContentProvider', 'MeshData', 'FileMeshData',
+    'MemEnforcedLRUCache', 'LruHolder', 'LruNode', 'CachedItem'
+)
+$baselineNs = @{
+    'MeshContentProvider' = [ordered]@{
+        'AssetID'   = @{ Value = '0x10'; Type = 'uintptr_t' }
+        'Cache'     = @{ Value = '0xf0'; Type = 'uintptr_t' }
+        'LRUCache'  = @{ Value = '0x20'; Type = 'uintptr_t' }
+        'MeshData'  = @{ Value = '0x40'; Type = 'uintptr_t' }
+        'ToMeshData'= @{ Value = '0x40'; Type = 'uintptr_t' }
+        'LruHolder' = @{ Value = '0xD8'; Type = 'uintptr_t' }
+    }
+    'MeshData' = [ordered]@{
+        'FaceEnd'    = @{ Value = '0x38'; Type = 'uintptr_t' }
+        'FaceStart'  = @{ Value = '0x30'; Type = 'uintptr_t' }
+        'VertexEnd'  = @{ Value = '0x8';  Type = 'uintptr_t' }
+        'VertexStart'= @{ Value = '0x0';  Type = 'uintptr_t' }
+    }
+    'FileMeshData' = [ordered]@{
+        'AabbMax'      = @{ Value = '0x2BC'; Type = 'uintptr_t' }
+        'AabbMin'      = @{ Value = '0x2B0'; Type = 'uintptr_t' }
+        'Faces'        = @{ Value = '0x30';  Type = 'uintptr_t' }
+        'FacesEnd'     = @{ Value = '0x38';  Type = 'uintptr_t' }
+        'Vertices'     = @{ Value = '0x0';   Type = 'uintptr_t' }
+        'VerticesEnd'  = @{ Value = '0x8';   Type = 'uintptr_t' }
+    }
+    'MemEnforcedLRUCache' = [ordered]@{
+        'Head' = @{ Value = '0x8'; Type = 'uintptr_t' }
+    }
+    'LruHolder' = [ordered]@{
+        'MemEnforcedLRUCache' = @{ Value = '0x20'; Type = 'uintptr_t' }
+    }
+    'LruNode' = [ordered]@{
+        'CachedItem' = @{ Value = '0x38'; Type = 'uintptr_t' }
+        'MeshId'     = @{ Value = '0x10'; Type = 'uintptr_t' }
+        'Next'       = @{ Value = '0x0';  Type = 'uintptr_t' }
+    }
+    'CachedItem' = [ordered]@{
+        'FileMeshData' = @{ Value = '0x28'; Type = 'uintptr_t' }
+    }
+}
+
+# ---- Apply baseline: create missing namespaces, add missing offset names ----
+foreach ($ns in $baselineNsOrder) {
+    if (-not $mergedNs.Contains($ns)) {
+        $mergedNs[$ns]    = [ordered]@{}
+        $mergedEnums[$ns] = [ordered]@{}
+        $mergedOrder += $ns
+    }
+    foreach ($off in $baselineNs[$ns].GetEnumerator()) {
+        if (-not $mergedNs[$ns].Contains($off.Key)) {
+            $mergedNs[$ns][$off.Key] = $off.Value
+        }
+    }
+}
+
 # 1. Copy all theos namespaces (offsets + enums)
 foreach ($ns in $theos.NamespaceOrder) {
-    $mergedNs[$ns]    = [ordered]@{}
-    $mergedEnums[$ns] = [ordered]@{}
+    if (-not $mergedNs.Contains($ns)) {
+        $mergedNs[$ns]    = [ordered]@{}
+        $mergedEnums[$ns] = [ordered]@{}
+        $mergedOrder += $ns
+    }
+    # Merge member-wise (NOT replace): a partial theos namespace must not wipe
+    # out the built-in baseline members (or earlier jonah entries).
     foreach ($off in $theos.Namespaces[$ns].GetEnumerator()) {
         $mergedNs[$ns][$off.Key] = $off.Value
     }
     foreach ($enum in $theos.NamespaceEnums[$ns].GetEnumerator()) {
-        $mergedEnums[$ns][$enum.Key] = $enum.Value
+        if (-not $mergedEnums[$ns].Contains($enum.Key)) {
+            $mergedEnums[$ns][$enum.Key] = $enum.Value
+        }
     }
-    $mergedOrder += $ns
 }
 
 # 2. Copy all theos globals
