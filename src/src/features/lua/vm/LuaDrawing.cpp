@@ -27,6 +27,8 @@ enum class DrawType : int {
 	Text,
 	Circle,
 	Square,
+	Triangle,
+	Image,
 };
 
 struct DrawObject {
@@ -48,6 +50,13 @@ struct DrawObject {
 	bool outline{ false };
 	std::string text;
 	std::string font;
+	// Triangle
+	float ax{ 0 }, ay{ 0 };
+	float bx{ 0 }, by{ 0 };
+	float cx{ 0 }, cy{ 0 };
+	// Image: raw binary payload (e.g. loaded via game:HttpGet)
+	std::string imageData;
+	float rounding{ 0.f }; // corner rounding radius (defaults 0)
 };
 
 constexpr size_t k_max_objects = 4096;
@@ -126,6 +135,8 @@ int l_tostring(lua_State* L)
 	case DrawType::Text: name = "Drawing(Text)"; break;
 	case DrawType::Circle: name = "Drawing(Circle)"; break;
 	case DrawType::Square: name = "Drawing(Square)"; break;
+	case DrawType::Triangle: name = "Drawing(Triangle)"; break;
+	case DrawType::Image: name = "Drawing(Image)"; break;
 	}
 	lua_pushstring(L, name);
 	return 1;
@@ -184,6 +195,18 @@ int l_index(lua_State* L)
 		if (std::strcmp(key, "Position") == 0) { LuaTypes::PushVector2(L, o.posX, o.posY); return 1; }
 		if (std::strcmp(key, "Size") == 0) { LuaTypes::PushVector2(L, o.width, o.height); return 1; }
 		if (std::strcmp(key, "Filled") == 0) { lua_pushboolean(L, o.filled); return 1; }
+	}
+	if (o.type == DrawType::Triangle)
+	{
+		if (std::strcmp(key, "PointA") == 0) { LuaTypes::PushVector2(L, o.ax, o.ay); return 1; }
+		if (std::strcmp(key, "PointB") == 0) { LuaTypes::PushVector2(L, o.bx, o.by); return 1; }
+		if (std::strcmp(key, "PointC") == 0) { LuaTypes::PushVector2(L, o.cx, o.cy); return 1; }
+	}
+	if (o.type == DrawType::Image)
+	{
+		if (std::strcmp(key, "Data") == 0) { lua_pushstring(L, o.imageData.c_str()); return 1; }
+		if (std::strcmp(key, "Size") == 0) { LuaTypes::PushVector2(L, o.width, o.height); return 1; }
+		if (std::strcmp(key, "Rounding") == 0) { lua_pushnumber(L, o.rounding); return 1; }
 	}
 
 	lua_pushnil(L);
@@ -294,6 +317,38 @@ int l_newindex(lua_State* L)
 		}
 		if (std::strcmp(key, "Filled") == 0) { o.filled = flag; return 0; }
 	}
+	if (o.type == DrawType::Triangle)
+	{
+		if (std::strcmp(key, "PointA") == 0 && isv2)
+		{
+			o.ax = vx; o.ay = vy;
+			return 0;
+		}
+		if (std::strcmp(key, "PointB") == 0 && isv2)
+		{
+			o.bx = vx; o.by = vy;
+			return 0;
+		}
+		if (std::strcmp(key, "PointC") == 0 && isv2)
+		{
+			o.cx = vx; o.cy = vy;
+			return 0;
+		}
+	}
+	if (o.type == DrawType::Image)
+	{
+		if (std::strcmp(key, "Data") == 0 && lua_type(L, 3) == LUA_TSTRING)
+		{
+			o.imageData = std::move(str);
+			return 0;
+		}
+		if (std::strcmp(key, "Size") == 0 && isv2)
+		{
+			o.width = vx; o.height = vy;
+			return 0;
+		}
+		if (std::strcmp(key, "Rounding") == 0 && isnum) { o.rounding = num; return 0; }
+	}
 	return 0;
 }
 
@@ -305,11 +360,19 @@ int l_new(lua_State* L)
 	else if (_stricmp(typeName, "Text") == 0) type = DrawType::Text;
 	else if (_stricmp(typeName, "Circle") == 0) type = DrawType::Circle;
 	else if (_stricmp(typeName, "Square") == 0) type = DrawType::Square;
+	else if (_stricmp(typeName, "Triangle") == 0) type = DrawType::Triangle;
+	else if (_stricmp(typeName, "Image") == 0) type = DrawType::Image;
 	else
-		return luaL_error(L, "Drawing.new: unknown type '%s' (Line/Text/Circle/Square)", typeName);
+		return luaL_error(L, "Drawing.new: unknown type '%s' (Line/Text/Circle/Square/Triangle/Image)", typeName);
 
 	auto obj = std::make_shared<DrawObject>();
 	obj->type = type;
+	if (type == DrawType::Image)
+	{
+		// matcha image default size is 50x50
+		obj->width = 50.f;
+		obj->height = 50.f;
+	}
 
 	auto* ud = static_cast<LuaDraw*>(lua_newuserdatauv(L, sizeof(LuaDraw), 0));
 	new (ud) LuaDraw{ obj };
@@ -525,6 +588,40 @@ void DrawSnapshot(ImDrawList* dl, ImFont* font,
 					dl->AddRectFilled(a, b, col);
 				else
 					dl->AddRect(a, b, col, 0.f, 0, th);
+				break;
+			}
+			case DrawType::Triangle:
+			{
+				const ImVec2 a(std::clamp(o.ax, -100000.f, 100000.f),
+					std::clamp(o.ay, -100000.f, 100000.f));
+				const ImVec2 b(std::clamp(o.bx, -100000.f, 100000.f),
+					std::clamp(o.by, -100000.f, 100000.f));
+				const ImVec2 c(std::clamp(o.cx, -100000.f, 100000.f),
+					std::clamp(o.cy, -100000.f, 100000.f));
+				if (o.filled)
+					dl->AddTriangleFilled(a, b, c, col);
+				else
+					dl->AddTriangle(a, b, c, col, th);
+				break;
+			}
+			case DrawType::Image:
+			{
+				// External VM: the raw binary payload (e.g. a PNG from
+				// game:HttpGet) can't be decoded to a GPU texture here, so draw
+				// a placeholder rect (rounded when Rounding is set). The object
+				// still tracks Data / Size / Rounding so Matcha-style scripts
+				// behave as a drawable.
+				const float x0 = std::clamp(o.posX, -100000.f, 100000.f);
+				const float y0 = std::clamp(o.posY, -100000.f, 100000.f);
+				const float w = std::clamp(o.width, 0.f, 100000.f);
+				const float h = std::clamp(o.height, 0.f, 100000.f);
+				const float rd = std::clamp(o.rounding, 0.f, 100000.f);
+				const ImVec2 a(x0, y0);
+				const ImVec2 b(x0 + w, y0 + h);
+				if (o.filled)
+					dl->AddRectFilled(a, b, col, rd);
+				else
+					dl->AddRect(a, b, col, rd, 0, th);
 				break;
 			}
 			}

@@ -462,6 +462,61 @@ int l_warn(lua_State* L)
 	return 0;
 }
 
+// --- Matcha console: error / errorl / printl ---
+// Matcha doc parity: despite the name, error()/errorl() print a red,
+// error-styled console line and return nil — they do NOT raise an error or
+// halt execution (use assert() to raise a pcall-catchable error). printl is
+// identical to print, registered as an alias in RegisterCompatGlobals.
+int l_error(lua_State* L)
+{
+	const int n = lua_gettop(L);
+	std::string line;
+	for (int i = 1; i <= n; ++i)
+	{
+		const char* s = luaL_tolstring(L, i, nullptr);
+		if (i > 1)
+			line.push_back('\t');
+		line += s ? s : "nil";
+		lua_pop(L, 1);
+	}
+	if (g_Settings.lua.internal_print)
+	{
+		// 3 = error level for the internal rbx print (LevelMap: 3 = error)
+		if (InternalPrint(3, line.c_str()))
+			return 0;
+	}
+	LuaExecutor::Log(LuaExecutor::LogLevel::Error, "%s", line.c_str());
+	return 0;
+}
+
+// --- newproxy (Lua 5.1 holdover) ---
+// Returns a blank userdata. With newproxy(true) it gets a fresh, settable
+// metatable (retrieved via getmetatable), so metamethods like __index and
+// __tostring work — exactly the documented Matcha behaviour.
+int l_newproxy(lua_State* L)
+{
+	const bool with_mt = !lua_isnoneornil(L, 1) && lua_toboolean(L, 1) != 0;
+	lua_newuserdata(L, 0);
+	if (with_mt)
+	{
+		lua_newtable(L); // fresh metatable each call, like Lua 5.1's newproxy
+		lua_setmetatable(L, -2);
+	}
+	return 1;
+}
+
+// --- GetPingValue ---
+// Matcha: returns the current server latency (ping) in milliseconds. Ardvark
+// doesn't have a published offset for the live ping value yet, so this returns
+// a valid number (0) as a placeholder — scripts that branch on the result
+// won't crash, same treatment as the getfflag stub.
+int l_getpingvalue(lua_State* L)
+{
+	(void)L;
+	lua_pushnumber(L, 0.0);
+	return 1;
+}
+
 int l_identifyexecutor(lua_State* L)
 {
 	lua_pushstring(L, "Ardvark");
@@ -2748,6 +2803,13 @@ int l_mousescroll(lua_State* L)
 
 void RegisterCompatGlobals(lua_State* L)
 {
+	// Matcha console aliases: printl == print, error/errorl == red error line
+	lua_pushcfunction(L, l_print);          lua_setglobal(L, "printl");
+	lua_pushcfunction(L, l_error);          lua_setglobal(L, "error");
+	lua_pushcfunction(L, l_error);          lua_setglobal(L, "errorl");
+	lua_pushcfunction(L, l_newproxy);       lua_setglobal(L, "newproxy");
+	lua_pushcfunction(L, l_getpingvalue);   lua_setglobal(L, "GetPingValue");
+
 	lua_pushcfunction(L, l_setclipboard);   lua_setglobal(L, "setclipboard");
 	lua_pushcfunction(L, l_getclipboard);   lua_setglobal(L, "getclipboard");
 	lua_pushcfunction(L, l_base64encode);   lua_setglobal(L, "base64encode");

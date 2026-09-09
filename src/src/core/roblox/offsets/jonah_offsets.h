@@ -3,8 +3,8 @@
  * Created by: Jonah (jonahw on Discord)
  * Github: https://git.jonah.cool/jonah/roblox-dumper
  * Roblox Version: version-e7d81637d42c4b23
- * Time Taken: 8780 ms (8.780000 seconds)
- * Total Offsets: 319
+ * Time Taken: 8365 ms (8.365000 seconds)
+ * Total Offsets: 329
  */
 
 #pragma once
@@ -51,7 +51,7 @@ namespace offsets {
     }
 
     namespace CachedItem {
-        inline constexpr uintptr_t FileMeshData = 0x28;
+        inline constexpr uintptr_t FileMeshData = 0x40;
     }
 
     namespace Camera {
@@ -124,15 +124,15 @@ namespace offsets {
         inline constexpr uintptr_t Clone = 0x1630C90; // better to resolve at runtime via func descriptors
         inline constexpr uintptr_t Destroy = 0x1630CB0; // better to resolve at runtime via func descriptors
         inline constexpr uintptr_t FindPartOnRay = 0xEBF270; // better to resolve at runtime via func descriptors
-        inline constexpr uintptr_t FindPartOnRayWithIgnoreList = 0x1829D5DE0; // better to resolve at runtime via func descriptors
+        inline constexpr uintptr_t FindPartOnRayWithIgnoreList = 0xEBF2F0; // better to resolve at runtime via func descriptors
         inline constexpr uintptr_t FindPartOnRayWithWhitelist = 0xEBF380; // better to resolve at runtime via func descriptors
         inline constexpr uintptr_t FireServer = 0xC9EED0; // better to resolve at runtime via func descriptors
         inline constexpr uintptr_t Print = 0x1C8A050;
-        inline constexpr uintptr_t RaisePropertyChanged = 0x3DED700;
-        inline constexpr uintptr_t Raycast = 0x1829D5CA0; // better to resolve at runtime via func descriptors
+        inline constexpr uintptr_t RaisePropertyChanged = 0xF6B4E6;
+        inline constexpr uintptr_t Raycast = 0xEB6860; // better to resolve at runtime via func descriptors
         inline constexpr uintptr_t SetParent = 0xB11F20;
         inline constexpr uintptr_t SetParentInternal = 0x1CD2C10;
-        inline constexpr uintptr_t Shapecast = 0x1829D5D40; // better to resolve at runtime via func descriptors
+        inline constexpr uintptr_t Shapecast = 0xEB8220; // better to resolve at runtime via func descriptors
     }
 
     namespace GuiBase2D {
@@ -166,7 +166,8 @@ namespace offsets {
 
     namespace Highlight {
         inline constexpr uintptr_t Adornee = 0xB8;
-        inline constexpr uintptr_t DepthMode = 0x6;
+        inline constexpr uintptr_t DepthMode = 0xE0;
+        inline constexpr uintptr_t Enabled = 0xF4;
         inline constexpr uintptr_t FillColor = 0xC8;
         inline constexpr uintptr_t FillTransparency = 0xE4;
         inline constexpr uintptr_t OutlineColor = 0xD4;
@@ -196,7 +197,7 @@ namespace offsets {
         inline constexpr uintptr_t NameDisplayDistance = 0x1B0;
         inline constexpr uintptr_t NameOcclusion = 0x1B4;
         inline constexpr uintptr_t RequiresNeck = 0x1DD;
-        inline constexpr uintptr_t RigType = 0x3D;
+        inline constexpr uintptr_t RigType = 0x1C0;
         inline constexpr uintptr_t SeatPart = 0x108;
         inline constexpr uintptr_t Sit = 0x1DE;
         inline constexpr uintptr_t TargetPoint = 0x14C;
@@ -228,6 +229,8 @@ namespace offsets {
         inline constexpr uintptr_t Atmosphere = 0x1D8;
         inline constexpr uintptr_t Brightness = 0x118;
         inline constexpr uintptr_t ClockTime = 0xC8;
+        inline constexpr uintptr_t ColorShift_Bottom = 0xDC;
+        inline constexpr uintptr_t ColorShift_Top = 0xE8;
         inline constexpr uintptr_t EnvironmentDiffuseScale = 0x11C;
         inline constexpr uintptr_t EnvironmentSpecularScale = 0x120;
         inline constexpr uintptr_t ExposureCompensation = 0x124;
@@ -242,15 +245,17 @@ namespace offsets {
     namespace LightingParameters { // these are in the lighting service
         inline constexpr uintptr_t GeographicLatitude = 0x134;
         inline constexpr uintptr_t LightColor = 0x15C;
+        inline constexpr uintptr_t LightDirection = 0x168;
         inline constexpr uintptr_t SkyAmbient = 0x150;
         inline constexpr uintptr_t SkyAmbient2 = 0x138;
-        inline constexpr uintptr_t Source = 0x15C;
-        inline constexpr uintptr_t TrueSunPosition = 0x160;
+        inline constexpr uintptr_t Source = 0x174;
+        inline constexpr uintptr_t TrueMoonPosition = 0x184;
+        inline constexpr uintptr_t TrueSunPosition = 0x178;
     }
 
     namespace LocalScript {
         inline constexpr uintptr_t Bytecode = 0x190;
-        inline constexpr uintptr_t Hash = 0x1A0;
+        inline constexpr uintptr_t Hash = 0xD0;
     }
 
     namespace LruHolder {
@@ -258,7 +263,7 @@ namespace offsets {
     }
 
     namespace LruNode {
-        inline constexpr uintptr_t CachedItem = 0x38;
+        inline constexpr uintptr_t CachedItem = 0x40;
         inline constexpr uintptr_t MeshId = 0x10;
         inline constexpr uintptr_t Next = 0x0;
     }
@@ -402,6 +407,14 @@ namespace offsets {
         inline constexpr uintptr_t TextureId = 0x128;
     }
 
+    namespace TaskScheduler {
+        inline constexpr uintptr_t JobEnd = 0xD0;
+        inline constexpr uintptr_t JobName = 0x18;
+        inline constexpr uintptr_t JobStart = 0xC8;
+        inline constexpr uintptr_t MaxFps = 0xB0;
+        inline constexpr uintptr_t Pointer = 0x8ABD728;
+    }
+
     namespace Team {
         inline constexpr uintptr_t TeamColor = 0xB8;
     }
@@ -448,7 +461,7 @@ namespace offsets {
         inline constexpr uintptr_t Text = 0xB88;
         inline constexpr uintptr_t TextColor3 = 0xEA0;
         inline constexpr uintptr_t TextDirection = 0xD40;
-        inline constexpr uintptr_t TextScaled = 0xB1D;
+        inline constexpr uintptr_t TextScaled = 0xD96;
         inline constexpr uintptr_t TextSize = 0xEC4;
         inline constexpr uintptr_t TextStrokeColor3 = 0xEAC;
         inline constexpr uintptr_t TextStrokeTransparency = 0xEC8;
