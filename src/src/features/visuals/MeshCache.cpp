@@ -34,10 +34,12 @@ bool LooksLikeMeshData(std::uint64_t md, int& vtx_count, int& fac_count,
 {
 	if (!g_Memory.IsValid(md))
 		return false;
-	vtx_start = g_Memory.Read<std::uint64_t>(md + ::MeshData::VertexStart);
-	std::uint64_t vtx_end = g_Memory.Read<std::uint64_t>(md + ::MeshData::VertexEnd);
-	fac_start = g_Memory.Read<std::uint64_t>(md + ::MeshData::FaceStart);
-	std::uint64_t fac_end = g_Memory.Read<std::uint64_t>(md + ::MeshData::FaceEnd);
+	// md is the FileMeshData struct: vertices/faces are vector pairs with
+	// start/end offsets straight from jonah_offsets.h.
+	vtx_start = g_Memory.Read<std::uint64_t>(md + ::FileMeshData::Vertices);
+	std::uint64_t vtx_end = g_Memory.Read<std::uint64_t>(md + ::FileMeshData::VerticesEnd);
+	fac_start = g_Memory.Read<std::uint64_t>(md + ::FileMeshData::Faces);
+	std::uint64_t fac_end = g_Memory.Read<std::uint64_t>(md + ::FileMeshData::FacesEnd);
 
 	vtx_count = (vtx_end > vtx_start) ? (int)((vtx_end - vtx_start) / sizeof(MeshVertex)) : 0;
 	fac_count = (fac_end > fac_start) ? (int)((fac_end - fac_start) / sizeof(MeshFace)) : 0;
@@ -109,9 +111,11 @@ void MeshCache::Refresh(bool force)
 	if (!g_Memory.IsValid(mcp))
 		return;
 
-	// theo иногда врёт (0xf0 = модуль); live обычно 0xd8
+	// Walk the mesh cache chain: MeshContentProvider -> LRUHolder ->
+	// MemEnforcedLRUCache -> LRUNode. Cache pointer probe offsets: the named
+	// member theos reports for the cache pointer is MeshContentProvider::LRUHolder.
 	static const uintptr_t k_cache_offs[] = {
-		::MeshContentProvider::Cache, 0xd8, 0xf0, 0xc8, 0xe0, 0xe8
+		::MeshContentProvider::LRUHolder, 0xf0, 0xc8, 0xe0, 0xe8
 	};
 
 	std::uint64_t cache_obj = 0;
@@ -123,10 +127,10 @@ void MeshCache::Refresh(bool force)
 		std::uint64_t c = g_Memory.Read<std::uint64_t>(mcp + off);
 		if (!g_Memory.IsValid(c))
 			continue;
-		std::uint64_t l = g_Memory.Read<std::uint64_t>(c + ::MeshContentProvider::LRUCache);
+		std::uint64_t l = g_Memory.Read<std::uint64_t>(c + ::LRUHolder::MemEnforcedLRUCache);
 		if (!g_Memory.IsValid(l))
 			continue;
-		std::uint64_t s = g_Memory.Read<std::uint64_t>(l + 0x08);
+		std::uint64_t s = g_Memory.Read<std::uint64_t>(l + ::MemEnforcedLRUCache::Head);
 		if (!g_Memory.IsValid(s))
 			continue;
 		std::uint64_t n = g_Memory.Read<std::uint64_t>(s);
@@ -148,13 +152,13 @@ void MeshCache::Refresh(bool force)
 
 	while (g_Memory.IsValid(node) && node != sentinel && max_nodes-- > 0)
 	{
-		std::string raw_id = g_Memory.ReadString(node + ::MeshContentProvider::AssetID);
+		std::string raw_id = g_Memory.ReadString(node + ::LRUNode::MeshId);
 		std::string id = CleanAssetId(raw_id);
 
 		if (!id.empty() && temp.find(id) == temp.end())
 		{
 			std::uint64_t pointer = g_Memory.Read<std::uint64_t>(
-				node + ::MeshContentProvider::ToMeshData);
+				node + ::LRUNode::CachedItem);
 
 			std::uint64_t mesh_data = 0;
 			int vtx_count = 0, fac_count = 0;
@@ -163,7 +167,7 @@ void MeshCache::Refresh(bool force)
 			if (g_Memory.IsValid(pointer))
 			{
 				mesh_data = g_Memory.Read<std::uint64_t>(
-					pointer + ::MeshContentProvider::MeshData);
+					pointer + ::CachedItem::FileMeshData);
 				if (!LooksLikeMeshData(mesh_data, vtx_count, fac_count, vtx_start, fac_start))
 				{
 					// иногда ToMeshData уже указывает на MeshData
@@ -195,7 +199,7 @@ void MeshCache::Refresh(bool force)
 			}
 		}
 
-		node = g_Memory.Read<std::uint64_t>(node);
+		node = g_Memory.Read<std::uint64_t>(node + ::LRUNode::Next);
 	}
 
 	std::lock_guard<std::mutex> lk(mtx_);

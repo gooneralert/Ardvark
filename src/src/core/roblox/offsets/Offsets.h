@@ -81,6 +81,10 @@ namespace ByteCode {
     constexpr uintptr_t Size = 0x20;
 }
 
+namespace CachedItem {
+    constexpr uintptr_t FileMeshData = 0x40;
+}
+
 namespace Camera {
     constexpr uintptr_t CameraSubject = 0xc8;
     constexpr uintptr_t CameraType = 0x138;
@@ -166,10 +170,19 @@ namespace FakeDataModel {
     constexpr uintptr_t RealDataModel = 0x1f8;
 }
 
+namespace FileMeshData {
+    constexpr uintptr_t AABBMax = 0x2bc;
+    constexpr uintptr_t AABBMin = 0x2b0;
+    constexpr uintptr_t Faces = 0x30;
+    constexpr uintptr_t FacesEnd = 0x38;
+    constexpr uintptr_t Vertices = 0x0;
+    constexpr uintptr_t VerticesEnd = 0x8;
+}
+
 namespace GuiBase2D {
-    constexpr uintptr_t AbsolutePosition = 0x10c;
+    constexpr uintptr_t AbsolutePosition = 0x0;
     constexpr uintptr_t AbsoluteRotation = 0xe8;
-    constexpr uintptr_t AbsoluteSize = 0x114;
+    constexpr uintptr_t AbsoluteSize = 0x0;
 }
 
 namespace GuiObject {
@@ -254,6 +267,17 @@ namespace Instance {
     constexpr uintptr_t This = 0x8;
 }
 
+namespace LRUHolder {
+    constexpr uintptr_t MemEnforcedLRUCache = 0x20;
+}
+
+namespace LRUNode {
+    constexpr uintptr_t AssetID = 0x10;
+    constexpr uintptr_t CachedItem = 0x40;
+    constexpr uintptr_t Next = 0x0;
+    constexpr uintptr_t MeshId = 0x10;
+}
+
 namespace Lighting {
     constexpr uintptr_t Ambient = 0xd0;
     constexpr uintptr_t Brightness = 0x118;
@@ -282,7 +306,7 @@ namespace Lighting {
 }
 
 namespace LocalScript {
-    constexpr uintptr_t ByteCode = 0x0;
+    constexpr uintptr_t ByteCode = 0xf00;
     constexpr uintptr_t GUID = 0xd0;
     constexpr uintptr_t Hash = 0x1a0;
 }
@@ -311,20 +335,12 @@ namespace MaterialColors {
     constexpr uintptr_t WoodPlanks = 0x15;
 }
 
-namespace MeshContentProvider {
-    constexpr uintptr_t AssetID = 0x10;
-    constexpr uintptr_t Cache = 0xf0;
-    constexpr uintptr_t LRUCache = 0x20;
-    constexpr uintptr_t MeshData = 0x40;
-    constexpr uintptr_t ToMeshData = 0x40;
-    constexpr uintptr_t LruHolder = 0xD8;
+namespace MemEnforcedLRUCache {
+    constexpr uintptr_t Head = 0x8;
 }
 
-namespace MeshData {
-    constexpr uintptr_t FaceEnd = 0x38;
-    constexpr uintptr_t FaceStart = 0x30;
-    constexpr uintptr_t VertexEnd = 0x8;
-    constexpr uintptr_t VertexStart = 0x0;
+namespace MeshContentProvider {
+    constexpr uintptr_t LRUHolder = 0xd8;
 }
 
 namespace MeshPart {
@@ -447,15 +463,15 @@ namespace RenderJob {
 }
 
 namespace RenderView {
-    constexpr uintptr_t DeviceD3D11 = 0x8;
-    constexpr uintptr_t LightingValid = 0x150;
-    constexpr uintptr_t SkyValid = 0x28d;
-    constexpr uintptr_t VisualEngine = 0x10;
+    constexpr uintptr_t DeviceD3D11 = 0x0;
+    constexpr uintptr_t LightingValid = 0x0;
+    constexpr uintptr_t SkyValid = 0x0;
+    constexpr uintptr_t VisualEngine = 0x0;
     constexpr uintptr_t SkyboxValid = 0x28D;
 }
 
 namespace RunService {
-    constexpr uintptr_t HeartbeatFPS = 0xc0;
+    constexpr uintptr_t HeartbeatFPS = 0xc5;
     constexpr uintptr_t HeartbeatTask = 0xe0;
 }
 
@@ -489,7 +505,7 @@ namespace Sky {
 }
 
 namespace Sound {
-    constexpr uintptr_t IsPlaying = 0x140;
+    constexpr uintptr_t IsPlaying = 0x0;
     constexpr uintptr_t Looped = 0x13d;
     constexpr uintptr_t PlaybackSpeed = 0x11c;
     constexpr uintptr_t RollOffMaxDistance = 0x120;
@@ -500,7 +516,7 @@ namespace Sound {
 }
 
 namespace SpawnLocation {
-    constexpr uintptr_t AllowTeamChangeOnTouch = 0x3d;
+    constexpr uintptr_t AllowTeamChangeOnTouch = 0x1f0;
     constexpr uintptr_t Enabled = 0x1f1;
     constexpr uintptr_t ForcefieldDuration = 0x1e8;
     constexpr uintptr_t Neutral = 0x1f2;
@@ -515,7 +531,7 @@ namespace SpecialMesh {
 }
 
 namespace StatsItem {
-    constexpr uintptr_t Value = 0xc8;
+    constexpr uintptr_t Value = 0xbda;
 }
 
 namespace SunRaysEffect {
@@ -569,7 +585,7 @@ namespace Tool {
     constexpr uintptr_t Enabled = 0x4b9;
     constexpr uintptr_t Grip = 0x4ac;
     constexpr uintptr_t ManualActivationOnly = 0x4ba;
-    constexpr uintptr_t RequiresHandle = 0x1d5;
+    constexpr uintptr_t RequiresHandle = 0x4bb;
     constexpr uintptr_t TextureId = 0x360;
     constexpr uintptr_t Tooltip = 0x468;
     constexpr uintptr_t GripForward = 0x4A0;
@@ -589,7 +605,7 @@ namespace UserInputService {
 namespace VehicleSeat {
     constexpr uintptr_t MaxSpeed = 0x228;
     constexpr uintptr_t SteerFloat = 0x22c;
-    constexpr uintptr_t ThrottleFloat = 0x188;
+    constexpr uintptr_t ThrottleFloat = 0x230;
     constexpr uintptr_t Torque = 0x234;
     constexpr uintptr_t TurnSpeed = 0x238;
     constexpr uintptr_t Occupant = 0x208;
@@ -634,10 +650,6 @@ namespace World {
     constexpr uintptr_t WorldSteps = 0x728;
 }
 
-namespace CachedItem {
-    constexpr uintptr_t FileMeshData = 0x28;
-}
-
 namespace ClassDescriptor {
     constexpr uintptr_t ClassName = 0x8;
     constexpr uintptr_t Creator = 0x230;
@@ -655,15 +667,6 @@ namespace Descriptor {
     constexpr uintptr_t Name = 0x8;
 }
 
-namespace FileMeshData {
-    constexpr uintptr_t AabbMax = 0x2BC;
-    constexpr uintptr_t AabbMin = 0x2B0;
-    constexpr uintptr_t Faces = 0x30;
-    constexpr uintptr_t FacesEnd = 0x38;
-    constexpr uintptr_t Vertices = 0x0;
-    constexpr uintptr_t VerticesEnd = 0x8;
-}
-
 namespace Fire {
     constexpr uintptr_t FireProximityPrompt = 0x30CA950;
 }
@@ -676,20 +679,21 @@ namespace Functions {
     constexpr uintptr_t Clone = 0x1630C90;
     constexpr uintptr_t Destroy = 0x1630CB0;
     constexpr uintptr_t FindPartOnRay = 0xEBF270;
-    constexpr uintptr_t FindPartOnRayWithIgnoreList = 0x1829D5DE0;
+    constexpr uintptr_t FindPartOnRayWithIgnoreList = 0xEBF2F0;
     constexpr uintptr_t FindPartOnRayWithWhitelist = 0xEBF380;
     constexpr uintptr_t FireServer = 0xC9EED0;
     constexpr uintptr_t Print = 0x1C8A050;
-    constexpr uintptr_t RaisePropertyChanged = 0x3DED700;
-    constexpr uintptr_t Raycast = 0x1829D5CA0;
+    constexpr uintptr_t RaisePropertyChanged = 0xF6B4E6;
+    constexpr uintptr_t Raycast = 0xEB6860;
     constexpr uintptr_t SetParent = 0xB11F20;
     constexpr uintptr_t SetParentInternal = 0x1CD2C10;
-    constexpr uintptr_t Shapecast = 0x1829D5D40;
+    constexpr uintptr_t Shapecast = 0xEB8220;
 }
 
 namespace Highlight {
     constexpr uintptr_t Adornee = 0xB8;
-    constexpr uintptr_t DepthMode = 0x6;
+    constexpr uintptr_t DepthMode = 0xE0;
+    constexpr uintptr_t Enabled = 0xF4;
     constexpr uintptr_t FillColor = 0xC8;
     constexpr uintptr_t FillTransparency = 0xE4;
     constexpr uintptr_t OutlineColor = 0xD4;
@@ -711,24 +715,12 @@ namespace InputObject {
 namespace LightingParameters {
     constexpr uintptr_t GeographicLatitude = 0x134;
     constexpr uintptr_t LightColor = 0x15C;
+    constexpr uintptr_t LightDirection = 0x168;
     constexpr uintptr_t SkyAmbient = 0x150;
     constexpr uintptr_t SkyAmbient2 = 0x138;
-    constexpr uintptr_t Source = 0x15C;
-    constexpr uintptr_t TrueSunPosition = 0x160;
-}
-
-namespace LruHolder {
-    constexpr uintptr_t MemEnforcedLRUCache = 0x20;
-}
-
-namespace LruNode {
-    constexpr uintptr_t CachedItem = 0x38;
-    constexpr uintptr_t MeshId = 0x10;
-    constexpr uintptr_t Next = 0x0;
-}
-
-namespace MemEnforcedLRUCache {
-    constexpr uintptr_t Head = 0x8;
+    constexpr uintptr_t Source = 0x174;
+    constexpr uintptr_t TrueMoonPosition = 0x184;
+    constexpr uintptr_t TrueSunPosition = 0x178;
 }
 
 namespace Players {
@@ -772,7 +764,7 @@ namespace TextLabel {
     constexpr uintptr_t Text = 0xB88;
     constexpr uintptr_t TextColor3 = 0xEA0;
     constexpr uintptr_t TextDirection = 0xD40;
-    constexpr uintptr_t TextScaled = 0xB1D;
+    constexpr uintptr_t TextScaled = 0xD96;
     constexpr uintptr_t TextSize = 0xEC4;
     constexpr uintptr_t TextStrokeColor3 = 0xEAC;
     constexpr uintptr_t TextStrokeTransparency = 0xEC8;
