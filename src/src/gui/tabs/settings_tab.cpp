@@ -121,6 +121,10 @@ void ng_tabs::draw_settings_tab(int* menu_kb, bool* kb_skip)
 
 		row_slider_f("lua tick (ms)", &g_Settings.lua.ticks_ms, 1.f, 15.f, "%.0f");
 
+		row_checkbox("overlay vsync", &g_Settings.gui.vsync);
+
+		row_slider_i("overlay fps cap", &g_Settings.gui.fps_cap, 0, 1440);
+
 		row_slider_f("glass blur", &g_Settings.gui.blur, 0.f, 100.f, "%.0f");
 
 		row_slider_f("glass frost", &g_Settings.gui.frost, 0.f, 1.f, "%.2f");

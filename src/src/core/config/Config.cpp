@@ -637,6 +637,8 @@ bool Save(const std::string& name)
 
     PutInt(out, "gui.theme", s.gui.theme);
     PutInt(out, "gui.font", s.gui.font);
+    PutBool(out, "gui.vsync", s.gui.vsync);
+    PutInt(out, "gui.fps_cap", s.gui.fps_cap);
     PutBool(out, "gui.watermark", s.gui.watermark);
     PutFloat(out, "gui.watermark_x", s.gui.watermark_x);
     PutFloat(out, "gui.watermark_y", s.gui.watermark_y);
@@ -1068,6 +1070,10 @@ bool Load(const std::string& name)
 
     GetInt(kv, "gui.theme", s.gui.theme);
     GetInt(kv, "gui.font", s.gui.font);
+    GetBool(kv, "gui.vsync", s.gui.vsync);
+    GetInt(kv, "gui.fps_cap", s.gui.fps_cap);
+    if (s.gui.fps_cap < 0) s.gui.fps_cap = 0;
+    if (s.gui.fps_cap > 1440) s.gui.fps_cap = 1440;
     GetBool(kv, "gui.watermark", s.gui.watermark);
     GetFloat(kv, "gui.watermark_x", s.gui.watermark_x);
     GetFloat(kv, "gui.watermark_y", s.gui.watermark_y);

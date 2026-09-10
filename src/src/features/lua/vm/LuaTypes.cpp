@@ -319,6 +319,78 @@ int c3_fromRGB(lua_State* L)
 	return 1;
 }
 
+int c3_fromHSV(lua_State* L)
+{
+	const float h = static_cast<float>(luaL_optnumber(L, 1, 0.0));
+	const float s = static_cast<float>(luaL_optnumber(L, 2, 0.0));
+	const float v = static_cast<float>(luaL_optnumber(L, 3, 0.0));
+
+	// standard HSV -> RGB (Roblox-compatible)
+	const float hh = h - std::floor(h);              // [0, 1)
+	const int i = static_cast<int>(hh * 6.0f) % 6;
+	const float f = hh * 6.0f - std::floor(hh * 6.0f);
+	const float p = v * (1.0f - s);
+	const float q = v * (1.0f - f * s);
+	const float t = v * (1.0f - (1.0f - f) * s);
+
+	float r, g, b;
+	switch (i)
+	{
+	case 0: r = v; g = t; b = p; break;
+	case 1: r = q; g = v; b = p; break;
+	case 2: r = p; g = v; b = t; break;
+	case 3: r = p; g = q; b = v; break;
+	case 4: r = t; g = p; b = v; break;
+	default: r = v; g = p; b = q; break;
+	}
+	PushC3Raw(L, r, g, b);
+	return 1;
+}
+
+int c3_fromHex(lua_State* L)
+{
+	const char* str = luaL_checkstring(L, 1);
+	size_t len = std::strlen(str);
+	size_t off = 0;
+	if (len > 0 && str[0] == '#')
+	{
+		off = 1;
+		len -= 1;
+	}
+
+	auto hexv = [](char c) -> int
+	{
+		if (c >= '0' && c <= '9') return c - '0';
+		if (c >= 'a' && c <= 'f') return c - 'a' + 10;
+		if (c >= 'A' && c <= 'F') return c - 'A' + 10;
+		return -1;
+	};
+
+	const char* p = str + off;
+	if (len == 3) // #RGB shorthand
+	{
+		const int r = hexv(p[0]), g = hexv(p[1]), b = hexv(p[2]);
+		if (r < 0 || g < 0 || b < 0)
+			return luaL_error(L, "fromHex: invalid hexadecimal string");
+		PushC3Raw(L, r / 15.f, g / 15.f, b / 15.f);
+		return 1;
+	}
+	if (len == 6) // RRGGBB
+	{
+		const int r1 = hexv(p[0]), r2 = hexv(p[1]);
+		const int g1 = hexv(p[2]), g2 = hexv(p[3]);
+		const int b1 = hexv(p[4]), b2 = hexv(p[5]);
+		if (r1 < 0 || r2 < 0 || g1 < 0 || g2 < 0 || b1 < 0 || b2 < 0)
+			return luaL_error(L, "fromHex: invalid hexadecimal string");
+		PushC3Raw(L,
+			(r1 * 16 + r2) / 255.f,
+			(g1 * 16 + g2) / 255.f,
+			(b1 * 16 + b2) / 255.f);
+		return 1;
+	}
+	return luaL_error(L, "fromHex: expected 3 or 6 hex digits");
+}
+
 int c3_toRGB(lua_State* L);
 
 int c3_index(lua_State* L)
@@ -709,6 +781,10 @@ void RegisterColor3(lua_State* L)
 	lua_setfield(L, -2, "new");
 	lua_pushcfunction(L, c3_fromRGB);
 	lua_setfield(L, -2, "fromRGB");
+	lua_pushcfunction(L, c3_fromHSV);
+	lua_setfield(L, -2, "fromHSV");
+	lua_pushcfunction(L, c3_fromHex);
+	lua_setfield(L, -2, "fromHex");
 	lua_newtable(L);
 	lua_pushcfunction(L, c3_new);
 	lua_setfield(L, -2, "__call");

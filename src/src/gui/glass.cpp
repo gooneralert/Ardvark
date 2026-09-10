@@ -155,7 +155,6 @@ namespace glass
                 tintColor = color;
                 SyncFallbackVisual(active);
             }
-
             long GetBuildVersion()
             {
                 if (GetVersionInfo != nullptr)
@@ -363,6 +362,11 @@ namespace glass
                 deviceContext->BeginDraw();
                 deviceContext->Clear();
                 deviceContext->CreateSolidColorBrush(tintColor, fallbackBrush.GetAddressOf());
+                // initial fill stays transparent: until the DWM thumbnail is
+                // live this surface would otherwise paint glass over the
+                // whole screen during startup
+                const D2D1_COLOR_F transparent = { 0.f, 0.f, 0.f, 0.f };
+                fallbackBrush->SetColor(transparent);
                 deviceContext->FillRectangle(fallbackRect, fallbackBrush.Get());
                 deviceContext->EndDraw();
 
@@ -562,7 +566,13 @@ namespace glass
                 }
                 else
                 {
-                    fallbackBrush->SetColor(tintColor);
+                    // DComp acrylic is ACTIVE: the visible glass comes from the
+                    // effect visual tree, not this surface. Keep the fallback
+                    // fully transparent — a tinted fill here covers the screen
+                    // while the DWM thumbnail is still loading (~1.5s flash)
+                    // and double-tints the glass afterwards.
+                    const D2D1_COLOR_F transparent = { 0.f, 0.f, 0.f, 0.f };
+                    fallbackBrush->SetColor(transparent);
                 }
 
                 deviceContext->BeginDraw();
@@ -653,7 +663,7 @@ namespace glass
                 0, 0, 100, 100, nullptr, nullptr, hInst, nullptr);
             if (!g_acrylic) return false;
 
-            g_overlay = FindWindowW(L"jewsploit_overlay", nullptr);
+            g_overlay = Cheat::Renderer::GetHwnd();
             // sit directly below the main overlay in z-order so the menu draws on top
             if (g_overlay)
                 SetWindowPos(g_acrylic, g_overlay, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
@@ -721,6 +731,14 @@ namespace glass
     {
     }
 
+    // last values actually applied to the compositor. gui::render() pushes
+    // frost/blur/tint EVERY frame; without this change-detection each frame
+    // pays a full-screen D2D redraw + a vsynced Present (twice) plus a DComp
+    // Commit, which throttles the whole overlay loop to half the monitor
+    // refresh rate no matter what vsync/cap settings say.
+    static D2D1_COLOR_F g_lastAppliedTint = { -1.f, -1.f, -1.f, -1.f };
+    static float        g_lastAppliedBlur = -1.f;
+
     void set_frost(float f)
     {
         const float v = clampf(f, 0.f, 1.f);
@@ -728,7 +746,13 @@ namespace glass
         if (g_compositor && g_dcomp_ok)
         {
             const float fa = std::min(0.85f, 0.12f + 0.55f * v) * clampf(g_tint_a.load(), 0.f, 1.f);
-            g_compositor->SetTintColor(D2D1::ColorF(g_tint_r.load(), g_tint_g.load(), g_tint_b.load(), fa), true);
+            const D2D1_COLOR_F c = D2D1::ColorF(g_tint_r.load(), g_tint_g.load(), g_tint_b.load(), fa);
+            if (c.r != g_lastAppliedTint.r || c.g != g_lastAppliedTint.g ||
+                c.b != g_lastAppliedTint.b || c.a != g_lastAppliedTint.a)
+            {
+                g_lastAppliedTint = c;
+                g_compositor->SetTintColor(c, true);
+            }
         }
         else if (g_accent_fb && g_acrylic)
         {
@@ -737,19 +761,25 @@ namespace glass
             const BYTE rb = (BYTE)(clampf(g_tint_r.load(), 0.f, 1.f) * 255.f);
             const BYTE gb = (BYTE)(clampf(g_tint_g.load(), 0.f, 1.f) * 255.f);
             const BYTE bb = (BYTE)(clampf(g_tint_b.load(), 0.f, 1.f) * 255.f);
-            const auto lib = LoadLibraryW(L"user32.dll");
-            if (lib)
+            const DWORD attr = ((DWORD)a << 24) | ((DWORD)bb << 16) | ((DWORD)gb << 8) | (DWORD)rb;
+            static DWORD s_lastAttr = 0;
+            if (attr != s_lastAttr)
             {
-                typedef BOOL(WINAPI* pFn)(HWND, WINCOMPATTRDATA*);
-                const auto fn = (pFn)GetProcAddress(lib, "SetWindowCompositionAttribute");
-                if (fn)
+                s_lastAttr = attr;
+                const auto lib = LoadLibraryW(L"user32.dll");
+                if (lib)
                 {
-                    const DWORD rgb = ((DWORD)bb << 16) | ((DWORD)gb << 8) | (DWORD)rb;
-                    ACCENTPOLICY policy{ 4, 2, (int)(((DWORD)a << 24) | rgb), 0 };
-                    WINCOMPATTRDATA data{ 19, &policy, sizeof(ACCENTPOLICY) };
-                    fn(g_acrylic, &data);
+                    typedef BOOL(WINAPI* pFn)(HWND, WINCOMPATTRDATA*);
+                    const auto fn = (pFn)GetProcAddress(lib, "SetWindowCompositionAttribute");
+                    if (fn)
+                    {
+                        const DWORD rgb = ((DWORD)bb << 16) | ((DWORD)gb << 8) | (DWORD)rb;
+                        ACCENTPOLICY policy{ 4, 2, (int)(((DWORD)a << 24) | rgb), 0 };
+                        WINCOMPATTRDATA data{ 19, &policy, sizeof(ACCENTPOLICY) };
+                        fn(g_acrylic, &data);
+                    }
+                    FreeLibrary(lib);
                 }
-                FreeLibrary(lib);
             }
         }
     }
@@ -768,8 +798,11 @@ namespace glass
     {
         const float v = clampf(f, 0.f, 100.f);
         g_blur.store(v);
-        if (g_compositor && g_dcomp_ok)
+        if (g_compositor && g_dcomp_ok && v != g_lastAppliedBlur)
+        {
+            g_lastAppliedBlur = v;
             g_compositor->SetBlurAmount(v);
+        }
     }
 
     void set_menu_rect(float x, float y, float w, float h)
@@ -877,7 +910,26 @@ namespace glass
 
         if (wasHidden)
         {
-            ShowWindow(g_acrylic, SW_SHOWNOACTIVATE);
+            // insert DIRECTLY below the overlay instead of a plain show: when a
+            // newly-shown topmost window is let through ShowWindow alone, DWM
+            // can briefly composite it ABOVE the menu until the overlay's
+            // (now once-per-second) TOPMOST re-assert runs — visible as glass
+            // covering the UI for ~a second after opening.
+            // NOTE: the overlay's window class is "jewsploit.overlay" (dot, not
+            // underscore) — FindWindowW with the wrong name always returned NULL,
+            // so this insert silently never happened and the freshly shown glass
+            // sat ABOVE the menu for ~1s until the overlay's TOPMOST re-assert
+            // pushed it back down.
+            g_overlay = Cheat::Renderer::GetHwnd();
+            if (g_overlay)
+            {
+                SetWindowPos(g_acrylic, g_overlay, 0, 0, 0, 0,
+                    SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW);
+            }
+            else
+            {
+                ShowWindow(g_acrylic, SW_SHOWNOACTIVATE);
+            }
         }
 
         if (!g_compositor && !g_accent_fb)

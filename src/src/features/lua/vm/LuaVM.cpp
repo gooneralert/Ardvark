@@ -2616,6 +2616,12 @@ int l_getscripthash(lua_State* L)
 }
 
 // --- WorldToScreen ---
+// Projects a world position into the Roblox viewport's pixel space (origin
+// top-left, same space as Camera.ViewportSize). Prefers the VisualEngine's
+// precomputed ViewMatrix — the same path our ESP and charm-wtf use (flipped
+// once per frame by the engine, immune to camera-rotation storage quirks) —
+// and falls back to reconstructing the projection from the camera's own
+// rotation matrix + FOV if that read fails.
 int l_worldtoscreen(lua_State* L)
 {
 	Vector3 world{};
@@ -2626,15 +2632,75 @@ int l_worldtoscreen(lua_State* L)
 	};
 	if (!LuaTypes::ToVector3(L, 1, world))
 		return fail(L);
-	if (!Globals::Workspace || !g_Memory.IsValid(Globals::Workspace->address))
-		return fail(L);
-	std::shared_ptr<Instance> cam = Globals::Workspace->GetCurrentCamera();
-	if (!cam || !g_Memory.IsValid(cam->address))
-		return fail(L);
 
-	Cheat::Camera c(cam->address);
+	Vector2 viewport{};
+	std::uint64_t cam_addr = 0;
+	if (Globals::Workspace && g_Memory.IsValid(Globals::Workspace->address))
+	{
+		auto cam = Globals::Workspace->GetCurrentCamera();
+		if (cam && g_Memory.IsValid(cam->address))
+		{
+			cam_addr = cam->address;
+			const Vector2 vp = Cheat::Camera(cam->address).GetViewportSize();
+			if (vp.x > 1.f && vp.y > 1.f)
+				viewport = vp;
+		}
+	}
+
+	// 1) VisualEngine view matrix (primary).
+	bool have_vm = false;
+	Matrix4x4 vm{};
+	const std::uint64_t modbase = g_Memory.GetModuleBase();
+	const std::uint64_t ve = g_Memory.Read<std::uint64_t>(
+		modbase + ::VisualEngine::Pointer);
+	if (g_Memory.IsValid(ve))
+	{
+		vm = g_Memory.Read<Matrix4x4>(ve + ::VisualEngine::ViewMatrix);
+		const float probe = vm.m[0][0] + vm.m[1][1] + vm.m[2][2] + vm.m[3][3];
+		if (std::isfinite(probe) && std::fabs(probe) > 1e-3f)
+		{
+			if (viewport.x <= 1.f || viewport.y <= 1.f)
+			{
+				const Vector2 dims = g_Memory.Read<Vector2>(
+					ve + ::VisualEngine::Dimensions);
+				if (dims.x > 1.f && dims.y > 1.f)
+					viewport = dims;
+			}
+			have_vm = true;
+		}
+	}
+
 	Vector2 scr{};
-	const bool on = c.WorldToScreen(world, scr);
+	bool on = false;
+
+	if (have_vm && viewport.x > 1.f && viewport.y > 1.f)
+	{
+		// same math as ESP::WorldToScreen(view matrix, viewport, ...) with no
+		// overlay rescale — docs promise viewport-space pixels
+		const float w = world.x * vm.m[3][0] + world.y * vm.m[3][1]
+			+ world.z * vm.m[3][2] + vm.m[3][3];
+		if (w >= 0.01f)
+		{
+			float x = world.x * vm.m[0][0] + world.y * vm.m[0][1]
+				+ world.z * vm.m[0][2] + vm.m[0][3];
+			float y = world.x * vm.m[1][0] + world.y * vm.m[1][1]
+				+ world.z * vm.m[1][2] + vm.m[1][3];
+			const float invw = 1.f / w;
+			x *= invw;
+			y *= invw;
+			scr.x = (viewport.x / 2.f) + x * (viewport.x / 2.f);
+			scr.y = (viewport.y / 2.f) - y * (viewport.y / 2.f);
+			on = true;
+		}
+	}
+
+	// 2) fallback: reconstruct from camera rotation + FOV.
+	if (!on && cam_addr && g_Memory.IsValid(cam_addr))
+		on = Cheat::Camera(cam_addr).WorldToScreen(world, scr);
+
+	if (!on)
+		scr = {};
+
 	LuaTypes::PushVector2(L, scr.x, scr.y);
 	lua_pushboolean(L, on ? 1 : 0);
 	return 2;

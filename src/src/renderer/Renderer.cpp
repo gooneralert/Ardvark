@@ -6,6 +6,7 @@
 #include "gui/glass.h"
 #include "imgui.h"
 #include "app/Graphics.h"
+#include "app/Settings.h"
 #include "core/memory/Memory.h"
 #include "core/console/Console.h"
 #include "features/visuals/Crosshair.h"
@@ -188,10 +189,39 @@ namespace Cheat {
 
         ResizeSwapchain(w, h);
 
-        SetWindowPos(
-            m_Hwnd, HWND_TOPMOST,
-            tl.x, tl.y, w, h,
-            SWP_SHOWWINDOW | SWP_NOACTIVATE);
+        // Only do the (expensive) move/size sync when the game window actually
+        // moved or resized, or when the overlay is currently hidden (tab-out).
+        // A cheap TOPMOST/visibility re-assert is issued at most once per
+        // second: the acrylic glass window sits just below the overlay in
+        // z-order and DWM can occasionally reorder topmost windows, so without
+        // any re-assert the glass backdrop could end up drawn OVER the menu —
+        // but re-asserting every frame throttled the loop to DWM's composition
+        // rate (monitor refresh), which no vsync/cap setting could override.
+        static RECT s_last{ -1, -1, -1, -1 };
+        // SetWindowPos synchronizes with DWM's compositor, so calling it every
+        // frame throttles the render loop to the monitor's refresh rate no
+        // matter what vsync/cap settings say. Only issue it when the game rect
+        // actually changed, the overlay is hidden, or on a low-frequency
+        // re-assert (DWM can reorder topmost windows vs the glass backdrop).
+        static DWORD s_lastAssertTick = 0;
+        const bool rectChanged =
+            s_last.left != tl.x || s_last.top != tl.y ||
+            s_last.right != br.x || s_last.bottom != br.y;
+        const bool hidden = !IsWindowVisible(m_Hwnd);
+        const bool periodic = (now - s_lastAssertTick) >= 1000;
+
+        if (rectChanged || hidden || periodic)
+        {
+            s_lastAssertTick = now;
+            if (rectChanged)
+                s_last = { tl.x, tl.y, br.x, br.y };
+            SetWindowPos(
+                m_Hwnd, HWND_TOPMOST,
+                rectChanged ? tl.x : 0, rectChanged ? tl.y : 0,
+                rectChanged ? w : 0, rectChanged ? h : 0,
+                SWP_NOACTIVATE | (rectChanged ? SWP_SHOWWINDOW : SWP_NOMOVE | SWP_NOSIZE) |
+                (hidden ? SWP_SHOWWINDOW : 0));
+        }
 
         m_GameActive = true;
     }
@@ -263,6 +293,14 @@ namespace Cheat {
     void Renderer::MainLoop()
     {
         bool running = true;
+        // QPC-based cap: target overlay frame interval in microseconds.
+        // 0 = uncapped (present as fast as the loop + swap chain allow).
+        long long target_us = 0;
+        LARGE_INTEGER t_freq{};
+        QueryPerformanceFrequency(&t_freq);
+        LARGE_INTEGER t_next{};
+        QueryPerformanceCounter(&t_next);
+
         while (running)
         {
             MSG msg;
@@ -289,6 +327,46 @@ namespace Cheat {
                 Visuals::Crosshair::NotifyInactive();
                 Sleep(15);
                 continue;
+            }
+
+            // enforce the user-requested cap (0 = off / uncapped). vsync is handled
+            // by Present's sync interval below, so only do software pacing when we
+            // are NOT syncing to the monitor.
+            if (g_Settings.gui.vsync)
+            {
+                target_us = 0;
+            }
+            else
+            {
+                const int cap = g_Settings.gui.fps_cap > 0 ? g_Settings.gui.fps_cap : 0;
+                const long long want = cap > 0 ? (1000000LL / (long long)cap) : 0;
+                if (want > 0)
+                {
+                    for (;;)
+                    {
+                        LARGE_INTEGER now{};
+                        QueryPerformanceCounter(&now);
+                        const long long elapsed = (long long)((double)(now.QuadPart - t_next.QuadPart) * 1000000.0 / (double)t_freq.QuadPart);
+                        if (elapsed < 0)
+                        {
+                            // not yet — sleep the remainder in small slices so we
+                            // still drain WM_QUIT promptly
+                            long long left_us = -elapsed;
+                            const long long slice = left_us > 2000 ? 1000 : left_us;
+                            Sleep((DWORD)((slice + 999) / 1000));
+                            continue;
+                        }
+                        target_us = want;
+                        break;
+                    }
+                }
+                else
+                {
+                    target_us = 0;
+                    LARGE_INTEGER now{};
+                    QueryPerformanceCounter(&now);
+                    t_next = now;
+                }
             }
 
             float clear[4] = { 0.f, 0.f, 0.f, 0.f };
@@ -324,8 +402,22 @@ namespace Cheat {
                 }
             }
 
-            // 0 = без vsync оверлея: меньше задержка относительно камеры игры
-            m_SwapChain->Present(0, 0);
+            // vsync: on = present syncs to the monitor's refresh, off = uncapped
+            // (present as fast as the loop can, less lag relative to the game camera)
+            m_SwapChain->Present(g_Settings.gui.vsync ? 1 : 0, 0);
+
+            // advance the software cap's next-frame target; snap to now when a frame
+            // overran its budget so lag doesn't accumulate into burst-then-idle
+            if (target_us > 0)
+            {
+                LARGE_INTEGER now{};
+                QueryPerformanceCounter(&now);
+                long long next = t_next.QuadPart
+                    + (long long)((double)target_us * (double)t_freq.QuadPart / 1000000.0);
+                if (next < now.QuadPart)
+                    next = now.QuadPart;
+                t_next.QuadPart = next;
+            }
         }
 
         Visuals::Crosshair::Shutdown();
@@ -436,9 +528,12 @@ namespace Cheat {
         // path like before. B8G8R8A8 gives us an alpha channel so the per-pixel
         // transparency of the layered window still works and the Windows acrylic
         // backdrop shows through the transparent pixels.
+        // Triple-buffered: with 2 buffers a windowed swap chain's Present blocks
+        // waiting for a free buffer (throttling the whole loop to the compositor
+        // cadence ~60-72Hz), so a 3rd buffer keeps Present returning immediately.
         DXGI_SWAP_CHAIN_DESC sd;
         ZeroMemory(&sd, sizeof(sd));
-        sd.BufferCount = 2;
+        sd.BufferCount = 3;
         sd.BufferDesc.Width = 0;
         sd.BufferDesc.Height = 0;
         sd.BufferDesc.Format = DXGI_FORMAT_B8G8R8A8_UNORM;

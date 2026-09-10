@@ -13,6 +13,7 @@ extern "C" {
 #include <vector>
 #include <cstring>
 #include <algorithm>
+#include <atomic>
 #include <cfloat>
 
 namespace Cheat {
@@ -59,10 +60,18 @@ struct DrawObject {
 	float rounding{ 0.f }; // corner rounding radius (defaults 0)
 };
 
-constexpr size_t k_max_objects = 4096;
+// One line segment's worth of neon glow is 12 objects (3 subdivs x 4 layers),
+// so a 500-point neon trail needs ~6000 live objects. Keep the cap generous
+// enough for documented-scale Matcha scripts (docs cap examples at 500 points)
+// without letting a runaway script eat unbounded memory.
+constexpr size_t k_max_objects = 16384;
 
 std::mutex g_mutex;
 std::vector<std::shared_ptr<DrawObject>> g_objects;
+// bumped whenever ZIndex ordering can change (new object, ZIndex write) so the
+// render thread only re-sorts when it actually has to (a 500-pt neon trail is
+// ~6000 objects; re-sorting that every frame is measurable)
+std::atomic<std::uint64_t> g_zorder_dirty{ 1 };
 
 struct LuaDraw {
 	std::shared_ptr<DrawObject> obj;
@@ -98,6 +107,7 @@ bool publish(std::shared_ptr<DrawObject> obj)
 	if (g_objects.size() >= k_max_objects)
 		return false;
 	g_objects.push_back(std::move(obj));
+	g_zorder_dirty.fetch_add(1, std::memory_order_relaxed);
 	return true;
 }
 
@@ -245,8 +255,13 @@ int l_newindex(lua_State* L)
 	if (std::strcmp(key, "Thickness") == 0) { if (isnum) o.thickness = num; return 0; }
 	if (std::strcmp(key, "ZIndex") == 0)
 	{
-		if (isnum)
+		// only invalidate the render sort when the value actually changes —
+		// trail scripts rewrite ZIndex every frame with the same value
+		if (isnum && o.zindex != static_cast<int>(num))
+		{
 			o.zindex = static_cast<int>(num);
+			g_zorder_dirty.fetch_add(1, std::memory_order_relaxed);
+		}
 		return 0;
 	}
 	if (std::strcmp(key, "Color") == 0)
@@ -519,7 +534,10 @@ void DrawSnapshot(ImDrawList* dl, ImFont* font,
 	const std::vector<std::shared_ptr<DrawObject>>& objs)
 {
 	// This runs on Roblox's present thread — never let a drawing fault
-	// take down the game.
+	// take down the game. Works on a shared_ptr snapshot taken under the
+	// lock: object fields are plain floats/bools, so a racing write can at
+	// worst show one stale value for a frame (visually invisible), while
+	// copying the pointers is O(1) per object instead of deep-copying strings.
 	__try
 	{
 		for (const auto& sp : objs)
@@ -639,30 +657,40 @@ void Render()
 		return;
 	ImFont* font = ImGui::GetFont();
 
-	// Snapshot under the lock, then draw unlocked so a fault here can't leave
-	// the mutex held (which would deadlock Roblox's present thread). Use
-	// try_to_lock so a leaked/held mutex never blocks the overlay render thread.
-	std::vector<std::shared_ptr<DrawObject>> snapshot;
+	// Snapshot shared_ptrs under the lock (cheap: refcount bumps only — the
+	// Lua thread mutates ~thousands of objects' fields per frame for trails,
+	// and deep-copying all of that every overlay frame showed up as an fps
+	// hit). If the lock is contended this frame, re-draw the previous
+	// snapshot instead of dropping the frame (kills flicker).
+	// Draw list is rebuilt every frame, so commands must be re-emitted here
+	// each call regardless; the sort is skipped unless z-order changed.
+	static std::vector<std::shared_ptr<DrawObject>> last_snapshot;
+	static std::uint64_t last_zorder = 0;
+
 	{
 		std::unique_lock lock(g_mutex, std::try_to_lock);
-		if (!lock.owns_lock())
-			return;
-		g_objects.erase(
-			std::remove_if(g_objects.begin(), g_objects.end(),
-				[](const std::shared_ptr<DrawObject>& o) { return !o || !o->alive; }),
-			g_objects.end());
-		snapshot.reserve(g_objects.size());
-		for (const auto& sp : g_objects)
-			snapshot.push_back(sp);
+		if (lock.owns_lock())
+		{
+			g_objects.erase(
+				std::remove_if(g_objects.begin(), g_objects.end(),
+					[](const std::shared_ptr<DrawObject>& o) { return !o || !o->alive; }),
+				g_objects.end());
+			last_snapshot.assign(g_objects.begin(), g_objects.end());
+		}
 	}
 
 	// Z-order: draw lower ZIndex first (behind), higher ZIndex on top.
-	std::stable_sort(snapshot.begin(), snapshot.end(),
-		[](const std::shared_ptr<DrawObject>& a, const std::shared_ptr<DrawObject>& b) {
-			return (a ? a->zindex : 0) < (b ? b->zindex : 0);
-		});
+	const std::uint64_t zorder = g_zorder_dirty.load(std::memory_order_relaxed);
+	if (zorder != last_zorder)
+	{
+		std::stable_sort(last_snapshot.begin(), last_snapshot.end(),
+			[](const std::shared_ptr<DrawObject>& a, const std::shared_ptr<DrawObject>& b) {
+				return (a ? a->zindex : 0) < (b ? b->zindex : 0);
+			});
+		last_zorder = zorder;
+	}
 
-	DrawSnapshot(dl, font, snapshot);
+	DrawSnapshot(dl, font, last_snapshot);
 }
 
 void Register(lua_State* L)

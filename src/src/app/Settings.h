@@ -618,6 +618,8 @@ bool  music{ false };   // music player window
         struct {
             int   theme{ 0 };
             int   font{ 0 }; // proxima soft bold
+            bool  vsync{ false };     // sync overlay present to the monitor's refresh
+            int   fps_cap{ 0 };       // 0 = uncapped, else overlay render cap (fps)
             float frost{ 0.10f };  // glass milkiness 0..1 (tint + white wash, 0 = clear)
             float blur{ 6.f };    // glass blur strength 0..100 (default 6)
             float tint[4]{ 27.f / 255.f, 27.f / 255.f, 29.f / 255.f, 1.f };  // glass tint color (rgb + strength), default #1B1B1DFF

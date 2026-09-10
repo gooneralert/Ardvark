@@ -988,6 +988,11 @@ int l_index(lua_State* L)
 			lua_pushnumber(L, hum.GetMaxHealth());
 			return 1;
 		}
+		if (std::strcmp(key, "HipHeight") == 0)
+		{
+			lua_pushnumber(L, hum.GetHipHeight());
+			return 1;
+		}
 		if (std::strcmp(key, "WalkSpeed") == 0)
 		{
 			lua_pushnumber(L, hum.GetWalkSpeed());
