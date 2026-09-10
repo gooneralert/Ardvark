@@ -366,7 +366,6 @@ namespace ModuleScript {
     constexpr uintptr_t GUID = 0xd0;
     constexpr uintptr_t Hash = 0x148;
     constexpr uintptr_t IsCoreScript = 0x0;
-    constexpr uintptr_t IsRobloxScript = 0x168;
 }
 
 namespace MouseService {
@@ -659,8 +658,8 @@ namespace ClassDescriptor {
 }
 
 namespace Creator {
-    constexpr uintptr_t MapEnd = 0x83B1508;
-    constexpr uintptr_t MapStart = 0x83B1500;
+    constexpr uintptr_t MapEnd = 0x844F058;
+    constexpr uintptr_t MapStart = 0x844F050;
 }
 
 namespace Descriptor {
@@ -668,7 +667,7 @@ namespace Descriptor {
 }
 
 namespace Fire {
-    constexpr uintptr_t FireProximityPrompt = 0x30CA950;
+    constexpr uintptr_t FireProximityPrompt = 0x3102650;
 }
 
 namespace FunctionDescriptor {
@@ -676,18 +675,18 @@ namespace FunctionDescriptor {
 }
 
 namespace Functions {
-    constexpr uintptr_t Clone = 0x1630C90;
-    constexpr uintptr_t Destroy = 0x1630CB0;
-    constexpr uintptr_t FindPartOnRay = 0xEBF270;
-    constexpr uintptr_t FindPartOnRayWithIgnoreList = 0xEBF2F0;
-    constexpr uintptr_t FindPartOnRayWithWhitelist = 0xEBF380;
-    constexpr uintptr_t FireServer = 0xC9EED0;
-    constexpr uintptr_t Print = 0x1C8A050;
-    constexpr uintptr_t RaisePropertyChanged = 0xF6B4E6;
-    constexpr uintptr_t Raycast = 0xEB6860;
-    constexpr uintptr_t SetParent = 0xB11F20;
-    constexpr uintptr_t SetParentInternal = 0x1CD2C10;
-    constexpr uintptr_t Shapecast = 0xEB8220;
+    constexpr uintptr_t Clone = 0x1642CE0;
+    constexpr uintptr_t Destroy = 0x1642D00;
+    constexpr uintptr_t FindPartOnRay = 0xECE7A0;
+    constexpr uintptr_t FindPartOnRayWithIgnoreList = 0xECE820;
+    constexpr uintptr_t FindPartOnRayWithWhitelist = 0xECE8B0;
+    constexpr uintptr_t FireServer = 0xCAC950;
+    constexpr uintptr_t Print = 0x1CAB4B0;
+    constexpr uintptr_t RaisePropertyChanged = 0xF7C720;
+    constexpr uintptr_t Raycast = 0xEC5D60;
+    constexpr uintptr_t SetParent = 0xEC0090;
+    constexpr uintptr_t SetParentInternal = 0x1CF3A00;
+    constexpr uintptr_t Shapecast = 0xEC7720;
 }
 
 namespace Highlight {
@@ -733,50 +732,50 @@ namespace PropertyDescriptor {
 }
 
 namespace TextButton {
-    constexpr uintptr_t AutoButtonColor = 0x9C4;
-    constexpr uintptr_t ContentText = 0xE08;
-    constexpr uintptr_t LineHeight = 0xF20;
-    constexpr uintptr_t LocalizedText = 0xE08;
-    constexpr uintptr_t MaxVisibleGraphemes = 0x113C;
-    constexpr uintptr_t Modal = 0x9C5;
-    constexpr uintptr_t RichText = 0x101E;
-    constexpr uintptr_t Selected = 0x9C6;
-    constexpr uintptr_t Text = 0xE08;
-    constexpr uintptr_t TextColor3 = 0x1120;
-    constexpr uintptr_t TextDirection = 0xFC0;
-    constexpr uintptr_t TextScaled = 0xDF1;
-    constexpr uintptr_t TextSize = 0x1144;
-    constexpr uintptr_t TextStrokeColor3 = 0x112C;
-    constexpr uintptr_t TextStrokeTransparency = 0x1148;
-    constexpr uintptr_t TextTransparency = 0x114C;
-    constexpr uintptr_t TextTruncate = 0x1150;
-    constexpr uintptr_t TextWrapped = 0x1018;
-    constexpr uintptr_t TextXAlignment = 0x1154;
-    constexpr uintptr_t TextYAlignment = 0xF68;
+    constexpr uintptr_t AutoButtonColor = 0x9DC;
+    constexpr uintptr_t ContentText = 0xE18;
+    constexpr uintptr_t LineHeight = 0xF30;
+    constexpr uintptr_t LocalizedText = 0xE18;
+    constexpr uintptr_t MaxVisibleGraphemes = 0x114C;
+    constexpr uintptr_t Modal = 0x9DD;
+    constexpr uintptr_t RichText = 0x102E;
+    constexpr uintptr_t Selected = 0x9DE;
+    constexpr uintptr_t Text = 0xE18;
+    constexpr uintptr_t TextColor3 = 0x1130;
+    constexpr uintptr_t TextDirection = 0xFD0;
+    constexpr uintptr_t TextScaled = 0xE01;
+    constexpr uintptr_t TextSize = 0x1154;
+    constexpr uintptr_t TextStrokeColor3 = 0x113C;
+    constexpr uintptr_t TextStrokeTransparency = 0x1158;
+    constexpr uintptr_t TextTransparency = 0x115C;
+    constexpr uintptr_t TextTruncate = 0x1160;
+    constexpr uintptr_t TextWrapped = 0xE01;
+    constexpr uintptr_t TextXAlignment = 0x1164;
+    constexpr uintptr_t TextYAlignment = 0xF78;
 }
 
 namespace TextLabel {
-    constexpr uintptr_t ContentText = 0xB88;
-    constexpr uintptr_t LineHeight = 0xCA0;
-    constexpr uintptr_t LocalizedText = 0xB88;
-    constexpr uintptr_t MaxVisibleGraphemes = 0xEBC;
-    constexpr uintptr_t RichText = 0xD9E;
-    constexpr uintptr_t Text = 0xB88;
-    constexpr uintptr_t TextColor3 = 0xEA0;
-    constexpr uintptr_t TextDirection = 0xD40;
-    constexpr uintptr_t TextScaled = 0xD96;
-    constexpr uintptr_t TextSize = 0xEC4;
-    constexpr uintptr_t TextStrokeColor3 = 0xEAC;
-    constexpr uintptr_t TextStrokeTransparency = 0xEC8;
-    constexpr uintptr_t TextTransparency = 0xECC;
-    constexpr uintptr_t TextTruncate = 0xED0;
-    constexpr uintptr_t TextWrapped = 0xD98;
-    constexpr uintptr_t TextXAlignment = 0xED4;
-    constexpr uintptr_t TextYAlignment = 0xCE8;
+    constexpr uintptr_t ContentText = 0xB98;
+    constexpr uintptr_t LineHeight = 0xCB0;
+    constexpr uintptr_t LocalizedText = 0xB98;
+    constexpr uintptr_t MaxVisibleGraphemes = 0xECC;
+    constexpr uintptr_t RichText = 0xDAE;
+    constexpr uintptr_t Text = 0xB98;
+    constexpr uintptr_t TextColor3 = 0xEB0;
+    constexpr uintptr_t TextDirection = 0xD50;
+    constexpr uintptr_t TextScaled = 0x6;
+    constexpr uintptr_t TextSize = 0xED4;
+    constexpr uintptr_t TextStrokeColor3 = 0xEBC;
+    constexpr uintptr_t TextStrokeTransparency = 0xED8;
+    constexpr uintptr_t TextTransparency = 0xEDC;
+    constexpr uintptr_t TextTruncate = 0xEE0;
+    constexpr uintptr_t TextWrapped = 0xDA8;
+    constexpr uintptr_t TextXAlignment = 0xEE4;
+    constexpr uintptr_t TextYAlignment = 0xCF8;
 }
 
 namespace Types {
-    constexpr uintptr_t AllTypes = 0x88A8C88;
+    constexpr uintptr_t AllTypes = 0x89482B8;
 }
 
 namespace Value {
