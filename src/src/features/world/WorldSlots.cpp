@@ -148,6 +148,148 @@ void write_clock_time(std::uint64_t lighting, float t)
 		LightingInvalidate::force_write<float>(addr, t);
 }
 
+// ---- точный порт time changer из gelato (features/world/helpers.h) --------
+
+constexpr float k_ws_pi         = 3.1415927f;
+constexpr float k_ws_hour       = 3600.0f;
+constexpr float k_ws_day        = 86400.0f;
+constexpr float k_ws_sunrise    = 6.0f * k_ws_hour;
+constexpr float k_ws_sunset     = 18.0f * k_ws_hour;
+constexpr float k_ws_rise_set   = k_ws_hour;
+constexpr float k_ws_solar_year = 365.2564f * k_ws_day;
+constexpr float k_ws_half_solar = 182.6282f;
+
+float ws_deg_to_rad(float degrees)
+{
+	return degrees * (k_ws_pi / 180.0f);
+}
+
+Vector3 ws_spline(float t, const float* times, const Vector3* colors, int count)
+{
+	if (count <= 0)
+		return Vector3(1.0f, 1.0f, 1.0f);
+	if (t <= times[0])
+		return colors[0];
+	if (t >= times[count - 1])
+		return colors[count - 1];
+
+	for (int i = 0; i < count - 1; i++)
+	{
+		if (t < times[i] || t > times[i + 1])
+			continue;
+
+		float span = times[i + 1] - times[i];
+		float a = span > 0.0f ? (t - times[i]) / span : 0.0f;
+		return colors[i] * (1.0f - a) + colors[i + 1] * a;
+	}
+
+	return colors[0];
+}
+
+Vector3 ws_sky_ambient(float t)
+{
+	static const float times[] = {
+		0.0f, k_ws_sunrise - 2.0f * k_ws_hour, k_ws_sunrise - k_ws_hour, k_ws_sunrise - k_ws_hour * 0.5f,
+		k_ws_sunrise, k_ws_sunrise + k_ws_rise_set, k_ws_sunset - k_ws_rise_set, k_ws_sunset,
+		k_ws_sunset + k_ws_hour / 3.0f, k_ws_day
+	};
+	static const Vector3 colors[] = {
+		{ 0.0f, 0.0f, 0.0f }, { 0.0f, 0.0f, 0.0f }, { 0.07f, 0.07f, 0.1f }, { 0.2f, 0.15f, 0.01f },
+		{ 0.2f, 0.15f, 0.01f }, { 1.0f, 1.0f, 1.0f }, { 1.0f, 1.0f, 1.0f }, { 0.4f, 0.2f, 0.05f },
+		{ 0.0f, 0.0f, 0.0f }, { 0.0f, 0.0f, 0.0f }
+	};
+	return ws_spline(t, times, colors, 10);
+}
+
+Vector3 ws_sky_ambient2(float t)
+{
+	static const float times[] = {
+		0.0f, k_ws_sunrise - 3.0f * k_ws_hour, k_ws_sunrise - 2.0f * k_ws_hour, k_ws_sunrise - k_ws_hour * 0.5f,
+		k_ws_sunrise, k_ws_sunrise + k_ws_rise_set, k_ws_sunset - k_ws_rise_set, k_ws_sunset,
+		k_ws_sunset + k_ws_hour / 3.0f, k_ws_sunset + 2.0f * k_ws_hour, k_ws_sunset + 3.0f * k_ws_hour, k_ws_day
+	};
+	static const Vector3 colors[] = {
+		{ 0.0f, 0.0f, 0.0f }, { 0.0f, 0.0f, 0.0f }, { 0.21f, 0.21f, 0.28f }, { 0.4f, 0.3f, 0.3f },
+		{ 0.3f, 0.2f, 0.3f }, { 1.0f, 1.0f, 1.0f }, { 1.0f, 1.0f, 1.0f }, { 0.4f, 0.3f, 0.2f },
+		{ 0.3f, 0.2f, 0.3f }, { 0.3f, 0.2f, 0.3f }, { 0.0f, 0.0f, 0.0f }, { 0.0f, 0.0f, 0.0f }
+	};
+	return ws_spline(t, times, colors, 12);
+}
+
+Vector3 ws_light_color_for_time(float t)
+{
+	const Vector3 day{ 0.75f, 0.75f, 0.75f };
+	static const float times[] = {
+		0.0f, k_ws_sunrise - k_ws_hour, k_ws_sunrise, k_ws_sunrise + k_ws_rise_set * 0.25f,
+		k_ws_sunrise + k_ws_rise_set, k_ws_sunset - k_ws_rise_set, k_ws_sunset - k_ws_rise_set * 0.5f,
+		k_ws_sunset, k_ws_sunset + k_ws_hour * 0.5f, k_ws_day
+	};
+	static const Vector3 colors[] = {
+		{ 0.2f, 0.2f, 0.2f }, { 0.1f, 0.1f, 0.1f }, { 0.0f, 0.0f, 0.0f }, { 0.6f, 0.6f, 0.0f },
+		day, day, { 0.1f, 0.1f, 0.075f }, { 0.1f, 0.05f, 0.05f }, { 0.1f, 0.1f, 0.1f }, { 0.2f, 0.2f, 0.2f }
+	};
+	return ws_spline(t, times, colors, 10);
+}
+
+Vector3 ws_rotate_axis_angle(const Vector3& v, const Vector3& axis, float angle)
+{
+	float cos_a = std::cos(angle);
+	float sin_a = std::sin(angle);
+	return v * cos_a + axis.Cross(v) * sin_a + axis * (axis.Dot(v) * (1.0f - cos_a));
+}
+
+Vector3 ws_true_sun_position(float source_angle, float abs_seconds, float latitude_deg)
+{
+	Vector3 sun{ std::sin(source_angle), -std::cos(source_angle), 0.0f };
+	float day_of_year = (abs_seconds - std::floor(abs_seconds / k_ws_solar_year) * k_ws_solar_year) / k_ws_day;
+	float sun_offset = -ws_deg_to_rad(23.5f) *
+		std::cos(k_ws_pi * (day_of_year - k_ws_half_solar) / k_ws_half_solar) - ws_deg_to_rad(latitude_deg);
+	Vector3 axis = Vector3(0.0f, 0.0f, 1.0f).Cross(sun);
+	axis.Normalize();
+	return ws_rotate_axis_angle(sun, axis, sun_offset);
+}
+
+std::int64_t ws_hours_to_clock_us(float hours)
+{
+	float clamped = hours < 0.0f ? 0.0f : (hours > 24.0f ? 24.0f : hours);
+	std::int64_t seconds = static_cast<std::int64_t>(clamped * 3600.0f + 0.5f);
+	return seconds * 1000000LL;
+}
+
+// gelato _world_apply_clock_time — 1:1
+void ws_apply_clock_time(std::uint64_t lighting_address, float hours)
+{
+	// ClockTime хранится как микросекунды TimeOfDay (int64), не float-часы
+	LightingInvalidate::force_write<std::int64_t>(
+		lighting_address + ::Lighting::ClockTime, ws_hours_to_clock_us(hours));
+
+	float seconds = hours * k_ws_hour;
+	float time_of_day = seconds - std::floor(seconds / k_ws_day) * k_ws_day;
+	float source_angle = (time_of_day * 2.0f * k_ws_pi) / k_ws_day;
+	float latitude = g_Memory.Read<float>(lighting_address + ::Lighting::GeographicLatitude);
+
+	Vector3 sun = ws_true_sun_position(source_angle, seconds, latitude);
+	Vector3 moon = -sun;
+	bool use_sun = sun.y > -0.3f;
+	Vector3 light_direction = use_sun ? sun : moon;
+	std::uint32_t source = use_sun ? 0u : 1u;
+
+	LightingInvalidate::force_write<Vector3>(
+		lighting_address + ::Lighting::GradientTop, ws_sky_ambient(time_of_day));
+	LightingInvalidate::force_write<Vector3>(
+		lighting_address + ::Lighting::GradientBottom, ws_sky_ambient2(time_of_day));
+	LightingInvalidate::force_write<Vector3>(
+		lighting_address + ::Lighting::LightColor, ws_light_color_for_time(time_of_day));
+	LightingInvalidate::force_write<Vector3>(
+		lighting_address + ::Lighting::SunPosition, sun);
+	LightingInvalidate::force_write<Vector3>(
+		lighting_address + ::Lighting::MoonPosition, moon);
+	LightingInvalidate::force_write<Vector3>(
+		lighting_address + ::Lighting::LightDirection, light_direction);
+	LightingInvalidate::force_write<std::uint32_t>(
+		lighting_address + ::Lighting::Source, source);
+}
+
 }
 
 std::uint64_t FindLighting()
@@ -173,13 +315,17 @@ void TickNoShadow(std::uint64_t lighting, bool force_off)
 
 void TickTime(std::uint64_t lighting, bool force_off)
 {
+	// time changer — порт gelato: ClockTime (int64 us) + настоящая солнечная
+	// геометрия (широта/сезон), сплайны неба, LightColor, LightDirection, Source
 	static bool was = false;
-	static bool as_double = false;
-	static float bak_clock = 12.f;
+	static std::int64_t bak_clock_us = 0;
 	static Vector3 bak_sun{};
 	static Vector3 bak_moon{};
 	static Vector3 bak_gt{};
 	static Vector3 bak_gb{};
+	static Vector3 bak_lc{};
+	static Vector3 bak_ld{};
+	static std::uint32_t bak_src = 0;
 	static const WorldOwn::Field fields[] = {
 		WorldOwn::Field::Clock,
 		WorldOwn::Field::Sun,
@@ -199,18 +345,15 @@ void TickTime(std::uint64_t lighting, bool force_off)
 		if (!was)
 		{
 			WorldOwn::Claim(WorldOwn::Feat::Time, fields, 5);
-			as_double = clock_is_double(lighting);
 			const std::uint64_t addr = lighting + ::Lighting::ClockTime;
-			if (as_double)
-				bak_clock = (float)g_Memory.Read<double>(addr);
-
-			else
-				bak_clock = g_Memory.Read<float>(addr);
-
+			bak_clock_us = g_Memory.Read<std::int64_t>(addr);
 			bak_sun = g_Memory.Read<Vector3>(lighting + ::Lighting::SunPosition);
 			bak_moon = g_Memory.Read<Vector3>(lighting + ::Lighting::MoonPosition);
 			bak_gt = g_Memory.Read<Vector3>(lighting + ::Lighting::GradientTop);
 			bak_gb = g_Memory.Read<Vector3>(lighting + ::Lighting::GradientBottom);
+			bak_lc = g_Memory.Read<Vector3>(lighting + ::Lighting::LightColor);
+			bak_ld = g_Memory.Read<Vector3>(lighting + ::Lighting::LightDirection);
+			bak_src = g_Memory.Read<std::uint32_t>(lighting + ::Lighting::Source);
 			was = true;
 		}
 
@@ -218,72 +361,27 @@ void TickTime(std::uint64_t lighting, bool force_off)
 		if (t < 0.f) t = 0.f;
 		if (t > 24.f) t = 24.f;
 
-		constexpr float PI = 3.14159265f;
-		const float sun_angle = (t / 24.f - 0.25f) * 2.f * PI;
-		const float sun_y = std::sin(sun_angle);
-		const float sun_x = 0.f;
-		const float sun_z = -std::cos(sun_angle);
-		const Vector3 sun_pos(sun_x, sun_y, sun_z);
-		const Vector3 moon_pos(-sun_x, -sun_y, -sun_z);
-
-		const float h = sun_y;
-		Vector3 grad_top, grad_bot;
-
-		if (h > 0.15f)
-		{
-			grad_top = Vector3(0.35f, 0.65f, 0.95f);
-			grad_bot = Vector3(0.75f, 0.85f, 0.95f);
-		}
-
-		else if (h > 0.0f)
-		{
-			const float st = h / 0.15f;
-			grad_top = Vector3(0.15f + st * 0.2f, 0.15f + st * 0.5f, 0.25f + st * 0.7f);
-			grad_bot = Vector3(0.95f, 0.45f + st * 0.4f, 0.25f + st * 0.7f);
-		}
-
-		else
-		{
-			float nt = (-h) / 0.3f;
-			if (nt > 1.0f) nt = 1.0f;
-			const float inv = 1.0f - nt;
-			grad_top = Vector3(0.05f + inv * 0.1f, 0.05f + inv * 0.1f, 0.12f + inv * 0.13f);
-			grad_bot = Vector3(0.08f + inv * 0.07f, 0.08f + inv * 0.07f, 0.15f + inv * 0.1f);
-		}
-
+		// gelato _world_apply_clock_time — пишет Clock/GradTop/GradBot/Sun/Moon/
+		// LightColor/LightDirection/Source разом (через Field::Clock они наши)
 		if (WorldOwn::Owns(WorldOwn::Feat::Time, WorldOwn::Field::Clock))
 		{
-			write_clock_time(lighting, t);
+			ws_apply_clock_time(lighting, t);
 			dirty = true;
 		}
-
-		if (WorldOwn::Owns(WorldOwn::Feat::Time, WorldOwn::Field::Sun))
-			dirty |= LightingInvalidate::write_if_changed<Vector3>(
-				lighting + ::Lighting::SunPosition, sun_pos);
-
-		if (WorldOwn::Owns(WorldOwn::Feat::Time, WorldOwn::Field::Moon))
-			dirty |= LightingInvalidate::write_if_changed<Vector3>(
-				lighting + ::Lighting::MoonPosition, moon_pos);
-
-		if (WorldOwn::Owns(WorldOwn::Feat::Time, WorldOwn::Field::GradTop))
-			dirty |= LightingInvalidate::write_if_changed<Vector3>(
-				lighting + ::Lighting::GradientTop, grad_top);
-
-		if (WorldOwn::Owns(WorldOwn::Feat::Time, WorldOwn::Field::GradBot))
-			dirty |= LightingInvalidate::write_if_changed<Vector3>(
-				lighting + ::Lighting::GradientBottom, grad_bot);
 	}
 
 	else if (was)
 	{
 		if (WorldOwn::Owns(WorldOwn::Feat::Time, WorldOwn::Field::Clock))
 		{
-			const std::uint64_t addr = lighting + ::Lighting::ClockTime;
-			if (as_double)
-				LightingInvalidate::force_write<double>(addr, (double)bak_clock);
-
-			else
-				LightingInvalidate::force_write<float>(addr, bak_clock);
+			LightingInvalidate::force_write<std::int64_t>(
+				lighting + ::Lighting::ClockTime, bak_clock_us);
+			LightingInvalidate::force_write<Vector3>(
+				lighting + ::Lighting::LightColor, bak_lc);
+			LightingInvalidate::force_write<Vector3>(
+				lighting + ::Lighting::LightDirection, bak_ld);
+			LightingInvalidate::force_write<std::uint32_t>(
+				lighting + ::Lighting::Source, bak_src);
 			dirty = true;
 		}
 

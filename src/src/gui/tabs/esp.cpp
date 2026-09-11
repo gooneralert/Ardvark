@@ -38,7 +38,7 @@ void ng_tabs::draw_esp_tab()
 	float left_w = 0.f, right_w = 0.f, h = 0.f;
 	begin_columns(&left_w, &right_w, &h);
 
-	begin_panel("##esp_child1", left_w, h);
+	begin_panel("##esp_child1", left_w, h, false, "MAIN");
 	{
 		row_checkbox("enabled", &g_Settings.esp.enabled);
 		row_checkbox("draw local", &g_Settings.esp.draw_local);
@@ -387,7 +387,7 @@ void ng_tabs::draw_esp_tab()
 
 	ImGui::SameLine(0.f, panel_gap);
 
-	begin_panel("##esp_child2", right_w, h);
+	begin_panel("##esp_child2", right_w, h, false, "RENDERING");
 	{
 		static const std::vector<const char*> k_esp_fonts = {
 			"fredoka one", "tahoma bold", "proggy clean", "visitor", "verdana", "imgui"

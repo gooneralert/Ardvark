@@ -104,7 +104,15 @@ void ng_tabs::draw_aim_tab()
 	float left_w = 0.f, right_w = 0.f, h = 0.f;
 	begin_columns(&left_w, &right_w, &h);
 
+<<<<<<< Updated upstream
 	begin_panel("##aim_child1", left_w, h);
+=======
+	// right column split: silent aim on top, triggerbot below
+	const float top_h = (h - panel_gap) * 0.62f;
+	const float bot_h = h - panel_gap - top_h;
+
+	begin_panel("##aim_child1", left_w, h, true, "MAIN");
+>>>>>>> Stashed changes
 	{
 		row_keybind("##aim_kb", "aim key", &g_Settings.aim.bind, &g_Settings.aim.bind_mode);
 
@@ -120,7 +128,11 @@ void ng_tabs::draw_aim_tab()
 
 	ImGui::SameLine(0.f, panel_gap);
 
+<<<<<<< Updated upstream
 	begin_panel("##aim_child2", right_w, h);
+=======
+	begin_panel("##aim_child2", right_w, top_h, true, "SILENT AIM");
+>>>>>>> Stashed changes
 	{
 		row_keybind("##silent_kb", "silent key",
 		            &g_Settings.aim.silent_bind, &g_Settings.aim.silent_bind_mode);
@@ -165,4 +177,14 @@ void ng_tabs::draw_aim_tab()
 		draw_aim_cfg(scfg, false, true, "silent");
 	}
 	end_panel();
+<<<<<<< Updated upstream
+=======
+
+	ImGui::SetCursorPos(ImVec2(0.f, top_h + panel_gap));
+	begin_panel("##trigger_child", right_w, bot_h, true, "TRIGGERBOT");
+	draw_trigger_rows();
+	end_panel();
+
+	ImGui::EndChild();
+>>>>>>> Stashed changes
 }

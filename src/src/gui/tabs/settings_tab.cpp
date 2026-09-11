@@ -25,7 +25,7 @@ void ng_tabs::draw_settings_tab(int* menu_kb, bool* kb_skip)
 		"build", "player", "place id", "game id", "time", "fps"
 	};
 
-	begin_panel("##set_menu", left_w, h);
+	begin_panel("##set_menu", left_w, h, false, "MENU");
 	{
 		if (menu_kb)
 		{
@@ -75,7 +75,7 @@ void ng_tabs::draw_settings_tab(int* menu_kb, bool* kb_skip)
 
 	ImGui::SameLine(0.f, panel_gap);
 
-	begin_panel("##set_cfgs", right_w, h);
+	begin_panel("##set_cfgs", right_w, h, false, "CONFIGS");
 	{
 		static char s_cfg_name[64] = "default";
 		static int s_cfg_sel = -1;

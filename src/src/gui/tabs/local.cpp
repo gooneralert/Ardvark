@@ -24,7 +24,7 @@ void ng_tabs::draw_local_tab()
 		Features::CharMods::AnimPackNames(),
 		Features::CharMods::AnimPackNames() + Features::CharMods::AnimPackCount());
 
-	begin_panel("##local_move", left_w, h);
+	begin_panel("##local_move", left_w, h, false, "MOVEMENT");
 	{
 		row_checkbox("walkspeed", &m.walkspeed);
 		if (m.walkspeed)
@@ -79,7 +79,7 @@ void ng_tabs::draw_local_tab()
 
 	ImGui::SameLine(0.f, panel_gap);
 
-	begin_panel("##local_cam", right_w, h);
+	begin_panel("##local_cam", right_w, h, false, "CAMERA");
 	{
 		row_keybind("##freecam", "freecam", &m.freecam_key, &m.freecam_mode);
 		row_slider_f("freecam speed", &m.freecam_speed, 10.f, 300.f, "%.0f");

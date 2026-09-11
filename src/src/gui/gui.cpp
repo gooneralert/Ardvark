@@ -1,4 +1,4 @@
-#include "pch.h"
+﻿#include "pch.h"
 #include "gui.h"
 #include "lua_window.h"
 #include "players_window.h"
@@ -17,6 +17,17 @@
 #include "imgui_internal.h"
 #include "widgets/widgets.h"
 #include "widgets/text.h"
+<<<<<<< Updated upstream
+=======
+#include "glass.h"
+#include "resources/fonts/fonts.h"
+#include "core/config/Config.h"
+#include "core/memory/Memory.h"
+#include "core/roblox/offsets/Offsets.h"
+#include "features/misc/PlayerAvatars.h"
+#include "music_player_ui.h"
+#include "media.h"
+>>>>>>> Stashed changes
 #include <cstring>
 #include <string>
 #include <vector>
@@ -327,6 +338,44 @@ namespace gui
         lua_open = Cheat::g_Settings.lua.executor;
         players_open = Cheat::g_Settings.misc.players;
         explorer_open = Cheat::g_Settings.misc.explorer;
+<<<<<<< Updated upstream
+=======
+        servers_open = Cheat::g_Settings.misc.servers;
+        esp_preview_open = Cheat::g_Settings.misc.esp_preview;
+        music_open = Cheat::g_Settings.misc.music;
+
+        const float menu_a = window_anim("##menu", s_menu_open, 20.f);
+
+        if (menu_a > 0.01f)
+            render_navbar(menu_a);
+
+        lua_open = Cheat::g_Settings.lua.executor;
+        players_open = Cheat::g_Settings.misc.players;
+        explorer_open = Cheat::g_Settings.misc.explorer;
+        servers_open = Cheat::g_Settings.misc.servers;
+        esp_preview_open = Cheat::g_Settings.misc.esp_preview;
+        music_open = Cheat::g_Settings.misc.music;   // re-sync after navbar clicks
+
+        // ESP preview: only while the Visuals tab is active; slides out from
+        // underneath the main GUI (rendered before it so the menu covers it)
+        {
+            const float dt = ImGui::GetIO().DeltaTime > 0.f ? ImGui::GetIO().DeltaTime : 1.f / 60.f;
+            const bool esp_wanted = s_menu_open && s_sidebar_selected == 1 && Cheat::g_Settings.misc.esp_preview;
+            s_esp_anim += ((esp_wanted ? 1.f : 0.f) - s_esp_anim) * (1.f - std::exp(-14.f * dt));
+            if (!esp_wanted && s_esp_anim < 0.001f)
+                s_esp_anim = 0.f;
+            if (s_esp_anim > 0.01f)
+                render_esp_preview_window(&esp_preview_open, s_menu_pos, s_menu_size, s_esp_anim);
+        }
+
+        if (menu_a > 0.01f)
+            render_menu_window(menu_a);
+        else
+            glass::set_menu_rect(0, 0, 0, 0);   // hide the acrylic backdrop once the fade-out finishes
+
+        // Ãƒâ€˜Ã¢â‚¬Â¡ÃƒÂÃ‚ÂµÃƒÂÃ‚ÂºÃƒÂÃ‚Â±ÃƒÂÃ‚Â¾ÃƒÂÃ‚ÂºÃƒâ€˜Ã‚Â ÃƒÂÃ‚Â¿Ãƒâ€˜Ã¢â€šÂ¬ÃƒÂÃ‚ÂµÃƒÂÃ‚Â²Ãƒâ€˜Ã…â€™Ãƒâ€˜Ã…Â½ ÃƒÂÃ‚Â¶ÃƒÂÃ‚Â¸ÃƒÂÃ‚Â²Ãƒâ€˜Ã¢â‚¬ËœÃƒâ€˜Ã¢â‚¬Å¡ ÃƒÂÃ‚Â²ÃƒÂÃ‚Â¾ ÃƒÂÃ‚Â²ÃƒÂÃ‚ÂºÃƒÂÃ‚Â»ÃƒÂÃ‚Â°ÃƒÂÃ‚Â´ÃƒÂÃ‚ÂºÃƒÂÃ‚Âµ esp, Ãƒâ€˜Ã¢â‚¬Å¡ÃƒÂÃ‚Â¾ ÃƒÂÃ‚ÂµÃƒâ€˜Ã‚ÂÃƒâ€˜Ã¢â‚¬Å¡Ãƒâ€˜Ã…â€™ ÃƒÂÃ‚Â²ÃƒÂÃ‚Â½Ãƒâ€˜Ã†â€™Ãƒâ€˜Ã¢â‚¬Å¡Ãƒâ€˜Ã¢â€šÂ¬ÃƒÂÃ‚Â¸ ÃƒÂÃ‚Â¼ÃƒÂÃ‚ÂµÃƒÂÃ‚Â½Ãƒâ€˜Ã…Â½, ÃƒÂÃ‚Â¿ÃƒÂÃ‚Â¾Ãƒâ€˜Ã‚ÂÃƒâ€˜Ã¢â‚¬Å¡ÃƒÂÃ‚Â¾ÃƒÂÃ‚Â¼Ãƒâ€˜Ã†â€™
+        // ÃƒÂÃ‚ÂµÃƒÂÃ‚Â³ÃƒÂÃ‚Â¾ ÃƒÂÃ‚Â·ÃƒÂÃ‚Â½ÃƒÂÃ‚Â°Ãƒâ€˜Ã¢â‚¬Â¡ÃƒÂÃ‚ÂµÃƒÂÃ‚Â½ÃƒÂÃ‚Â¸ÃƒÂÃ‚Âµ ÃƒÂÃ‚Â¿ÃƒÂÃ‚Â¾ÃƒÂÃ‚Â´Ãƒâ€˜Ã¢â‚¬Â¦ÃƒÂÃ‚Â²ÃƒÂÃ‚Â°Ãƒâ€˜Ã¢â‚¬Å¡Ãƒâ€˜Ã¢â‚¬Â¹ÃƒÂÃ‚Â²ÃƒÂÃ‚Â°ÃƒÂÃ‚ÂµÃƒÂÃ‚Â¼ Ãƒâ€˜Ã†â€™ÃƒÂÃ‚Â¶ÃƒÂÃ‚Âµ ÃƒÂÃ‚Â¿ÃƒÂÃ‚Â¾Ãƒâ€˜Ã‚ÂÃƒÂÃ‚Â»ÃƒÂÃ‚Âµ ÃƒÂÃ‚Â¾Ãƒâ€˜Ã¢â‚¬Å¡Ãƒâ€˜Ã¢â€šÂ¬ÃƒÂÃ‚Â¸Ãƒâ€˜Ã‚ÂÃƒÂÃ‚Â¾ÃƒÂÃ‚Â²ÃƒÂÃ‚ÂºÃƒÂÃ‚Â¸
+>>>>>>> Stashed changes
         esp_preview_open = Cheat::g_Settings.misc.esp_preview;
 
         if (s_menu_open)
@@ -349,13 +398,180 @@ namespace gui
         Cheat::g_Settings.misc.players = players_open;
         Cheat::g_Settings.misc.explorer = explorer_open;
         Cheat::g_Settings.misc.esp_preview = esp_preview_open;
+<<<<<<< Updated upstream
+=======
+        Cheat::g_Settings.misc.music = music_open;
+
+        // watermark badge: like the music player it lives on the overlay and
+        // keeps rendering even when the menu itself is closed
+        if (Cheat::g_Settings.gui.watermark)
+            widgets::watermark(1.f);
+
+    // layuh-style backdrop: dark wash behind everything EXCEPT the frosted-glass
+        // windows, whose acrylic blur has to stay see-through (the menu is glass).
+        if (menu_a > 0.01f)
+        {
+            ImDrawList* bgl = ImGui::GetBackgroundDrawList();
+            const ImVec2 bg_dims = ImGui::GetIO().DisplaySize;
+            const ImU32 dark = ImGui::GetColorU32(ImVec4(0.12f, 0.12f, 0.12f, 0.89f * menu_a));
+
+            // collect this frame's glass rects (same coordinate space as the
+            // background draw list)
+            struct FR { float x0, y0, x1, y1; };
+            std::vector<FR> holes;
+            for (int i = 0; i < glass::rect_count(); ++i)
+            {
+                float x = 0.f, y = 0.f, w = 0.f, h = 0.f;
+                if (glass::rect_at(i, x, y, w, h) && w > 0.5f && h > 0.5f)
+                    holes.push_back(FR{ x, y, x + w, y + h });
+            }
+
+            if (holes.empty())
+            {
+                bgl->AddRectFilled(ImVec2(0.f, 0.f), bg_dims, dark, 0);
+            }
+            else
+            {
+                // vertical strips between the glass edges; darken only the gaps
+                // so the wash never overlaps the windows (no double-blend seams)
+                std::vector<float> ys;
+                for (const FR& h : holes) { ys.push_back(h.y0); ys.push_back(h.y1); }
+                std::sort(ys.begin(), ys.end());
+                ys.erase(std::unique(ys.begin(), ys.end()), ys.end());
+
+                auto draw_gap = [&](float y0, float y1)
+                {
+                    if (y1 - y0 <= 0.01f) return;
+                    std::vector<ImVec2> cv; // x-intervals of holes spanning strip [y0,y1]
+                    for (const FR& h : holes)
+                        if (h.y0 <= y0 + 0.01f && h.y1 >= y1 - 0.01f)
+                            cv.push_back(ImVec2(h.x0, h.x1));
+                    std::sort(cv.begin(), cv.end(),
+                              [](ImVec2 a, ImVec2 b) { return a.x < b.x; });
+                    float px = 0.f;
+                    for (const ImVec2& c : cv)
+                    {
+                        if (c.x > px)
+                            bgl->AddRectFilled(ImVec2(px, y0), ImVec2(c.x, y1), dark, 0);
+                        if (c.y > px) px = c.y;
+                    }
+                    if (px < bg_dims.x)
+                        bgl->AddRectFilled(ImVec2(px, y0), ImVec2(bg_dims.x, y1), dark, 0);
+                };
+
+                float yprev = 0.f;
+                for (float y : ys) { draw_gap(yprev, y); yprev = y; }
+                draw_gap(yprev, bg_dims.y); // final strip down to the bottom edge
+
+                // round the holes: the OS acrylic backdrop is square, so its
+                // blur peeks through the square hole corners. Paint the corner
+                // cutout sectors FULLY OPAQUE (1px outside the hole, slightly
+                // larger radius) so no blur sliver survives at the corners and
+                // every glass window renders as a genuinely rounded shape.
+                const ImU32 opaque = ImGui::GetColorU32(ImVec4(0.12f, 0.12f, 0.12f, menu_a));
+                for (const FR& h : holes)
+                    glass::mask_corners(bgl, ImVec2(h.x0 - 1.f, h.y0 - 1.f), ImVec2(h.x1 + 1.f, h.y1 + 1.f), 9.f, opaque);
+            }
+
+        // Snow particles background - Performance optimized
+            {
+                struct Snowflake { ImVec2 pos; float speed; float drift; float size; float phase; };
+                static std::vector<Snowflake> flakes;
+                static ImVec2 last_screen = ImVec2(0, 0);
+                static bool seeded = false;
+                static auto last_snow_update = std::chrono::steady_clock::now();
+
+                if (!seeded) { srand((unsigned)time(nullptr)); seeded = true; }
+
+                ImVec2 screen = ImGui::GetIO().DisplaySize;
+                const int target_count = 70; // Reduced from 140
+
+                if (flakes.empty() || screen.x != last_screen.x || screen.y != last_screen.y) {
+                    flakes.clear(); flakes.reserve(target_count);
+                    last_screen = screen;
+                    for (int i = 0; i < target_count; ++i) {
+                        Snowflake f;
+                        f.pos = ImVec2((float)(rand() % (int)std::max(1.0f, screen.x)), (float)(rand() % (int)std::max(1.0f, screen.y)));
+                        f.speed = 90.0f + (float)(rand() % 100); // px/sec fall speed
+                        f.drift = 30.0f + (float)(rand() % 50); // horizontal sway
+                        f.size = 1.0f + (float)(rand() % 200) / 100.0f; // 1.0 .. 3.0 px
+                        f.phase = (float)(rand() % 628) / 100.0f;
+                        flakes.push_back(f);
+                    }
+                }
+
+                // Performance optimization: Update snow less frequently
+                auto now = std::chrono::steady_clock::now();
+                auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - last_snow_update);
+                if (elapsed.count() < 16) { // ~60 FPS instead of every frame
+                    // Skip update but still render
+                }
+                else {
+                    // Use the real wall-clock time since the last update so the
+                    // snow speed is exact regardless of the overlay framerate.
+                    // (ImGui::GetIO().DeltaTime is nearly zero at uncapped FPS,
+                    // which made the flakes crawl.)
+                    float dt = std::chrono::duration<float>(now - last_snow_update).count();
+                    if (dt > 0.1f) dt = 0.1f; // clamp tab-away jumps
+                    for (auto& f : flakes) {
+                        f.phase += dt * 2.4f; // faster sway
+                        f.pos.y += f.speed * dt;
+                        f.pos.x += cosf(f.phase) * f.drift * dt;
+
+                        if (f.pos.y > screen.y + 8.0f) {
+                            f.pos.y = -8.0f;
+                            f.pos.x = (float)(rand() % (int)std::max(1.0f, screen.x));
+                            f.speed = 90.0f + (float)(rand() % 100);
+                            f.drift = 30.0f + (float)(rand() % 50);
+                            f.size = 1.0f + (float)(rand() % 200) / 100.0f;
+                        }
+                        if (f.pos.x < -8.0f) f.pos.x = screen.x + 8.0f;
+                        if (f.pos.x > screen.x + 8.0f) f.pos.x = -8.0f;
+                    }
+                    last_snow_update = now;
+                }
+
+                for (auto& f : flakes) {
+                    bgl->AddCircleFilled(f.pos, f.size, IM_COL32(255, 255, 255, 150)); // Reduced alpha
+                }
+            }
+        }
+
+    glass::commit();   // size/position the acrylic backdrop over every collected rect
+>>>>>>> Stashed changes
     }
 
     static void render_menu_window()
     {
         ImVec2 center = ImGui::GetMainViewport()->GetCenter();
+<<<<<<< Updated upstream
         ImGui::SetNextWindowPos(center, ImGuiCond_Once, ImVec2(0.5f, 0.5f));
         ImGui::SetNextWindowSize(ImVec2(578.f, 504.f), ImGuiCond_Once);
+=======
+        // fade + rise-in. The position is only forced while the entry
+        // animation is actually rising; once it settles the menu can be
+        // dragged and resized freely (forcing it every frame would override
+        // the custom drag). The last rendered position is saved in our own
+        // static (ImGui may recreate the window between sessions and forget
+        // its position), so the menu always rises from where it was left.
+        static bool   s_menuPlaced = false;   // menu has rendered at least once
+        static ImVec2 s_riseBase{};
+        static bool   s_riseValid = false;
+        static bool   s_wasOpen = false;
+        const bool opening = s_menu_open && !s_wasOpen;   // just (re)opened
+        s_wasOpen = s_menu_open;
+        if (opening)
+        {
+            // entry animation starting: rise from wherever the menu was last
+            s_riseBase = s_menuPlaced ? s_menu_pos
+                : ImVec2(center.x - 420.f, center.y - 320.f);   // centered (840x640)
+            s_riseValid = true;
+        }
+        if (s_riseValid && anim < 0.999f && s_menu_open)
+            ImGui::SetNextWindowPos(ImVec2(s_riseBase.x, s_riseBase.y + (1.f - anim) * 20.f),
+                ImGuiCond_Always);
+        ImGui::SetNextWindowSize(ImVec2(840.f, 640.f), ImGuiCond_Once);
+>>>>>>> Stashed changes
 
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.f, 0.f));
         ImGui::PushStyleColor(ImGuiCol_Border, border_color_outer);
@@ -369,19 +585,36 @@ namespace gui
         s_menu_pos = win_pos;
         s_menu_size = win_size;
 
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.f, 0.f));
-        ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.f, 0.f, 0.f, 0.f));
-        ImGui::BeginChild("content", win_size, ImGuiChildFlags_Borders);
-        ImGui::PopStyleColor();
-        ImGui::PopStyleVar();
+        // matcha status pill floating above the menu (fps / uptime / user)
+        {
+            ImDrawList* bgl = ImGui::GetBackgroundDrawList();
+            char fps_buf[24];
+            snprintf(fps_buf, sizeof(fps_buf), "%d FPS", (int)(ImGui::GetIO().Framerate + 0.5f));
+            const int total = (int)ImGui::GetTime();
+            char time_buf[16];
+            snprintf(time_buf, sizeof(time_buf), "%02d:%02d:%02d", total / 3600, (total / 60) % 60, total % 60);
 
-        ImGui::SetCursorPos(ImVec2(content_margin, content_margin));
-        ImGui::PushStyleColor(ImGuiCol_Border, border_color_inner);
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.f, 0.f));
-        ImGui::BeginChild("content_inner", ImVec2(win_size.x - content_margin * 2.f, win_size.y - content_margin * 2.f), ImGuiChildFlags_Borders, ImGuiWindowFlags_NoScrollbar);
-        ImGui::PopStyleVar();
-        ImGui::PopStyleColor();
+            // local username (refreshed every 2s, shared with the sidebar card)
+            static std::string s_user;
+            static std::int64_t s_uid = 0;
+            static float s_user_next = 0.f;
+            const float unow = (float)ImGui::GetTime();
+            if (unow >= s_user_next)
+            {
+                s_user_next = unow + 2.f;
+                if (Cheat::Globals::Players && Cheat::Globals::Players->address)
+                {
+                    const std::uint64_t lp = g_Memory.Read<std::uint64_t>(
+                        Cheat::Globals::Players->address + ::Player::LocalPlayer);
+                    if (g_Memory.IsValid(lp))
+                    {
+                        s_user = Cheat::Instance(lp).GetName();
+                        s_uid = (std::int64_t)Cheat::Player(lp).GetUserId();
+                    }
+                }
+            }
 
+<<<<<<< Updated upstream
         static int sidebar_selected = 0;
         static const std::vector<const char*> sidebar_items = { "Aim", "Visuals", "Misc", "Local", "Settings" };
         constexpr float sidebar_width = 100.f;
@@ -391,14 +624,234 @@ namespace gui
 
         ImGui::SameLine();
         render_right_panel(sidebar_selected);
+=======
+            const ImVec2 fps_ts  = ImGui::CalcTextSize(fps_buf);
+            const ImVec2 time_ts = ImGui::CalcTextSize(time_buf);
+            const ImVec2 user_ts = ImGui::CalcTextSize(s_user.empty() ? "user" : s_user.c_str());
 
-        ImGui::EndChild();
+            constexpr float pill_h = 40.f;
+            constexpr float pad    = 14.f;
+            const float pill_w = pad + 22.f + 12.f + (12.f + 6.f + fps_ts.x) + 18.f +
+                                 (12.f + 6.f + time_ts.x) + 18.f + (20.f + 8.f + user_ts.x) + pad;
+
+            float px = win_pos.x + (win_size.x - pill_w) * 0.5f;
+            float py = win_pos.y - pill_h - 10.f;
+            if (py < 6.f) py = 6.f;
+
+            bgl->AddRectFilled(ImVec2(px, py), ImVec2(px + pill_w, py + pill_h), IM_COL32(26, 26, 30, (int)(245 * anim)), pill_h * 0.5f);
+            bgl->AddRect(ImVec2(px, py), ImVec2(px + pill_w, py + pill_h), IM_COL32(255, 255, 255, (int)(18 * anim)), pill_h * 0.5f, 0, 1.2f);
+>>>>>>> Stashed changes
+
+            const float cy = py + pill_h * 0.5f;
+            float cx = px + pad;
+
+            // logo chip
+            bgl->AddRectFilled(ImVec2(cx, cy - 11.f), ImVec2(cx + 22.f, cy + 11.f), IM_COL32(232, 121, 249, (int)(255 * anim)), 6.f);
+            {
+                const ImVec2 ts = ImGui::CalcTextSize("M");
+                bgl->AddText(ImVec2(cx + (22.f - ts.x) * 0.5f, cy - ts.y * 0.5f), IM_COL32(255, 255, 255, (int)(255 * anim)), "M");
+            }
+            cx += 22.f + 12.f;
+
+            // fps chip
+            bgl->AddCircleFilled(ImVec2(cx + 6.f, cy), 5.f, IM_COL32(140, 225, 90, (int)(255 * anim)));
+            bgl->AddText(ImVec2(cx + 18.f, cy - fps_ts.y * 0.5f), IM_COL32(240, 240, 242, (int)(255 * anim)), fps_buf);
+            cx += 12.f + 6.f + fps_ts.x + 18.f;
+
+            // uptime chip
+            bgl->AddCircle(ImVec2(cx + 6.f, cy), 5.f, IM_COL32(232, 121, 249, (int)(255 * anim)), 0, 1.3f);
+            bgl->AddText(ImVec2(cx + 18.f, cy - time_ts.y * 0.5f), IM_COL32(240, 240, 242, (int)(255 * anim)), time_buf);
+            cx += 12.f + 6.f + time_ts.x + 18.f;
+
+            // user chip
+            ID3D11ShaderResourceView* srv = s_uid > 0 ? Cheat::Features::PlayerAvatars::Get(s_uid) : nullptr;
+            if (srv)
+                bgl->AddImageRounded(ImTextureID((uintptr_t)srv), ImVec2(cx, cy - 10.f), ImVec2(cx + 20.f, cy + 10.f),
+                    ImVec2(0, 0), ImVec2(1, 1), IM_COL32(255, 255, 255, (int)(255 * anim)), 10.f);
+            else
+                bgl->AddCircleFilled(ImVec2(cx + 10.f, cy), 10.f, IM_COL32(232, 121, 249, (int)(120 * anim)));
+            bgl->AddText(ImVec2(cx + 28.f, cy - user_ts.y * 0.5f), IM_COL32(240, 240, 242, (int)(255 * anim)),
+                s_user.empty() ? "user" : s_user.c_str());
+        }
+
+        constexpr float side_w   = 190.f;
+        constexpr float side_pad = 16.f;
+        ImDrawList* wdl = ImGui::GetWindowDrawList();
+
+        // vertical divider between sidebar and content
+        wdl->AddLine(ImVec2(win_pos.x + side_w, win_pos.y + 12.f),
+                     ImVec2(win_pos.x + side_w, win_pos.y + win_size.y - 12.f),
+                     IM_COL32(255, 255, 255, 14), 1.f);
+
+        // ---- sidebar ----
+        {
+            const float spx = win_pos.x;
+            float y = win_pos.y + 18.f;
+
+            // brand: "Matcha" (fredoka) + PRO badge
+            {
+                ImGui::PushFont(fonts::fredoka_one ? fonts::fredoka_one : ImGui::GetFont());
+                const ImVec2 lts = ImGui::CalcTextSize("Matcha");
+                wdl->AddText(ImVec2(spx + side_pad, y), IM_COL32(248, 248, 250, 255), "Matcha");
+                ImGui::PopFont();
+
+                const ImVec2 b0(spx + side_pad + lts.x + 8.f, y + 2.f);
+                const ImVec2 b1(b0.x + 36.f, b0.y + 17.f);
+                wdl->AddRectFilled(b0, b1, IM_COL32(232, 121, 249, 255), 5.f);
+                const ImVec2 pts = ImGui::CalcTextSize("PRO");
+                wdl->AddText(ImVec2(b0.x + (36.f - pts.x) * 0.5f, b0.y + (17.f - pts.y) * 0.5f),
+                    IM_COL32(255, 255, 255, 255), "PRO");
+                y += 44.f;
+            }
+
+            struct NavItem { const char* label; widgets::TabIcon icon; int tab; };
+            struct NavGroup { const char* title; NavItem items[4]; int count; };
+            static const NavGroup k_groups[] = {
+                { "AIMBOT", { { "Aimbot",   widgets::TABICON_CROSSHAIR, 0 } }, 1 },
+                { "COMMON", { { "Visuals",  widgets::TABICON_EYE,     1 },
+                              { "World",    widgets::TABICON_SLIDERS, 2 },
+                              { "Character",widgets::TABICON_PERSON,  3 } }, 3 },
+                { "SYSTEM", { { "Options",  widgets::TABICON_GEAR,    4 } }, 1 },
+            };
+
+            for (const NavGroup& g : k_groups)
+            {
+                wdl->AddText(ImVec2(spx + side_pad, y + 3.f), IM_COL32(255, 255, 255, 96), g.title);
+                y += 24.f;
+
+                for (int i = 0; i < g.count; ++i)
+                {
+                    const NavItem& it = g.items[i];
+                    const bool active = (s_sidebar_selected == it.tab);
+
+                    const ImVec2 i0(spx + 6.f, y);
+                    const ImVec2 i1(spx + side_w - 6.f, y + 34.f);
+
+                    ImGui::SetCursorScreenPos(i0);
+                    ImGui::PushID(it.label);
+                    ImGui::InvisibleButton("##nav", ImVec2(i1.x - i0.x, 34.f));
+                    const bool hov = ImGui::IsItemHovered();
+                    if (ImGui::IsItemClicked())
+                        s_sidebar_selected = it.tab;
+                    ImGui::PopID();
+
+                    if (active)
+                        wdl->AddRectFilled(i0, i1, IM_COL32(255, 255, 255, 20), 8.f);
+                    else if (hov)
+                        wdl->AddRectFilled(i0, i1, IM_COL32(255, 255, 255, 10), 8.f);
+
+                    const ImU32 col = ImGui::GetColorU32(active ? ImVec4(0.95f, 0.95f, 0.96f, 1.f)
+                                       : (hov ? ImVec4(0.80f, 0.80f, 0.83f, 1.f) : ImVec4(0.62f, 0.62f, 0.66f, 1.f)));
+                    widgets::tab_icon(wdl, it.icon, ImVec2(i0.x + 26.f, (i0.y + i1.y) * 0.5f),
+                        active ? IM_COL32(232, 121, 249, 255) : col);
+                    wdl->AddText(ImVec2(i0.x + 46.f, (i0.y + i1.y - ImGui::GetTextLineHeight()) * 0.5f), col, it.label);
+
+                    y += 38.f;
+                }
+                y += 8.f;
+            }
+        }
+
+        // ---- user card (pinned to the sidebar bottom) ----
+        {
+            constexpr float card_h = 52.f;
+            const float cy0 = win_pos.y + win_size.y - card_h - 12.f;
+            const ImVec2 c0(win_pos.x + 6.f, cy0);
+            const ImVec2 c1(win_pos.x + side_w - 6.f, cy0 + card_h);
+            wdl->AddRectFilled(c0, c1, IM_COL32(255, 255, 255, 8), 10.f);
+
+            // local identity (refreshed every 2s)
+            static std::string s_user;
+            static std::int64_t s_uid = 0;
+            static float s_next = 0.f;
+            const float now = (float)ImGui::GetTime();
+            if (now >= s_next)
+            {
+                s_next = now + 2.f;
+                if (Cheat::Globals::Players && Cheat::Globals::Players->address)
+                {
+                    const std::uint64_t lp = g_Memory.Read<std::uint64_t>(
+                        Cheat::Globals::Players->address + ::Player::LocalPlayer);
+                    if (g_Memory.IsValid(lp))
+                    {
+                        s_user = Cheat::Instance(lp).GetName();
+                        s_uid = (std::int64_t)Cheat::Player(lp).GetUserId();
+                    }
+                }
+            }
+
+            const float av = 34.f;
+            const ImVec2 a0(c0.x + 9.f, c0.y + (card_h - av) * 0.5f);
+            const ImVec2 a1(a0.x + av, a0.y + av);
+            ID3D11ShaderResourceView* srv = s_uid > 0 ? Cheat::Features::PlayerAvatars::Get(s_uid) : nullptr;
+            if (srv)
+                wdl->AddImageRounded(ImTextureID((uintptr_t)srv), a0, a1,
+                    ImVec2(0, 0), ImVec2(1, 1), IM_COL32(255, 255, 255, 255), av * 0.5f);
+            else
+            {
+                wdl->AddCircleFilled(ImVec2((a0.x + a1.x) * 0.5f, (a0.y + a1.y) * 0.5f), av * 0.5f, IM_COL32(232, 121, 249, 70));
+                const char* init = s_user.empty() ? "?" : s_user.substr(0, 1).c_str();
+                const ImVec2 ts = ImGui::CalcTextSize(init);
+                wdl->AddText(ImVec2((a0.x + a1.x - ts.x) * 0.5f, (a0.y + a1.y - ts.y) * 0.5f), IM_COL32(255, 255, 255, 220), init);
+            }
+
+            wdl->AddText(ImVec2(a1.x + 10.f, c0.y + 9.f), IM_COL32(242, 242, 244, 255),
+                s_user.empty() ? "user" : s_user.c_str());
+            wdl->AddText(ImVec2(a1.x + 10.f, c0.y + 27.f), IM_COL32(255, 255, 255, 100), "lifetime");
+
+            const float chx = c1.x - 14.f;
+            const float chy = c0.y + card_h * 0.5f;
+            const ImVec2 ch[3] = { ImVec2(chx - 2.f, chy - 4.f), ImVec2(chx + 2.f, chy), ImVec2(chx - 2.f, chy + 4.f) };
+            wdl->AddPolyline(ch, 3, IM_COL32(255, 255, 255, 110), 0, 1.4f);
+        }
+
+        // ---- right content column ----
+        ImGui::SetCursorScreenPos(ImVec2(win_pos.x + side_w + 16.f, win_pos.y + 14.f));
+        ImGui::BeginChild("##matcha_content", ImVec2(win_size.x - side_w - 32.f, win_size.y - 28.f),
+            ImGuiChildFlags_None, ImGuiWindowFlags_NoScrollbar);
+        {
+            ImDrawList* cdl = ImGui::GetWindowDrawList();
+            const float cw = ImGui::GetWindowSize().x;
+
+            // config dropdown (loads the selected config on change)
+            static std::vector<std::string> s_cfgs;
+            static std::vector<const char*> s_cfg_items;
+            static int s_cfg_sel = 0;
+            static float s_cfg_next = 0.f;
+            const float cnow = (float)ImGui::GetTime();
+            if (cnow >= s_cfg_next)
+            {
+                s_cfg_next = cnow + 2.f;
+                s_cfgs = Cheat::Config::List();
+                s_cfg_items.clear();
+                for (const auto& c : s_cfgs)
+                    s_cfg_items.push_back(c.c_str());
+                if (s_cfg_items.empty())
+                    s_cfg_items.push_back("No config");
+                if (s_cfg_sel >= (int)s_cfg_items.size())
+                    s_cfg_sel = 0;
+            }
+
+            ImGui::PushItemWidth(210.f);
+            const int prev_sel = s_cfg_sel;
+            widgets::combo("##matcha_config", &s_cfg_sel, s_cfg_items, 30.f);
+            ImGui::PopItemWidth();
+            if (s_cfg_sel != prev_sel && s_cfg_sel >= 0 && s_cfg_sel < (int)s_cfgs.size())
+                Cheat::Config::Load(s_cfgs[s_cfg_sel]);
+
+            // hairline under the dropdown row
+            const float hy = ImGui::GetCursorScreenPos().y + 8.f;
+            cdl->AddLine(ImVec2(ImGui::GetWindowPos().x, hy), ImVec2(ImGui::GetWindowPos().x + cw, hy), IM_COL32(255, 255, 255, 14), 1.f);
+            ImGui::Dummy(ImVec2(0.f, 22.f));
+
+            render_right_panel(s_sidebar_selected);
+        }
         ImGui::EndChild();
 
         constexpr float resize_border = 6.f;
         constexpr float resize_corner = 18.f;
-        constexpr float min_size_x = 408.f;
-        constexpr float min_size_y = 324.f;
+        constexpr float min_size_x = 660.f;
+        constexpr float min_size_y = 500.f;
         ImGuiIO& io = ImGui::GetIO();
 
         enum resize_handle { resize_none = -1, resize_left, resize_right, resize_bottom, resize_bottom_left, resize_bottom_right };

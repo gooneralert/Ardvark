@@ -10,7 +10,11 @@ namespace ng_tabs
 
 	void pad();
 	void begin_columns(float* out_left_w, float* out_right_w, float* out_h);
+<<<<<<< Updated upstream
 	bool begin_panel(const char* id, float width, float height);
+=======
+	bool begin_panel(const char* id, float width, float height, bool scrollable = false, const char* caption = nullptr);
+>>>>>>> Stashed changes
 	void end_panel();
 
 	void row_keybind(const char* id, const char* label, int* key, int* mode);

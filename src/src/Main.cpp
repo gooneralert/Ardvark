@@ -4,6 +4,7 @@
 #include "core/roblox/offsets/Offsets.h"
 #include "core/globals/Globals.h"
 #include "core/player/PlayerHandler.h"
+#include "features/visuals/AvatarLoader.h"
 #include "features/visuals/RaycastEngine.h"
 #include "features/misc/PlayerAvatars.h"
 #include "renderer/Renderer.h"
@@ -42,10 +43,33 @@ static void CrashAppend(const char* msg)
 
 static LONG WINAPI CrashFilter(EXCEPTION_POINTERS* ep)
 {
-	char line[256];
-	const int n = snprintf(line, sizeof(line), "code=0x%08lX addr=0x%llX\n",
+	// module-relative RIP so we can match it against the .map file
+	HMODULE mod = GetModuleHandleA(nullptr);
+	uintptr_t base = (uintptr_t)mod;
+	uintptr_t rip = ep && ep->ContextRecord ? (uintptr_t)ep->ContextRecord->Rip : 0;
+	uintptr_t access = 0;
+	bool is_write = false;
+	if (ep && ep->ExceptionRecord && ep->ExceptionRecord->ExceptionCode == 0xC0000005
+		&& ep->ExceptionRecord->NumberParameters >= 2)
+	{
+		is_write = ep->ExceptionRecord->ExceptionInformation[0] != 0;
+		access = (uintptr_t)ep->ExceptionRecord->ExceptionInformation[1];
+	}
+	CONTEXT* c = ep ? ep->ContextRecord : nullptr;
+	char line[512];
+	const int n = snprintf(line, sizeof(line),
+		"code=0x%08lX rip=0x%llX rip_rva=0x%llX %s access=0x%llX rax=0x%llX rsi=0x%llX rdi=0x%llX rbx=0x%llX r9=0x%llX r11=0x%llX\n",
 		(unsigned long)(ep ? ep->ExceptionRecord->ExceptionCode : 0),
-		(unsigned long long)(ep ? (uintptr_t)ep->ExceptionRecord->ExceptionAddress : 0));
+		(unsigned long long)rip,
+		(unsigned long long)(rip > base ? rip - base : rip),
+		is_write ? "WRITE" : "READ",
+		(unsigned long long)access,
+		(unsigned long long)(c ? c->Rax : 0),
+		(unsigned long long)(c ? c->Rsi : 0),
+		(unsigned long long)(c ? c->Rdi : 0),
+		(unsigned long long)(c ? c->Rbx : 0),
+		(unsigned long long)(c ? c->R9 : 0),
+		(unsigned long long)(c ? c->R11 : 0));
 	CrashAppend(line);
 	return EXCEPTION_EXECUTE_HANDLER;
 }
@@ -133,9 +157,40 @@ static void OnRobloxAttached(bool reattached)
         Cheat::Console::DumpLastCrash();
 }
 
+#ifndef DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2
+#define DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2 ((DPI_AWARENESS_CONTEXT)-4)
+#endif
+
 int main()
 {
-    SetProcessDPIAware();
+    // gelato живёт ВНУТРИ процесса Roblox (per-monitor DPI aware v2), поэтому его
+    // GetCursorPos всегда в физических пикселях вьюпорта игры. Мы внешние — без
+    // выравнивания DPI на мониторах с масштабом 125/150% GetCursorPos/ScreenToClient
+    // возвращают виртуализованные (масштабированные) координаты, и курсор живёт
+    // в другой системе координат, чем W2S-цель из памяти. Ставим per-monitor v2,
+    // с фолбэками для старых систем (повторные вызовы после успешного — безвредны).
+    {
+        if (HMODULE user32 = GetModuleHandleA("user32.dll"))
+        {
+            using set_ctx_fn = BOOL(WINAPI*)(DPI_AWARENESS_CONTEXT);
+            if (auto fn = reinterpret_cast<set_ctx_fn>(
+                    GetProcAddress(user32, "SetProcessDpiAwarenessContext")))
+            {
+                fn(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+            }
+        }
+        if (HMODULE shcore = LoadLibraryA("shcore.dll"))
+        {
+            using set_awareness_fn = HRESULT(WINAPI*)(int);
+            if (auto fn = reinterpret_cast<set_awareness_fn>(
+                    GetProcAddress(shcore, "SetProcessDpiAwareness")))
+            {
+                fn(2 /* PROCESS_PER_MONITOR_DPI_AWARE */);
+            }
+        }
+        SetProcessDPIAware();
+    }
+
     SetUnhandledExceptionFilter(CrashFilter);
     std::set_terminate(TerminateLog);
     std::thread(HeartbeatThread).detach();
@@ -148,6 +203,7 @@ int main()
         WaitForRoblox();
         OnRobloxAttached(false);
         Cheat::PlayerHandler::StartCacheThread(); // кэш игроков
+        Cheat::Features::AvatarLoader::Start(); // локальный аватар для esp preview
     }
 
     // роблокс сдох, ждём и цепляемся заново
@@ -172,6 +228,8 @@ int main()
             WaitForRoblox();
             OnRobloxAttached(true);
             Cheat::PlayerHandler::StartCacheThread();
+            Cheat::Features::AvatarLoader::Reset(); // сброс, чтобы не отдал старый аватар
+            Cheat::Features::AvatarLoader::Start();
         }
 
         std::this_thread::sleep_for(std::chrono::milliseconds(500));

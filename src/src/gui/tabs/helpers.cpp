@@ -8,8 +8,6 @@
 
 namespace ng_tabs
 {
-	static const ImVec4 k_border = ImVec4(0.18f, 0.18f, 0.18f, 1.f);
-
 	void pad()
 	{
 		ImGui::SetCursorPosX(content_pad);
@@ -25,12 +23,34 @@ namespace ng_tabs
 		if (out_h) *out_h = avail.y;
 	}
 
+<<<<<<< Updated upstream
 	bool begin_panel(const char* id, float width, float height)
+=======
+	bool begin_panel(const char* id, float width, float height, bool scrollable, const char* caption)
+>>>>>>> Stashed changes
 	{
-		ImGui::PushStyleColor(ImGuiCol_Border, k_border);
+		// matcha-style section caption above the card
+		float card_h = height;
+		if (caption && caption[0])
+		{
+			ImGui::GetWindowDrawList()->AddText(
+				ImGui::GetCursorScreenPos() + ImVec2(2.f, 0.f),
+				ImGui::GetColorU32(ImVec4(1.f, 1.f, 1.f, 0.35f)), caption);
+			ImGui::Dummy(ImVec2(width, 20.f));
+			card_h = height - 20.f;
+		}
+
+		ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(1.f, 1.f, 1.f, 0.05f));
+		ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.085f, 0.085f, 0.095f, 0.85f));
 		ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.f, 0.f));
+<<<<<<< Updated upstream
 		ImGui::PushStyleVar(ImGuiStyleVar_ScrollbarSize, 0.f);
 		ImGui::BeginChild(id, ImVec2(width, height), ImGuiChildFlags_Borders, ImGuiWindowFlags_NoScrollbar);
+=======
+		ImGui::PushStyleVar(ImGuiStyleVar_ScrollbarSize, scrollable ? 3.f : 0.f);
+		ImGui::BeginChild(id, ImVec2(width, card_h), ImGuiChildFlags_Borders,
+			scrollable ? ImGuiWindowFlags_None : ImGuiWindowFlags_NoScrollbar);
+>>>>>>> Stashed changes
 		ImGui::PopStyleVar(2);
 
 		float content_w = ImGui::GetWindowSize().x - content_pad * 2.f;
@@ -45,7 +65,7 @@ namespace ng_tabs
 		ImGui::PopItemWidth();
 		ImGui::PopStyleVar();
 		ImGui::EndChild();
-		ImGui::PopStyleColor();
+		ImGui::PopStyleColor(2);
 	}
 
 	void row_keybind(const char* id, const char* label, int* key, int* mode)

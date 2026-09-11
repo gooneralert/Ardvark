@@ -35,7 +35,7 @@ void ng_tabs::draw_misc_tab()
 	static const std::vector<const char*> hb_parts = { "head", "hrp", "torso", "arms", "legs" };
 	static const std::vector<const char*> hb_viz = { "2d", "3d", "3d filled" };
 
-	begin_panel("##misc_world", left_w, h);
+	begin_panel("##misc_world", left_w, h, false, "WORLD");
 	{
 		row_checkbox("teamcheck", &m.teamcheck);
 		row_checkbox("no shadow", &w.no_shadow);
@@ -185,7 +185,7 @@ void ng_tabs::draw_misc_tab()
 
 	ImGui::SameLine(0.f, panel_gap);
 
-	begin_panel("##misc_extra", right_w, h);
+	begin_panel("##misc_extra", right_w, h, false, "EXTRA");
 	{
 		row_checkbox("hitchance", &cfg.hitchance_enabled);
 		if (cfg.hitchance_enabled)
