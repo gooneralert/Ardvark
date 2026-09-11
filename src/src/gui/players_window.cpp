@@ -20,8 +20,8 @@
 
 namespace gui
 {
-    static const ImVec4 border_outer = ImVec4(0.13f, 0.13f, 0.13f, 1.f);
-    static const ImVec4 border_inner = ImVec4(0.18f, 0.18f, 0.18f, 1.f);
+    static const ImVec4 border_outer = ImVec4(0.92f, 0.94f, 0.93f, 1.f); // matcha near-white (same as the main menu)
+    static const ImVec4 border_inner = ImVec4(1.f, 1.f, 1.f, 0.16f); // translucent white hairline
 
     static std::uint64_t g_sel = 0;
     static std::int64_t g_sel_uid = 0;
@@ -59,12 +59,13 @@ namespace gui
         bool clicked = ImGui::IsItemClicked();
 
         ImDrawList* draw = ImGui::GetWindowDrawList();
-        draw->AddRectFilled(min, max, ImGui::GetColorU32(ImVec4(0.08f, 0.08f, 0.08f, 1.f)));
+        constexpr float rnd = 6.f;   // matches the main menu glass buttons
+        draw->AddRectFilled(min, max, ImGui::GetColorU32(ImVec4(1.f, 1.f, 1.f, 0.07f)), rnd);
         if (held)
-            draw->AddRectFilled(min, max, ImGui::GetColorU32(ImVec4(1.f, 1.f, 1.f, 0.10f)));
+            draw->AddRectFilled(min, max, ImGui::GetColorU32(ImVec4(1.f, 1.f, 1.f, 0.16f)), rnd);
         else if (hovered)
-            draw->AddRectFilled(min, max, ImGui::GetColorU32(ImVec4(1.f, 1.f, 1.f, 0.06f)));
-        draw->AddRect(min, max, ImGui::GetColorU32(border_inner));
+            draw->AddRectFilled(min, max, ImGui::GetColorU32(ImVec4(1.f, 1.f, 1.f, 0.12f)), rnd);
+        draw->AddRect(min, max, ImGui::GetColorU32(ImVec4(1.f, 1.f, 1.f, 0.14f)), rnd);
 
         ImVec2 ts = ImGui::CalcTextSize(label);
         widgets::text_outlined(draw, ImVec2(min.x + (max.x - min.x - ts.x) * 0.5f, min.y + (max.y - min.y - ts.y) * 0.5f),
@@ -217,7 +218,12 @@ namespace gui
         ImVec2 ws = ImGui::GetWindowSize();
         ImDrawList* draw = ImGui::GetWindowDrawList();
 
-        draw->AddRectFilled(wp, ImVec2(wp.x + ws.x, wp.y + title_h), IM_COL32(20, 20, 20, 255));
+        // frosted-glass backdrop for the whole window, tinted by the gui glass
+        // tint slider like the main menu (fade follows the window's style alpha)
+        const float fa = ImGui::GetStyle().Alpha;
+        glass::draw(draw, ImVec2(wp.x + 1.f, wp.y + 1.f), ImVec2(wp.x + ws.x - 1.f, wp.y + ws.y - 1.f), 8.f, fa);
+        glass::draw_header(draw, wp, ws, title_h, fa);
+
         ImVec2 title_ts = ImGui::CalcTextSize("players");
         widgets::text_outlined(draw, ImVec2(wp.x + (ws.x - title_ts.x) * 0.5f, wp.y + (title_h - title_ts.y) * 0.5f),
             IM_COL32(230, 230, 230, 255), "players");
@@ -393,8 +399,9 @@ namespace gui
             float avatar_size = std::min(160.f, psz.x * 0.42f);
             ImVec2 av_min(pp.x + pad, pp.y + header_h + pad);
             ImVec2 av_max(av_min.x + avatar_size, av_min.y + avatar_size);
-            dl->AddRectFilled(av_min, av_max, IM_COL32(16, 16, 16, 255));
-            dl->AddRect(av_min, av_max, ImGui::GetColorU32(border_inner));
+            // glass-tinted avatar plate (rounded, lets the acrylic show through)
+            dl->AddRectFilled(av_min, av_max, ImGui::GetColorU32(ImVec4(1.f, 1.f, 1.f, 0.05f)), 8.f);
+            dl->AddRect(av_min, av_max, ImGui::GetColorU32(ImVec4(1.f, 1.f, 1.f, 0.14f)), 8.f);
 
             ID3D11ShaderResourceView* srv = Cheat::Features::PlayerAvatars::Get(g_sel_uid);
             if (srv)
@@ -404,7 +411,7 @@ namespace gui
                     av_min, av_max,
                     ImVec2(0.f, 0.f), ImVec2(1.f, 1.f),
                     IM_COL32(255, 255, 255, 255),
-                    0.f);
+                    8.f);
             }
             else
             {
@@ -456,12 +463,12 @@ namespace gui
 
             ImVec2 bar_min(info_x, y);
             ImVec2 bar_max(info_x + info_w, y + bar_h);
-            dl->AddRectFilled(bar_min, bar_max, IM_COL32(31, 31, 31, 255));
+            dl->AddRectFilled(bar_min, bar_max, IM_COL32(255, 255, 255, 28));
             float hp_frac = max_hp > 0.f ? std::clamp(hp / max_hp, 0.f, 1.f) : 0.f;
             float fill_x = bar_min.x + info_w * hp_frac;
             if (hp_frac > 0.f)
                 dl->AddRectFilled(bar_min, ImVec2(fill_x, bar_max.y), IM_COL32(217, 217, 217, 255));
-            dl->AddRect(bar_min, bar_max, IM_COL32(0, 0, 0, 255));
+            dl->AddRect(bar_min, bar_max, IM_COL32(255, 255, 255, 70));
 
             float value_x = fill_x - hp_size.x * 0.5f;
             if (value_x < bar_min.x) value_x = bar_min.x;

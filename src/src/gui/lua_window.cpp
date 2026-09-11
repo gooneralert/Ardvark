@@ -26,8 +26,8 @@ namespace fs = std::filesystem;
 
 namespace gui
 {
-    static const ImVec4 border_outer = ImVec4(0.13f, 0.13f, 0.13f, 1.f);
-    static const ImVec4 border_inner = ImVec4(0.18f, 0.18f, 0.18f, 1.f);
+    static const ImVec4 border_outer = ImVec4(0.92f, 0.94f, 0.93f, 1.f); // matcha near-white (same as the main menu)
+    static const ImVec4 border_inner = ImVec4(1.f, 1.f, 1.f, 0.16f); // translucent white hairline
 
     struct lua_tab
     {
@@ -115,6 +115,12 @@ namespace gui
         ImVec2 ws = ImGui::GetWindowSize();
         ImDrawList* draw = ImGui::GetWindowDrawList();
         sync_output_from_log();
+
+        // frosted-glass backdrop for the whole panel, tinted by the gui glass
+        // tint slider like the main menu (fade follows the window's style alpha)
+        const float fa = ImGui::GetStyle().Alpha;
+        glass::draw(draw, ImVec2(wp.x + 1.f, wp.y + 1.f), ImVec2(wp.x + ws.x - 1.f, wp.y + ws.y - 1.f), 8.f, fa);
+        glass::draw_header(draw, wp, ws, 18.f, fa);
 
         ImU32 title_col = err_has_errors ? IM_COL32(220, 90, 90, 255) : IM_COL32(110, 200, 120, 255);
         widgets::text_outlined(draw, ImVec2(wp.x + 8.f, wp.y + 4.f), title_col, "output");
@@ -284,12 +290,13 @@ namespace gui
         bool clicked = ImGui::IsItemClicked();
 
         ImDrawList* draw = ImGui::GetWindowDrawList();
-        draw->AddRectFilled(min, max, ImGui::GetColorU32(ImVec4(0.08f, 0.08f, 0.08f, 1.f)));
+        constexpr float rnd = 6.f;   // matches the main menu glass buttons
+        draw->AddRectFilled(min, max, ImGui::GetColorU32(ImVec4(1.f, 1.f, 1.f, 0.07f)), rnd);
         if (held)
-            draw->AddRectFilled(min, max, ImGui::GetColorU32(ImVec4(1.f, 1.f, 1.f, 0.10f)));
+            draw->AddRectFilled(min, max, ImGui::GetColorU32(ImVec4(1.f, 1.f, 1.f, 0.16f)), rnd);
         else if (hovered)
-            draw->AddRectFilled(min, max, ImGui::GetColorU32(ImVec4(1.f, 1.f, 1.f, 0.06f)));
-        draw->AddRect(min, max, ImGui::GetColorU32(border_inner));
+            draw->AddRectFilled(min, max, ImGui::GetColorU32(ImVec4(1.f, 1.f, 1.f, 0.12f)), rnd);
+        draw->AddRect(min, max, ImGui::GetColorU32(ImVec4(1.f, 1.f, 1.f, 0.14f)), rnd);
 
         ImVec2 ts = ImGui::CalcTextSize(label);
         widgets::text_outlined(draw, ImVec2(min.x + (max.x - min.x - ts.x) * 0.5f, min.y + (max.y - min.y - ts.y) * 0.5f),
@@ -363,7 +370,12 @@ namespace gui
         ImVec2 ws = ImGui::GetWindowSize();
         ImDrawList* draw = ImGui::GetWindowDrawList();
 
-        draw->AddRectFilled(wp, ImVec2(wp.x + ws.x, wp.y + title_h), IM_COL32(20, 20, 20, 255));
+        // frosted-glass backdrop for the whole window, tinted by the gui glass
+        // tint slider like the main menu (fade follows the window's style alpha)
+        const float fa = ImGui::GetStyle().Alpha;
+        glass::draw(draw, ImVec2(wp.x + 1.f, wp.y + 1.f), ImVec2(wp.x + ws.x - 1.f, wp.y + ws.y - 1.f), 8.f, fa);
+        glass::draw_header(draw, wp, ws, title_h, fa);
+
         widgets::text_outlined(draw, ImVec2(wp.x + 10.f, wp.y + (title_h - ImGui::CalcTextSize("Lua").y) * 0.5f),
             IM_COL32(230, 230, 230, 255), "Lua");
 
@@ -501,7 +513,7 @@ namespace gui
                 if (visible)
                 {
                     if (active || renaming)
-                        dl->AddRectFilled(tmin, ImVec2(tmax.x, tmax.y - 1.f), ImGui::GetColorU32(ImVec4(0.14f, 0.14f, 0.14f, 1.f)));
+                        dl->AddRectFilled(tmin, ImVec2(tmax.x, tmax.y - 1.f), ImGui::GetColorU32(ImVec4(1.f, 1.f, 1.f, 0.08f)));
                     else if (hovered)
                         dl->AddRectFilled(tmin, ImVec2(tmax.x, tmax.y - 1.f), ImGui::GetColorU32(ImVec4(1.f, 1.f, 1.f, 0.04f)));
 
@@ -516,10 +528,10 @@ namespace gui
                 {
                     ImGui::PushID(i);
                     ImGui::SetCursorScreenPos(ImVec2(tmin.x + tab_pad_x - 4.f, tmin.y + (tab_h - ImGui::GetTextLineHeight()) * 0.5f - 2.f));
-                    ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(0.08f, 0.08f, 0.08f, 1.f));
-                    ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, ImVec4(0.10f, 0.10f, 0.10f, 1.f));
-                    ImGui::PushStyleColor(ImGuiCol_FrameBgActive, ImVec4(0.12f, 0.12f, 0.12f, 1.f));
-                    ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.22f, 0.22f, 0.22f, 1.f));
+                    ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(1.f, 1.f, 1.f, 0.06f));
+                    ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, ImVec4(1.f, 1.f, 1.f, 0.09f));
+                    ImGui::PushStyleColor(ImGuiCol_FrameBgActive, ImVec4(1.f, 1.f, 1.f, 0.12f));
+                    ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(1.f, 1.f, 1.f, 0.18f));
                     ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.9f, 0.9f, 0.9f, 1.f));
                     ImGui::PushStyleColor(ImGuiCol_TextSelectedBg, ImVec4(1.f, 1.f, 1.f, 0.18f));
                     ImGui::PushStyleColor(ImGuiCol_NavCursor, ImVec4(0.f, 0.f, 0.f, 0.f));

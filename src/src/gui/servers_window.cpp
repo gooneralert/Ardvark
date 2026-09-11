@@ -23,8 +23,8 @@
 
 namespace gui
 {
-    static const ImVec4 border_outer = ImVec4(0.13f, 0.13f, 0.13f, 1.f);
-    static const ImVec4 border_inner = ImVec4(0.18f, 0.18f, 0.18f, 1.f);
+    static const ImVec4 border_outer = ImVec4(0.92f, 0.94f, 0.93f, 1.f); // matcha near-white (same as the main menu)
+    static const ImVec4 border_inner = ImVec4(1.f, 1.f, 1.f, 0.16f); // translucent white hairline
 
     struct server_entry_t
     {
@@ -317,12 +317,13 @@ namespace gui
             bool clicked = ImGui::IsItemClicked();
 
             ImDrawList* draw = ImGui::GetWindowDrawList();
-            draw->AddRectFilled(min, max, ImGui::GetColorU32(ImVec4(0.08f, 0.08f, 0.08f, 1.f)));
+            constexpr float rnd = 6.f;   // matches the main menu glass buttons
+            draw->AddRectFilled(min, max, ImGui::GetColorU32(ImVec4(1.f, 1.f, 1.f, 0.07f)), rnd);
             if (held)
-                draw->AddRectFilled(min, max, ImGui::GetColorU32(ImVec4(1.f, 1.f, 1.f, 0.10f)));
+                draw->AddRectFilled(min, max, ImGui::GetColorU32(ImVec4(1.f, 1.f, 1.f, 0.16f)), rnd);
             else if (hovered)
-                draw->AddRectFilled(min, max, ImGui::GetColorU32(ImVec4(1.f, 1.f, 1.f, 0.06f)));
-            draw->AddRect(min, max, ImGui::GetColorU32(border_inner));
+                draw->AddRectFilled(min, max, ImGui::GetColorU32(ImVec4(1.f, 1.f, 1.f, 0.12f)), rnd);
+            draw->AddRect(min, max, ImGui::GetColorU32(ImVec4(1.f, 1.f, 1.f, 0.14f)), rnd);
 
             ImVec2 ts = ImGui::CalcTextSize(label);
             widgets::text_outlined(draw,
@@ -519,8 +520,12 @@ namespace gui
         ImVec2 ws = ImGui::GetWindowSize();
         ImDrawList* draw = ImGui::GetWindowDrawList();
 
-        // title bar
-        draw->AddRectFilled(wp, ImVec2(wp.x + ws.x, wp.y + title_h), IM_COL32(20, 20, 20, 255));
+        // frosted-glass backdrop for the whole window, tinted by the gui glass
+        // tint slider like the main menu (fade follows the window's style alpha)
+        const float fa = ImGui::GetStyle().Alpha;
+        glass::draw(draw, ImVec2(wp.x + 1.f, wp.y + 1.f), ImVec2(wp.x + ws.x - 1.f, wp.y + ws.y - 1.f), 8.f, fa);
+        glass::draw_header(draw, wp, ws, title_h, fa);
+
         ImVec2 title_ts = ImGui::CalcTextSize("server explorer");
         widgets::text_outlined(draw,
             ImVec2(wp.x + (ws.x - title_ts.x) * 0.5f, wp.y + (title_h - title_ts.y) * 0.5f),

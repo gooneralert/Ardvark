@@ -7,7 +7,7 @@
 
 namespace gui
 {
-    static const ImVec4 border_outer = ImVec4(0.13f, 0.13f, 0.13f, 1.f);
+    static const ImVec4 border_outer = ImVec4(0.92f, 0.94f, 0.93f, 1.f); // matcha near-white (same as the main menu)
 
     void render_esp_preview_window(bool* open, ImVec2 anchor_pos, ImVec2 anchor_size, float anim)
     {
@@ -58,17 +58,18 @@ namespace gui
         const ImVec2 clip_max(wp.x + ws.x + 2.f, wp.y + ws.y + 2.f);
         draw->PushClipRect(clip_min, clip_max, false);
 
-        draw->AddRectFilled(wp, ImVec2(wp.x + ws.x, wp.y + ws.y),
-            IM_COL32(14, 15, 18, (int)(255.f * 0.34f * anim)), 8.f);
-        draw->AddRect(wp, ImVec2(wp.x + ws.x, wp.y + ws.y),
-            IM_COL32(33, 33, 33, (int)(255 * anim)), 8.f, 0, 1.2f);
+        // frosted-glass backdrop for the whole window, tinted by the gui glass
+        // tint slider like the main menu
+        glass::draw(draw, ImVec2(wp.x + 1.f, wp.y + 1.f), ImVec2(wp.x + ws.x - 1.f, wp.y + ws.y - 1.f), 8.f, anim);
 
         // acrylic backdrop for this window (only once fully revealed; the
         // OS-level blur region cannot be clipped by the mask)
         if (anim > 0.99f)
             glass::add_rect(wp.x, wp.y, ws.x, ws.y, 8.f);
 
-        draw->AddRectFilled(wp, ImVec2(wp.x + ws.x, wp.y + title_h), IM_COL32(20, 20, 20, (int)(255 * anim)));
+        // tinted glass title bar (rounded top corners to match the window)
+        glass::draw_header(draw, wp, ws, title_h, anim);
+
         ImVec2 title_ts = ImGui::CalcTextSize("esp preview");
         widgets::text_outlined(draw,
             ImVec2(wp.x + (ws.x - title_ts.x) * 0.5f, wp.y + (title_h - title_ts.y) * 0.5f),

@@ -1,5 +1,6 @@
 #include "pch.h"
 #include "lua_editor.h"
+#include "../glass.h"
 #include <algorithm>
 #include <cctype>
 #include <cstdio>
@@ -356,8 +357,9 @@ namespace editor
             io.MouseWheel = 0.f;
         }
 
-        dl->AddRectFilled(origin, ImVec2(origin.x + gutter_w, origin.y + canvas_avail.y), IM_COL32(18, 18, 18, 255));
-        dl->AddLine(ImVec2(origin.x + gutter_w, origin.y), ImVec2(origin.x + gutter_w, origin.y + canvas_avail.y), IM_COL32(45, 45, 45, 255));
+        // glass-tinted gutter (lets the acrylic show through instead of a black slab)
+        dl->AddRectFilled(origin, ImVec2(origin.x + gutter_w, origin.y + canvas_avail.y), IM_COL32(255, 255, 255, 16));
+        dl->AddLine(ImVec2(origin.x + gutter_w, origin.y), ImVec2(origin.x + gutter_w, origin.y + canvas_avail.y), IM_COL32(255, 255, 255, 32));
 
         auto char_x = [&](int row, int col) -> float {
             std::string sub = lines[row].substr(0, std::min(col, (int)lines[row].size()));
@@ -614,8 +616,16 @@ namespace editor
             float pw = max_w + 16.f;
             ImVec2 pmin(px, py);
             ImVec2 pmax(px + pw, py + ph);
-            dl->AddRectFilled(pmin, pmax, IM_COL32(28, 28, 28, 245));
-            dl->AddRect(pmin, pmax, IM_COL32(70, 70, 70, 255));
+            // rounded, glass-tinted autocomplete popup (follows the tint slider)
+            constexpr float ac_r = 8.f;
+            {
+                float atr = 0.f, atg = 0.f, atb = 0.f, ata = 0.f;
+                glass::tint_color(&atr, &atg, &atb, &ata);
+                dl->AddRectFilled(pmin, pmax,
+                    IM_COL32((int)(atr * 255.f), (int)(atg * 255.f), (int)(atb * 255.f),
+                        (ImU32)(120.f + 115.f * ata)), ac_r);
+            }
+            dl->AddRect(pmin, pmax, IM_COL32(255, 255, 255, 30), ac_r);
             int start = std::max(0, ac_index - show + 1);
             for (int i = 0; i < show; ++i)
             {
@@ -623,7 +633,7 @@ namespace editor
                 if (idx >= (int)ac_items.size()) break;
                 ImVec2 tp(pmin.x + 6.f, pmin.y + 2.f + i * line_h);
                 if (idx == ac_index)
-                    dl->AddRectFilled(ImVec2(pmin.x + 1.f, tp.y), ImVec2(pmax.x - 1.f, tp.y + line_h), IM_COL32(55, 55, 55, 255));
+                    dl->AddRectFilled(ImVec2(pmin.x + 2.f, tp.y), ImVec2(pmax.x - 2.f, tp.y + line_h), IM_COL32(255, 255, 255, 22), 4.f);
                 dl->AddText(tp, IM_COL32(230, 230, 230, 255), ac_items[idx].c_str());
             }
         }
@@ -632,7 +642,9 @@ namespace editor
         {
             ImVec2 sb_min(origin.x + canvas_avail.x + 1.f, origin.y);
             ImVec2 sb_max(origin.x + avail.x - 1.f, origin.y + canvas_avail.y);
-            dl->AddRectFilled(sb_min, sb_max, IM_COL32(20, 20, 20, 255));
+            const float sb_round = (sb_max.x - sb_min.x) * 0.5f;
+            // glass-tinted scrollbar track (matches the main menu slider tracks)
+            dl->AddRectFilled(sb_min, sb_max, IM_COL32(255, 255, 255, 28), sb_round);
 
             float track_h = sb_max.y - sb_min.y;
             float thumb_h = std::max(16.f, track_h * (canvas_avail.y / content_h));
@@ -653,8 +665,8 @@ namespace editor
                 th_max.y = thumb_y + thumb_h;
             }
 
-            ImU32 th_col = IM_COL32(sb_held ? 120 : (sb_hov ? 100 : 70), sb_held ? 120 : (sb_hov ? 100 : 70), sb_held ? 120 : (sb_hov ? 100 : 70), 255);
-            dl->AddRectFilled(th_min, th_max, th_col);
+            ImU32 th_col = IM_COL32(255, 255, 255, sb_held ? 170 : (sb_hov ? 145 : 110));
+            dl->AddRectFilled(th_min, th_max, th_col, sb_round);
         }
 
         ImGui::EndChild();

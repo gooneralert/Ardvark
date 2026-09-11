@@ -365,8 +365,15 @@ namespace gui
         ImDrawList* draw = ImGui::GetWindowDrawList();
         const ImVec2 wp = ImGui::GetWindowPos();
 
-        // pill background
-        draw->AddRectFilled(wp, ImVec2(wp.x + pill_w, wp.y + pill_h), fade_color(IM_COL32(16, 16, 18, 235), anim), pill_h * 0.5f);
+        // pill background: tinted glass (follows the gui tint slider) instead
+        // of an opaque black pill, with the same white outline as the windows
+        {
+            float ptr = 0.f, ptg = 0.f, ptb = 0.f, pta = 0.f;
+            glass::tint_color(&ptr, &ptg, &ptb, &pta);
+            draw->AddRectFilled(wp, ImVec2(wp.x + pill_w, wp.y + pill_h),
+                fade_color(IM_COL32((int)(ptr * 255.f), (int)(ptg * 255.f), (int)(ptb * 255.f),
+                    (ImU32)(120.f + 100.f * pta)), anim), pill_h * 0.5f);
+        }
         draw->AddRect(wp, ImVec2(wp.x + pill_w, wp.y + pill_h), fade_color(IM_COL32(255, 255, 255, 22), anim), pill_h * 0.5f, 0, 1.2f);
 
         struct Item { const char* id; const char* tip; int kind; };
@@ -606,6 +613,13 @@ namespace gui
                 float yprev = 0.f;
                 for (float y : ys) { draw_gap(yprev, y); yprev = y; }
                 draw_gap(yprev, bg_dims.y); // final strip down to the bottom edge
+
+                // round the holes: the OS acrylic backdrop is square, so its
+                // blur peeks through the square hole corners. Paint the corner
+                // cutout sectors with the backdrop color so every glass window
+                // renders as a genuinely rounded shape.
+                for (const FR& h : holes)
+                    glass::mask_corners(bgl, ImVec2(h.x0, h.y0), ImVec2(h.x1, h.y1), 8.f, dark);
             }
 
         // Snow particles background - Performance optimized

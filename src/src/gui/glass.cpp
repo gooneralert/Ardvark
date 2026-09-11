@@ -25,6 +25,7 @@
 #include <dxgi1_3.h>
 #include <d3d11_2.h>
 #include <dwmapi.h>
+#include <cmath>
 #include <wrl/client.h>
 #include <wrl/implements.h>
 #include <winternl.h>
@@ -976,9 +977,87 @@ namespace glass
             (ImU32)(86 * alpha));
         draw_list->AddRectFilled(rect_min, rect_max, wash, rounding);
         const float sheenH = (rect_max.y - rect_min.y) * 0.35f;
-        draw_list->AddRectFilledMultiColor(rect_min, ImVec2(rect_max.x, rect_min.y + sheenH),
+        draw_list->AddRectFilledMultiColorRounded(rect_min, ImVec2(rect_max.x, rect_min.y + sheenH),
             IM_COL32(255, 255, 255, (ImU32)(14 * alpha)), IM_COL32(255, 255, 255, (ImU32)(14 * alpha)),
-            IM_COL32(255, 255, 255, 0), IM_COL32(255, 255, 255, 0));
+            IM_COL32(255, 255, 255, 0), IM_COL32(255, 255, 255, 0),
+            rounding);
         draw_list->AddRect(rect_min, rect_max, IM_COL32(235, 240, 237, (ImU32)(70 * alpha)), rounding, 0, 1.2f);
+    }
+
+    void tint_color(float* r, float* g, float* b, float* a)
+    {
+        if (r) *r = clampf(g_tint_r.load(), 0.f, 1.f);
+        if (g) *g = clampf(g_tint_g.load(), 0.f, 1.f);
+        if (b) *b = clampf(g_tint_b.load(), 0.f, 1.f);
+        if (a) *a = clampf(g_tint_a.load(), 0.f, 1.f);
+    }
+
+    void draw_header(ImDrawList* draw_list, const ImVec2& wp, const ImVec2& ws, float title_h, float alpha, float rounding)
+    {
+        if (!draw_list) return;
+        if (ws.x <= 2.f || ws.y <= 2.f || title_h <= 0.f)
+            return;
+
+        // tinted glass band: same color family as the main menu glass wash,
+        // slightly stronger so the header reads as a distinct band.
+        const ImU32 fill = IM_COL32(
+            (int)(clampf(g_tint_r.load(), 0.f, 1.f) * 255.f),
+            (int)(clampf(g_tint_g.load(), 0.f, 1.f) * 255.f),
+            (int)(clampf(g_tint_b.load(), 0.f, 1.f) * 255.f),
+            (ImU32)(118.f * alpha));
+        const ImVec2 min(wp.x + 1.f, wp.y + 1.f);
+        const ImVec2 max(wp.x + ws.x - 1.f, wp.y + title_h);
+        if (max.x <= min.x || max.y <= min.y)
+            return;
+
+        draw_list->AddRectFilled(min, max, fill, rounding, ImDrawFlags_RoundCornersTop);
+
+        // subtle hairline under the header so the title band reads as a band
+        draw_list->AddRectFilled(ImVec2(min.x, max.y), ImVec2(max.x, max.y + 1.f),
+            IM_COL32(235, 240, 237, (ImU32)(52.f * alpha)));
+    }
+
+    void mask_corners(ImDrawList* draw_list, const ImVec2& rect_min, const ImVec2& rect_max, float rounding, ImU32 col)
+    {
+        if (!draw_list) return;
+        const float w = rect_max.x - rect_min.x;
+        const float h = rect_max.y - rect_min.y;
+        if (w <= 2.f || h <= 2.f) return;
+        if (rounding <= 0.5f) return;
+        const float r = std::min(rounding, std::min(w, h) * 0.5f);
+
+        // For each corner: the sector between the square corner and the rounded
+        // arc is filled as a triangle fan (corner point -> arc samples). That
+        // covers exactly the square acrylic corner that peeks through the hole
+        // carved in the backdrop, making the glass shape visually rounded.
+        const ImVec2 corner[4] = {
+            { rect_min.x,       rect_min.y       }, // top-left square corner
+            { rect_max.x,       rect_min.y       }, // top-right
+            { rect_max.x,       rect_max.y       }, // bottom-right
+            { rect_min.x,       rect_max.y       }  // bottom-left
+        };
+        const ImVec2 center[4] = {
+            { rect_min.x + r,   rect_min.y + r   },
+            { rect_max.x - r,   rect_min.y + r   },
+            { rect_max.x - r,   rect_max.y - r   },
+            { rect_min.x + r,   rect_max.y - r   }
+        };
+        const float a0[4] = { 180.f, 270.f,   0.f,  90.f };
+        const float a1[4] = { 270.f, 360.f,  90.f, 180.f };
+
+        constexpr int seg = 10;
+        constexpr float kDeg = 3.14159265f / 180.f;
+        for (int k = 0; k < 4; ++k)
+        {
+            ImVec2 prev = corner[k];
+            for (int i = 0; i <= seg; ++i)
+            {
+                const float a = (a0[k] + (a1[k] - a0[k]) * (float)i / (float)seg) * kDeg;
+                const ImVec2 p(center[k].x + cosf(a) * r, center[k].y + sinf(a) * r);
+                if (i > 0)
+                    draw_list->AddTriangleFilled(prev, p, corner[k], col);
+                prev = p;
+            }
+        }
     }
 }
