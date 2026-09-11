@@ -835,6 +835,23 @@ namespace glass
         g_rounds.push_back(clampf(rounding, 0.f, 32.f));
     }
 
+    int rect_count()
+    {
+        return (int)g_rects.size();
+    }
+
+    bool rect_at(int i, float& x, float& y, float& w, float& h)
+    {
+        if (i < 0 || i >= (int)g_rects.size())
+            return false;
+        const RECT& r = g_rects[i];
+        x = (float)r.left;
+        y = (float)r.top;
+        w = (float)(r.right - r.left);
+        h = (float)(r.bottom - r.top);
+        return true;
+    }
+
     void commit()
     {
         if (g_rects.empty())

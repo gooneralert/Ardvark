@@ -34,6 +34,14 @@ namespace glass
     void add_rect(float x, float y, float w, float h, float rounding = 8.f);
     void commit();
 
+    // --- introspection ------------------------------------------------------
+    // this frame's collected glass rects (window coords, in the same space as
+    // the ImGui background draw list). Used by the dark menu backdrop to carve
+    // holes around the frosted windows so their acrylic blur stays see-through.
+    // Valid between new_frame() and the next new_frame().
+    int  rect_count();
+    bool rect_at(int i, float& x, float& y, float& w, float& h);
+
     // draws a frosted-glass backdrop for the given screen-space rect:
     // a blurred capture of the game window behind the menu + a dark tint + subtle sheen
     void draw(ImDrawList* draw_list, const ImVec2& rect_min, const ImVec2& rect_max, float rounding, float alpha = 1.f);

@@ -25,6 +25,7 @@
 #include "media.h"
 #include <cstring>
 #include <cmath>
+#include <ctime>
 #include <string>
 #include <vector>
 #include <unordered_map>
@@ -475,6 +476,7 @@ namespace gui
         music_open = Cheat::g_Settings.misc.music;
 
         const float menu_a = window_anim("##menu", s_menu_open, 20.f);
+
         if (menu_a > 0.01f)
             render_navbar(menu_a);
 
@@ -548,6 +550,127 @@ namespace gui
         // keeps rendering even when the menu itself is closed
         if (Cheat::g_Settings.gui.watermark)
             widgets::watermark(1.f);
+
+    // layuh-style backdrop: dark wash behind everything EXCEPT the frosted-glass
+        // windows, whose acrylic blur has to stay see-through (the menu is glass).
+        if (menu_a > 0.01f)
+        {
+            ImDrawList* bgl = ImGui::GetBackgroundDrawList();
+            const ImVec2 bg_dims = ImGui::GetIO().DisplaySize;
+            const ImU32 dark = ImGui::GetColorU32(ImVec4(0.12f, 0.12f, 0.12f, 0.89f * menu_a));
+
+            // collect this frame's glass rects (same coordinate space as the
+            // background draw list)
+            struct FR { float x0, y0, x1, y1; };
+            std::vector<FR> holes;
+            for (int i = 0; i < glass::rect_count(); ++i)
+            {
+                float x = 0.f, y = 0.f, w = 0.f, h = 0.f;
+                if (glass::rect_at(i, x, y, w, h) && w > 0.5f && h > 0.5f)
+                    holes.push_back(FR{ x, y, x + w, y + h });
+            }
+
+            if (holes.empty())
+            {
+                bgl->AddRectFilled(ImVec2(0.f, 0.f), bg_dims, dark, 0);
+            }
+            else
+            {
+                // vertical strips between the glass edges; darken only the gaps
+                // so the wash never overlaps the windows (no double-blend seams)
+                std::vector<float> ys;
+                for (const FR& h : holes) { ys.push_back(h.y0); ys.push_back(h.y1); }
+                std::sort(ys.begin(), ys.end());
+                ys.erase(std::unique(ys.begin(), ys.end()), ys.end());
+
+                auto draw_gap = [&](float y0, float y1)
+                {
+                    if (y1 - y0 <= 0.01f) return;
+                    std::vector<ImVec2> cv; // x-intervals of holes spanning strip [y0,y1]
+                    for (const FR& h : holes)
+                        if (h.y0 <= y0 + 0.01f && h.y1 >= y1 - 0.01f)
+                            cv.push_back(ImVec2(h.x0, h.x1));
+                    std::sort(cv.begin(), cv.end(),
+                              [](ImVec2 a, ImVec2 b) { return a.x < b.x; });
+                    float px = 0.f;
+                    for (const ImVec2& c : cv)
+                    {
+                        if (c.x > px)
+                            bgl->AddRectFilled(ImVec2(px, y0), ImVec2(c.x, y1), dark, 0);
+                        if (c.y > px) px = c.y;
+                    }
+                    if (px < bg_dims.x)
+                        bgl->AddRectFilled(ImVec2(px, y0), ImVec2(bg_dims.x, y1), dark, 0);
+                };
+
+                float yprev = 0.f;
+                for (float y : ys) { draw_gap(yprev, y); yprev = y; }
+                draw_gap(yprev, bg_dims.y); // final strip down to the bottom edge
+            }
+
+        // Snow particles background - Performance optimized
+            {
+                struct Snowflake { ImVec2 pos; float speed; float drift; float size; float phase; };
+                static std::vector<Snowflake> flakes;
+                static ImVec2 last_screen = ImVec2(0, 0);
+                static bool seeded = false;
+                static auto last_snow_update = std::chrono::steady_clock::now();
+
+                if (!seeded) { srand((unsigned)time(nullptr)); seeded = true; }
+
+                ImVec2 screen = ImGui::GetIO().DisplaySize;
+                const int target_count = 70; // Reduced from 140
+
+                if (flakes.empty() || screen.x != last_screen.x || screen.y != last_screen.y) {
+                    flakes.clear(); flakes.reserve(target_count);
+                    last_screen = screen;
+                    for (int i = 0; i < target_count; ++i) {
+                        Snowflake f;
+                        f.pos = ImVec2((float)(rand() % (int)std::max(1.0f, screen.x)), (float)(rand() % (int)std::max(1.0f, screen.y)));
+                        f.speed = 90.0f + (float)(rand() % 100); // px/sec fall speed
+                        f.drift = 30.0f + (float)(rand() % 50); // horizontal sway
+                        f.size = 1.0f + (float)(rand() % 200) / 100.0f; // 1.0 .. 3.0 px
+                        f.phase = (float)(rand() % 628) / 100.0f;
+                        flakes.push_back(f);
+                    }
+                }
+
+                // Performance optimization: Update snow less frequently
+                auto now = std::chrono::steady_clock::now();
+                auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - last_snow_update);
+                if (elapsed.count() < 16) { // ~60 FPS instead of every frame
+                    // Skip update but still render
+                }
+                else {
+                    // Use the real wall-clock time since the last update so the
+                    // snow speed is exact regardless of the overlay framerate.
+                    // (ImGui::GetIO().DeltaTime is nearly zero at uncapped FPS,
+                    // which made the flakes crawl.)
+                    float dt = std::chrono::duration<float>(now - last_snow_update).count();
+                    if (dt > 0.1f) dt = 0.1f; // clamp tab-away jumps
+                    for (auto& f : flakes) {
+                        f.phase += dt * 2.4f; // faster sway
+                        f.pos.y += f.speed * dt;
+                        f.pos.x += cosf(f.phase) * f.drift * dt;
+
+                        if (f.pos.y > screen.y + 8.0f) {
+                            f.pos.y = -8.0f;
+                            f.pos.x = (float)(rand() % (int)std::max(1.0f, screen.x));
+                            f.speed = 90.0f + (float)(rand() % 100);
+                            f.drift = 30.0f + (float)(rand() % 50);
+                            f.size = 1.0f + (float)(rand() % 200) / 100.0f;
+                        }
+                        if (f.pos.x < -8.0f) f.pos.x = screen.x + 8.0f;
+                        if (f.pos.x > screen.x + 8.0f) f.pos.x = -8.0f;
+                    }
+                    last_snow_update = now;
+                }
+
+                for (auto& f : flakes) {
+                    bgl->AddCircleFilled(f.pos, f.size, IM_COL32(255, 255, 255, 150)); // Reduced alpha
+                }
+            }
+        }
 
     glass::commit();   // size/position the acrylic backdrop over every collected rect
     }
