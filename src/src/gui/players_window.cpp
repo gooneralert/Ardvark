@@ -196,7 +196,7 @@ namespace gui
 
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.f, 0.f));
         ImGui::PushStyleColor(ImGuiCol_Border, border_outer);
-        ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.055f, 0.06f, 0.07f, 0.34f));  // translucent so the acrylic shows through
+        ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.055f, 0.06f, 0.07f, 0.34f));  // translucent so the glass shows through
         bool visible = ImGui::Begin("##players_window", nullptr,
             ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoScrollbar | 0 | ImGuiWindowFlags_NoResize);
         ImGui::PopStyleColor(2);
@@ -205,7 +205,7 @@ namespace gui
         {
             const ImVec2 gp = ImGui::GetWindowPos();
             const ImVec2 gs = ImGui::GetWindowSize();
-            glass::add_rect(gp.x, gp.y, gs.x, gs.y, 8.f);   // acrylic backdrop for this window
+            glass::add_rect(gp.x, gp.y, gs.x, gs.y, 8.f, ImGui::GetStyle().Alpha);   // frosted panel for this window
         }
 
         if (!visible)
@@ -399,7 +399,7 @@ namespace gui
             float avatar_size = std::min(160.f, psz.x * 0.42f);
             ImVec2 av_min(pp.x + pad, pp.y + header_h + pad);
             ImVec2 av_max(av_min.x + avatar_size, av_min.y + avatar_size);
-            // glass-tinted avatar plate (rounded, lets the acrylic show through)
+            // glass-tinted avatar plate (rounded, lets the glass show through)
             dl->AddRectFilled(av_min, av_max, ImGui::GetColorU32(ImVec4(1.f, 1.f, 1.f, 0.05f)), 8.f);
             dl->AddRect(av_min, av_max, ImGui::GetColorU32(ImVec4(1.f, 1.f, 1.f, 0.14f)), 8.f);
 

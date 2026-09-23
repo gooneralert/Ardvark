@@ -103,13 +103,13 @@ void ng_tabs::draw_settings_tab(int* menu_kb, bool* kb_skip)
 			ImGui::Spacing();
 
 			ImGui::PushItemWidth(90.f);
-			if (widgets::button("##enable"))
+			if (row_button("enable"))
 			{
 				g_Settings.misc.hybrid_mode = true;
 				ImGui::CloseCurrentPopup();
 			}
 			ImGui::SameLine();
-			if (widgets::button("##cancel"))
+			if (row_button("cancel"))
 				ImGui::CloseCurrentPopup();
 			ImGui::PopItemWidth();
 
@@ -159,7 +159,7 @@ void ng_tabs::draw_settings_tab(int* menu_kb, bool* kb_skip)
 		}
 
 		pad();
-		widgets::input_text("##cfg_name", s_cfg_name, (int)sizeof(s_cfg_name));
+		row_input_text("##cfg_name", s_cfg_name, (int)sizeof(s_cfg_name));
 
 		pad();
 		{
@@ -169,11 +169,11 @@ void ng_tabs::draw_settings_tab(int* menu_kb, bool* kb_skip)
 				bw = 40.f;
 
 			ImGui::PushItemWidth(bw);
-			bool load = widgets::button("##load");
+			bool load = row_button("load");
 			ImGui::SameLine(0.f, content_spacing);
-			bool del = widgets::button("##delete");
+			bool del = row_button("delete");
 			ImGui::SameLine(0.f, content_spacing);
-			bool save = widgets::button("##save");
+			bool save = row_button("save");
 			ImGui::PopItemWidth();
 
 			const char* name = s_cfg_name;

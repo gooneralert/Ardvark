@@ -357,7 +357,7 @@ namespace editor
             io.MouseWheel = 0.f;
         }
 
-        // glass-tinted gutter (lets the acrylic show through instead of a black slab)
+        // glass-tinted gutter (lets the glass show through instead of a black slab)
         dl->AddRectFilled(origin, ImVec2(origin.x + gutter_w, origin.y + canvas_avail.y), IM_COL32(255, 255, 255, 16));
         dl->AddLine(ImVec2(origin.x + gutter_w, origin.y), ImVec2(origin.x + gutter_w, origin.y + canvas_avail.y), IM_COL32(255, 255, 255, 32));
 

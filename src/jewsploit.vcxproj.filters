@@ -97,6 +97,9 @@
     <Filter Include="src\gui">
       <UniqueIdentifier>{28C4E687-3ADB-4CE7-B8C9-756A437C8F3C}</UniqueIdentifier>
     </Filter>
+    <Filter Include="src\gui\LiquidUI">
+      <UniqueIdentifier>{7A1F62D0-9B4C-4E1F-8D23-3A5C6E7F8901}</UniqueIdentifier>
+    </Filter>
     <Filter Include="src\jewsploit">
       <UniqueIdentifier>{92883A43-4579-4A9D-ADE1-F8E0F050EA2A}</UniqueIdentifier>
     </Filter>
@@ -309,6 +312,9 @@
     <ClInclude Include="src\gui\glass.h">
       <Filter>src\gui</Filter>
     </ClInclude>
+    <ClInclude Include="src\gui\liquid_ui.h">
+      <Filter>src\gui</Filter>
+    </ClInclude>
     <ClInclude Include="src\gui\gui.h">
       <Filter>src\gui</Filter>
     </ClInclude>
@@ -442,6 +448,7 @@
     <ClInclude Include="src\gui\tabs\misc.h" />
     <ClInclude Include="src\gui\tabs\local.h" />
     <ClInclude Include="src\gui\tabs\settings_tab.h" />
+    <ClInclude Include="src\gui\tabs\customize.h" />
     <ClInclude Include="src\gui\tabs\trigger.h" />
     <ClInclude Include="src\gui\tabs\helpers.h" />
     <ClInclude Include="third_party\lua\lua.h" />
@@ -632,6 +639,12 @@
     <ClCompile Include="src\gui\glass.cpp">
       <Filter>src\gui</Filter>
     </ClCompile>
+    <ClCompile Include="src\gui\LiquidUI\examples\example_win32_directx11\src\glass\glass.cpp">
+      <Filter>src\gui\LiquidUI</Filter>
+    </ClCompile>
+    <ClCompile Include="src\gui\LiquidUI\examples\example_win32_directx11\src\glass\backdrop.cpp">
+      <Filter>src\gui\LiquidUI</Filter>
+    </ClCompile>
     <ClCompile Include="src\gui\gui.cpp">
       <Filter>src\gui</Filter>
 
@@ -787,6 +800,7 @@
     <ClCompile Include="src\gui\tabs\misc.cpp" />
     <ClCompile Include="src\gui\tabs\local.cpp" />
     <ClCompile Include="src\gui\tabs\settings_tab.cpp" />
+    <ClCompile Include="src\gui\tabs\customize.cpp" />
     <ClCompile Include="src\gui\tabs\helpers.cpp" />
     <ClCompile Include="src\gui\tabs\trigger.cpp" />
     <ClCompile Include="src\gui\colors\colors.cpp" />

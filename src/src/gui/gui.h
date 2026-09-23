@@ -13,5 +13,6 @@ namespace gui
     bool menu_open();
     void set_menu_open(bool open);
     bool any_ui_open();
+    ImVec2 menu_pos();      // last rendered menu position (0,0 until first frame)
 bool music_visible();   // music player card currently toggled on
 }

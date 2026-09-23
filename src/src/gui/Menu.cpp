@@ -32,7 +32,9 @@
 #include "features/misc/PlayerAvatars.h"
 #include "features/explorer/Explorer.h"
 #include "features/mcp/McpBridge.h"
+#include "core/console/Console.h"
 #include <Windows.h>
+#include <cstdio>
 
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
@@ -106,6 +108,92 @@ void Menu::Render()
         ImGui::PopFont();
     }
     ImGui::Render();
+
+    // LiquidUI glass pass: draws every window's frosted panel (blurred desktop
+    // capture + liquid glass shader) into the overlay target, then ImGui paints
+    // the ui on top of it.
+    glass::render_pass();
+
+    // ---- diagnostic: probe the backbuffer after the full frame is drawn ----
+    {
+        static bool s_probed = false;
+        if (!s_probed && ImGui::GetFrameCount() > 60)
+        {
+            s_probed = true;
+            ID3D11Device* dev = Cheat::Core::g_Device;
+            ID3D11DeviceContext* ctx = Cheat::Core::g_DeviceContext;
+            IDXGISwapChain* sc = Cheat::Core::g_SwapChain;
+            if (dev && ctx && sc)
+            {
+                ID3D11Texture2D* back = nullptr;
+                if (SUCCEEDED(sc->GetBuffer(0, IID_PPV_ARGS(&back))) && back)
+                {
+                    D3D11_TEXTURE2D_DESC bd{};
+                    back->GetDesc(&bd);
+                    // copy 64x64 at the menu's position + the screen center into
+                    // a staging texture and read the real pixels back
+                    const int px = std::min((int)gui::menu_pos().x + 60, (int)bd.Width - 65);
+                    const int py = std::min((int)gui::menu_pos().y + 60, (int)bd.Height - 65);
+                    D3D11_TEXTURE2D_DESC sd = bd;
+                    sd.Width = 64; sd.Height = 64;
+                    sd.MipLevels = 1; sd.ArraySize = 1;
+                    sd.SampleDesc.Count = 1;
+                    sd.Usage = D3D11_USAGE_STAGING;
+                    sd.BindFlags = 0;
+                    sd.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
+                    sd.MiscFlags = 0;
+                    ID3D11Texture2D* stage = nullptr;
+                    if (SUCCEEDED(dev->CreateTexture2D(&sd, nullptr, &stage)) && stage)
+                    {
+                        D3D11_BOX box{};
+                        box.left = px; box.top = py;
+                        box.right = px + 64; box.bottom = py + 64;
+                        box.back = 1;
+                        ctx->CopySubresourceRegion(stage, 0, 0, 0, 0, back, 0, &box);
+                        D3D11_MAPPED_SUBRESOURCE map{};
+                        if (SUCCEEDED(ctx->Map(stage, 0, D3D11_MAP_READ, 0, &map)))
+                        {
+                            const uint8_t* p = (const uint8_t*)map.pData;
+                            long long sum = 0, a = 0, nz = 0;
+                            for (int y = 0; y < 64; ++y)
+                            {
+                                const uint8_t* row = p + (size_t)y * map.RowPitch;
+                                for (int x = 0; x < 64; ++x)
+                                {
+                                    const uint8_t b0 = row[x * 4 + 0], g0 = row[x * 4 + 1];
+                                    const uint8_t r0 = row[x * 4 + 2], a0 = row[x * 4 + 3];
+                                    sum += b0 + g0 + r0;
+                                    a += a0;
+                                    if (b0 | g0 | r0 | a0) ++nz;
+                                    (void)b0;
+                                }
+                            }
+                            Cheat::Console::Log(Cheat::Console::Color::Gray,
+                                "[probe] backbuffer %ux%u | menu area avg=BGRA sum=%lld alpha_sum=%lld nonzero=%lld/4096",
+                                bd.Width, bd.Height, sum, a, nz);
+                            ctx->Unmap(stage, 0);
+                        }
+                        else
+                            Cheat::Console::Log(Cheat::Console::Color::Red, "[probe] Map failed");
+                        stage->Release();
+                    }
+                    back->Release();
+                }
+                ID3D11RenderTargetView* crt = nullptr;
+                ctx->OMGetRenderTargets(1, &crt, nullptr);
+                RECT wr{};
+                GetWindowRect(Cheat::Renderer::GetHwnd(), &wr);
+                const ImVec2 mp = gui::menu_pos();
+                Cheat::Console::Log(Cheat::Console::Color::Gray,
+                    "[probe] drawdata vtx=%d idx=%d | rtv=%p | menu at %.0f,%.0f | overlay rect %ld,%ld %ldx%ld",
+                    ImGui::GetDrawData()->TotalIdxCount, ImGui::GetDrawData()->TotalVtxCount,
+                    (void*)crt, mp.x, mp.y,
+                    wr.left, wr.top, wr.right - wr.left, wr.bottom - wr.top);
+                if (crt) crt->Release();
+            }
+        }
+    }
+
     ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
 }
 

@@ -12,11 +12,12 @@
 #include "features/visuals/Crosshair.h"
 #include "features/visuals/boxfill/BoxFill.h"
 #include "features/visuals/MeshDxShader.h"
-#include <dwmapi.h>
 #include <windowsx.h>
-
-
-
+// NOTE: only for the per-pixel transparency plumbing below (DWM honoring the
+// client-area alpha). This does NOT request blur or acrylic - that would be
+// DwmEnableBlurBehindWindow / SetWindowCompositionAttribute, which this build
+// deliberately never calls. All glass is LiquidUI's own shader.
+#include <dwmapi.h>
 #pragma comment(lib, "dwmapi.lib")
 
 namespace Cheat {
@@ -192,10 +193,9 @@ namespace Cheat {
         // Only do the (expensive) move/size sync when the game window actually
         // moved or resized, or when the overlay is currently hidden (tab-out).
         // A cheap TOPMOST/visibility re-assert is issued at most once per
-        // second: the acrylic glass window sits just below the overlay in
-        // z-order and DWM can occasionally reorder topmost windows, so without
-        // any re-assert the glass backdrop could end up drawn OVER the menu —
-        // but re-asserting every frame throttled the loop to DWM's composition
+        // second: DWM can occasionally reorder topmost windows, so without any
+        // re-assert the overlay could end up behind the game window - but
+        // re-asserting every frame throttled the loop to DWM's composition
         // rate (monitor refresh), which no vsync/cap setting could override.
         static RECT s_last{ -1, -1, -1, -1 };
         // SetWindowPos synchronizes with DWM's compositor, so calling it every
@@ -252,12 +252,19 @@ namespace Cheat {
             return false;
         }
 
-        // Layered window: overall opacity 255, but the per-pixel alpha channel of
-        // the B8G8R8A8 swapchain still controls transparency so the Windows acrylic
-        // backdrop shows through the transparent pixels (this mirrors the original
-        // working overlay setup).
+        // Layered window: overall opacity 255, the per-pixel alpha channel of
+        // the B8G8R8A8 swapchain does the real work. There is deliberately NO
+        // OS blur and NO DWM frame here - every frosted panel is drawn by the
+        // LiquidUI glass renderer from its own DXGI desktop capture, so the
+        // overlay needs nothing from outside its own swapchain.
         SetLayeredWindowAttributes(m_Hwnd, 0, 255, LWA_ALPHA);
 
+        // Per-pixel transparency plumbing - NOT acrylic and NOT blur:
+        // a DISCARD-model DXGI swapchain only gets its alpha channel honoured
+        // by DWM when the frame is extended into the whole client area. Without
+        // this call the transparent pixels composite as solid black. Nothing
+        // here asks Windows for a blur, tint or glass effect - the frosted look
+        // is drawn entirely by the LiquidUI shader from its own desktop capture.
         MARGINS margins = { -1 };
         DwmExtendFrameIntoClientArea(m_Hwnd, &margins);
 
@@ -322,7 +329,8 @@ namespace Cheat {
 
             if (!m_GameActive)
             {
-                // hide the acrylic backdrop whenever the game is gone / not focused
+                // nothing to hide anymore: the frosted panels only exist while
+                // the ui renders (they live in the overlay's swap chain now)
                 glass::set_menu_rect(0, 0, 0, 0);
                 Visuals::Crosshair::NotifyInactive();
                 Sleep(15);
@@ -404,7 +412,35 @@ namespace Cheat {
 
             // vsync: on = present syncs to the monitor's refresh, off = uncapped
             // (present as fast as the loop can, less lag relative to the game camera)
-            m_SwapChain->Present(g_Settings.gui.vsync ? 1 : 0, 0);
+            const HRESULT pres = m_SwapChain->Present(g_Settings.gui.vsync ? 1 : 0, 0);
+            if (FAILED(pres))
+            {
+                static bool s_logged_present = false;
+                if (!s_logged_present)
+                {
+                    s_logged_present = true;
+                    Console::Log(Console::Color::Red,
+                        "Present failed: 0x%08X", (unsigned)pres);
+                }
+            }
+            else
+            {
+                HRESULT rm = m_Device->GetDeviceRemovedReason();
+                if (rm != S_OK)
+                {
+                    static bool s_logged_rm = false;
+                    if (!s_logged_rm)
+                    {
+                        s_logged_rm = true;
+                        Console::Log(Console::Color::Red,
+                            "DEVICE REMOVED: 0x%08X", (unsigned)rm);
+                    }
+                }
+                static int s_present_tick = 0;
+                if ((++s_present_tick % 600) == 0)
+                    Console::Log(Console::Color::Gray,
+                        "[probe] frames flowing: %d", s_present_tick);
+            }
 
             // advance the software cap's next-frame target; snap to now when a frame
             // overran its budget so lag doesn't accumulate into burst-then-idle
@@ -525,9 +561,9 @@ namespace Cheat {
     {
         // Layered windows (WS_EX_LAYERED) are incompatible with the flip-model
         // swap chain, so use the classic D3D11CreateDeviceAndSwapChain DISCARD
-        // path like before. B8G8R8A8 gives us an alpha channel so the per-pixel
-        // transparency of the layered window still works and the Windows acrylic
-        // backdrop shows through the transparent pixels.
+        // path like before. B8G8R8A8 gives us an alpha channel: the per-pixel
+        // transparency of the layered window is what lets the game show through,
+        // and the LiquidUI glass panels paint their own blur on top of it.
         // Triple-buffered: with 2 buffers a windowed swap chain's Present blocks
         // waiting for a free buffer (throttling the whole loop to the compositor
         // cadence ~60-72Hz), so a 3rd buffer keeps Present returning immediately.

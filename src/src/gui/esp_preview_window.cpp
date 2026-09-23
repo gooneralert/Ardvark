@@ -58,14 +58,12 @@ namespace gui
         const ImVec2 clip_max(wp.x + ws.x + 2.f, wp.y + ws.y + 2.f);
         draw->PushClipRect(clip_min, clip_max, false);
 
-        // frosted-glass backdrop for the whole window, tinted by the gui glass
-        // tint slider like the main menu
-        glass::draw(draw, ImVec2(wp.x + 1.f, wp.y + 1.f), ImVec2(wp.x + ws.x - 1.f, wp.y + ws.y - 1.f), 8.f, anim);
-
-        // acrylic backdrop for this window (only once fully revealed; the
-        // OS-level blur region cannot be clipped by the mask)
-        if (anim > 0.99f)
-            glass::add_rect(wp.x, wp.y, ws.x, ws.y, 8.f);
+        // frosted panel for the window: the glass pass has no ImGui clip list,
+        // so hand it the mask rect directly; the panel fades with the window's
+        // open animation like everything else in it
+        glass::set_clip(clip_min.x, clip_min.y, clip_max.x, clip_max.y);
+        glass::add_rect(wp.x, wp.y, ws.x, ws.y, 8.f, anim);
+        glass::clear_clip();
 
         // tinted glass title bar (rounded top corners to match the window)
         glass::draw_header(draw, wp, ws, title_h, anim);

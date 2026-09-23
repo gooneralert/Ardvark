@@ -17,6 +17,7 @@ IMGUI_IMPL_API void     ImGui_ImplWin32_EnableDpiAwareness();
 IMGUI_IMPL_API float    ImGui_ImplWin32_GetDpiScaleForHwnd(void* hwnd);
 IMGUI_IMPL_API float    ImGui_ImplWin32_GetDpiScaleForMonitor(void* monitor);
 
-IMGUI_IMPL_API void     ImGui_ImplWin32_EnableAlphaCompositing(void* hwnd);
+// ImGui_ImplWin32_EnableAlphaCompositing() was removed from the vendored
+// backend: this overlay never uses Windows acrylic / DWM blur.
 
 #endif

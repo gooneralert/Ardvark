@@ -507,7 +507,7 @@ namespace gui
         {
             const ImVec2 gp = ImGui::GetWindowPos();
             const ImVec2 gs = ImGui::GetWindowSize();
-            glass::add_rect(gp.x, gp.y, gs.x, gs.y, 8.f);
+            glass::add_rect(gp.x, gp.y, gs.x, gs.y, 8.f, ImGui::GetStyle().Alpha);   // frosted panel for this window
         }
 
         if (!visible)

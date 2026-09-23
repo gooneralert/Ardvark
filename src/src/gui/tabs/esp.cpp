@@ -99,13 +99,9 @@ void ng_tabs::draw_esp_tab()
 
 		if (g_Settings.esp.chams_mode != 3 && g_Settings.esp.chams_mode != 4)
 		{
-			pad();
-			widgets::checkbox_color2(
-				"chams",
-				&g_Settings.esp.chams,
-				g_Settings.esp.chams_outline_color,
-				g_Settings.esp.chams_fill_color
-			);
+			row_checkbox_color("chams", &g_Settings.esp.chams, g_Settings.esp.chams_outline_color);
+			if (g_Settings.esp.chams)
+				row_color("chams fill", g_Settings.esp.chams_fill_color);
 		}
 		else
 		{
@@ -195,7 +191,7 @@ void ng_tabs::draw_esp_tab()
 			{
 				g_Settings.esp.engine_chams_color[3] = 1.f;
 				pad();
-				widgets::color_edit("##engine_chams_col", g_Settings.esp.engine_chams_color);
+				row_color("##engine_chams_col", g_Settings.esp.engine_chams_color);
 			}
 			else if (st == 3 || st == 4)
 			{

@@ -10,6 +10,7 @@
 #include "tabs/misc.h"
 #include "tabs/local.h"
 #include "tabs/settings_tab.h"
+#include "tabs/customize.h"
 #include "tabs/trigger.h"
 #include "app/Settings.h"
 #include "core/globals/Globals.h"
@@ -21,6 +22,7 @@
 #include "widgets/widgets.h"
 #include "widgets/text.h"
 #include "glass.h"
+#include "liquid_ui.h"      // LiquidUI glass kit: menu card, sidebar nav, widgets
 #include "music_player_ui.h"
 #include "media.h"
 #include <cstring>
@@ -75,6 +77,8 @@ namespace gui
     void set_menu_open(bool open) { set_menu_visible(open); }
     bool any_ui_open() { return any_window_visible(); }
     bool music_visible() { return music_open; }
+
+    ImVec2 menu_pos() { return s_menu_pos; }
 
     static bool rect_contains(ImVec2 mn, ImVec2 mx, float x, float y)
     {
@@ -211,6 +215,65 @@ namespace gui
         c[ImGuiCol_ModalWindowDimBg]      = ImVec4(0.f, 0.f, 0.f, 0.45f);
     }
 
+    // the selected page's controls - shared by the LiquidUI card and the plain
+    // ImGui fallback chrome
+    static void menu_tab_pages(int sidebar_selected)
+    {
+        if (sidebar_selected == 0)
+            ng_tabs::draw_aim_tab();          // combat: aimbot + silent + triggerbot
+        else if (sidebar_selected == 1)
+            ng_tabs::draw_esp_tab();
+        else if (sidebar_selected == 2)
+            ng_tabs::draw_misc_tab();
+        else if (sidebar_selected == 3)
+            ng_tabs::draw_local_tab();
+        else if (sidebar_selected == 4)
+            ng_tabs::draw_settings_tab(&menu_kb, &menu_kb_skip);
+        else
+            ng_tabs::draw_customize_tab();    // the example's Customize page
+    }
+
+    // draws the selected page into a child of the given size, placed at the
+    // current cursor. With the LiquidUI kit driving the controls the container
+    // is transparent (the glass panels inside ARE the chrome) and the renderer
+    // clip keeps every glass primitive inside the page area.
+    static void menu_tab_content(int sidebar_selected, float w, float h)
+    {
+        if (glass::ready())
+        {
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.f, 0.f));
+            ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(6.f, 6.f));
+            ImGui::BeginChild("##tab_content", ImVec2(w, h), ImGuiChildFlags_None,
+                              ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoScrollbar);
+            ImGui::PopStyleVar(2);
+
+            if (Glass::g)
+            {
+                const ImVec2 cmin = ImGui::GetWindowPos();
+                Glass::g->SetClipRect(cmin.x, cmin.y, cmin.x + w, cmin.y + h);
+            }
+
+            menu_tab_pages(sidebar_selected);
+
+            if (Glass::g)
+                Glass::g->ClearClipRect();
+
+            ImGui::EndChild();
+            return;
+        }
+
+        ImGui::PushStyleColor(ImGuiCol_Border, border_color_inner);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.f, 0.f));
+        ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 2.f);
+        ImGui::BeginChild("##tab_content", ImVec2(w, h), ImGuiChildFlags_Borders, ImGuiWindowFlags_NoScrollbar);
+        ImGui::PopStyleVar(2);
+        ImGui::PopStyleColor();
+
+        menu_tab_pages(sidebar_selected);
+
+        ImGui::EndChild();
+    }
+
     static void render_right_panel(int sidebar_selected)
     {
         ImGui::BeginChild("##right_panel", ImVec2(0.f, 0.f), ImGuiChildFlags_None, ImGuiWindowFlags_NoScrollbar);
@@ -220,25 +283,8 @@ namespace gui
         float content_height = avail.y - subtab_margin * 2.f;
 
         ImGui::SetCursorPos(ImVec2(subtab_margin, subtab_margin));
-        ImGui::PushStyleColor(ImGuiCol_Border, border_color_inner);
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.f, 0.f));
-        ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 2.f);
-        ImGui::BeginChild("##tab_content", ImVec2(content_width, content_height), ImGuiChildFlags_Borders, ImGuiWindowFlags_NoScrollbar);
-        ImGui::PopStyleVar(2);
-        ImGui::PopStyleColor();
+        menu_tab_content(sidebar_selected, content_width, content_height);
 
-        if (sidebar_selected == 0)
-            ng_tabs::draw_aim_tab();          // combat: aimbot + silent + triggerbot
-        else if (sidebar_selected == 1)
-            ng_tabs::draw_esp_tab();
-        else if (sidebar_selected == 2)
-            ng_tabs::draw_misc_tab();
-        else if (sidebar_selected == 3)
-            ng_tabs::draw_local_tab();
-        else
-            ng_tabs::draw_settings_tab(&menu_kb, &menu_kb_skip);
-
-        ImGui::EndChild();
         ImGui::EndChild();
     }
 
@@ -508,8 +554,6 @@ namespace gui
 
         if (menu_a > 0.01f)
             render_menu_window(menu_a);
-        else
-            glass::set_menu_rect(0, 0, 0, 0);   // hide the acrylic backdrop once the fade-out finishes
 
         // Ã‘â€¡ÃÂµÃÂºÃÂ±ÃÂ¾ÃÂºÃ‘Â ÃÂ¿Ã‘â‚¬ÃÂµÃÂ²Ã‘Å’Ã‘Å½ ÃÂ¶ÃÂ¸ÃÂ²Ã‘â€˜Ã‘â€š ÃÂ²ÃÂ¾ ÃÂ²ÃÂºÃÂ»ÃÂ°ÃÂ´ÃÂºÃÂµ esp, Ã‘â€šÃÂ¾ ÃÂµÃ‘ÂÃ‘â€šÃ‘Å’ ÃÂ²ÃÂ½Ã‘Æ’Ã‘â€šÃ‘â‚¬ÃÂ¸ ÃÂ¼ÃÂµÃÂ½Ã‘Å½, ÃÂ¿ÃÂ¾Ã‘ÂÃ‘â€šÃÂ¾ÃÂ¼Ã‘Æ’
         // ÃÂµÃÂ³ÃÂ¾ ÃÂ·ÃÂ½ÃÂ°Ã‘â€¡ÃÂµÃÂ½ÃÂ¸ÃÂµ ÃÂ¿ÃÂ¾ÃÂ´Ã‘â€¦ÃÂ²ÃÂ°Ã‘â€šÃ‘â€¹ÃÂ²ÃÂ°ÃÂµÃÂ¼ Ã‘Æ’ÃÂ¶ÃÂµ ÃÂ¿ÃÂ¾Ã‘ÂÃÂ»ÃÂµ ÃÂ¾Ã‘â€šÃ‘â‚¬ÃÂ¸Ã‘ÂÃÂ¾ÃÂ²ÃÂºÃÂ¸
@@ -559,8 +603,10 @@ namespace gui
             widgets::watermark(1.f);
 
     // layuh-style backdrop: dark wash behind everything EXCEPT the frosted-glass
-        // windows, whose acrylic blur has to stay see-through (the menu is glass).
-        if (menu_a > 0.01f)
+        // windows, whose frosted glass has to stay see-through (the menu is glass).
+        // OFF by default (Customize -> "dim background"): the LiquidUI glass
+        // panels stand on their own, exactly like the reference app.
+        if (menu_a > 0.01f && Cheat::g_Settings.gui.dim_backdrop)
         {
             ImDrawList* bgl = ImGui::GetBackgroundDrawList();
             const ImVec2 bg_dims = ImGui::GetIO().DisplaySize;
@@ -568,13 +614,13 @@ namespace gui
 
             // collect this frame's glass rects (same coordinate space as the
             // background draw list)
-            struct FR { float x0, y0, x1, y1; };
+            struct FR { float x0, y0, x1, y1, round; };
             std::vector<FR> holes;
             for (int i = 0; i < glass::rect_count(); ++i)
             {
-                float x = 0.f, y = 0.f, w = 0.f, h = 0.f;
-                if (glass::rect_at(i, x, y, w, h) && w > 0.5f && h > 0.5f)
-                    holes.push_back(FR{ x, y, x + w, y + h });
+                float x = 0.f, y = 0.f, w = 0.f, h = 0.f, round = 8.f;
+                if (glass::rect_at(i, x, y, w, h, &round) && w > 0.5f && h > 0.5f)
+                    holes.push_back(FR{ x, y, x + w, y + h, round });
             }
 
             if (holes.empty())
@@ -614,12 +660,11 @@ namespace gui
                 for (float y : ys) { draw_gap(yprev, y); yprev = y; }
                 draw_gap(yprev, bg_dims.y); // final strip down to the bottom edge
 
-                // round the holes: the OS acrylic backdrop is square, so its
-                // blur peeks through the square hole corners. Paint the corner
-                // cutout sectors with the backdrop color so every glass window
-                // renders as a genuinely rounded shape.
+                // round the holes: the glass panels are rounded, so their
+                // corner cutouts get painted with the backdrop colour to keep
+                // every window's shape genuinely rounded.
                 for (const FR& h : holes)
-                    glass::mask_corners(bgl, ImVec2(h.x0, h.y0), ImVec2(h.x1, h.y1), 8.f, dark);
+                    glass::mask_corners(bgl, ImVec2(h.x0, h.y0), ImVec2(h.x1, h.y1), h.round, dark);
             }
 
         // Snow particles background - Performance optimized
@@ -686,98 +731,64 @@ namespace gui
             }
         }
 
-    glass::commit();   // size/position the acrylic backdrop over every collected rect
+    glass::commit();   // frame's glass rects are collected; the pass runs in render_pass()
     }
 
-    static void render_menu_window(float anim)
+    // -------------------------------------------------------------------------
+    // main menu - LiquidUI glass card with a sidebar nav (the old top tab bar
+    // window is gone). The page controls are still the tabs from tabs/*.cpp;
+    // only the shell and the glass are LiquidUI's.
+    // -------------------------------------------------------------------------
+    constexpr float menu_default_w = 700.f;   // old chrome was 578x680
+    constexpr float menu_default_h = 720.f;
+    constexpr float menu_card_round = 26.f;   // the kit's BeginCard radius
+    constexpr float menu_side_w = 158.f;      // sidebar width inside the card
+
+    static const Glass::Icon k_menu_icons[6] = {
+        Glass::Icon::Crosshairs, Glass::Icon::Eye, Glass::Icon::Sliders,
+        Glass::Icon::Person,     Glass::Icon::Gear, Glass::Icon::Paintbrush
+    };
+    static const char* k_menu_labels[6] = { "Combat", "Visuals", "Misc", "Local", "Settings", "Customize" };
+    static const ImU32 k_menu_tints[6] = {
+        IM_COL32(10, 132, 255, 255), IM_COL32(52, 199, 89, 255), IM_COL32(255, 149, 0, 255),
+        IM_COL32(255, 69, 58, 255),  IM_COL32(94, 92, 230, 255), IM_COL32(0, 196, 160, 255)
+    };
+
+    // places the menu for the given open/close animation value. The position is
+    // only forced while the entry animation is actually rising; once it settles
+    // the menu can be dragged and resized freely (forcing it every frame would
+    // override the custom drag). The last rendered position lives in s_menu_pos.
+    static void menu_place(float anim)
     {
         ImVec2 center = ImGui::GetMainViewport()->GetCenter();
-        // fade + rise-in. The position is only forced while the entry
-        // animation is actually rising; once it settles the menu can be
-        // dragged and resized freely (forcing it every frame would override
-        // the custom drag). The last rendered position is saved in our own
-        // static (ImGui may recreate the window between sessions and forget
-        // its position), so the menu always rises from where it was left.
-        static bool   s_menuPlaced = false;   // menu has rendered at least once
-        static ImVec2 s_riseBase{};
-        static bool   s_riseValid = false;
-        static bool   s_wasOpen = false;
-        const bool opening = s_menu_open && !s_wasOpen;   // just (re)opened
-        s_wasOpen = s_menu_open;
+        static ImVec2 s_rise_base{};
+        static bool   s_rise_valid = false;
+        static bool   s_was_open = false;
+
+        const bool opening = s_menu_open && !s_was_open;
+        s_was_open = s_menu_open;
         if (opening)
         {
-            // entry animation starting: rise from wherever the menu was last
-            s_riseBase = s_menuPlaced ? s_menu_pos
-                : ImVec2(center.x - 289.f, center.y - 340.f);   // centered (578x680)
-            s_riseValid = true;
+            const bool placed = (s_menu_pos.x != 0.f || s_menu_pos.y != 0.f);
+            s_rise_base = placed ? s_menu_pos
+                : ImVec2(center.x - menu_default_w * 0.5f, center.y - menu_default_h * 0.5f);
+            s_rise_valid = true;
         }
-        if (s_riseValid && anim < 0.999f && s_menu_open)
-            ImGui::SetNextWindowPos(ImVec2(s_riseBase.x, s_riseBase.y + (1.f - anim) * 20.f),
+        if (s_rise_valid && anim < 0.999f && s_menu_open)
+            ImGui::SetNextWindowPos(ImVec2(s_rise_base.x, s_rise_base.y + (1.f - anim) * 20.f),
                 ImGuiCond_Always);
-        ImGui::SetNextWindowSize(ImVec2(578.f, 680.f), ImGuiCond_Once);
+        ImGui::SetNextWindowSize(ImVec2(menu_default_w, menu_default_h), ImGuiCond_Once);
+    }
 
-        ImGui::PushStyleVar(ImGuiStyleVar_Alpha, anim);
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.f, 0.f));
-        ImGui::PushStyleColor(ImGuiCol_Border, border_color_outer);
-        ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.05f, 0.055f, 0.065f, 0.30f));
-        ImGui::Begin("menu", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | 0);
-        ImGui::PopStyleColor(2);
-        ImGui::PopStyleVar();
 
-        ImVec2 win_pos = ImGui::GetWindowPos();
-        ImVec2 win_size = ImGui::GetWindowSize();
-
-        // OS-level acrylic backdrop, sized to exactly the menu rectangle
-        // (only the menu gets the blur, not the surrounding ESP overlay)
-        glass::add_rect(win_pos.x, win_pos.y, win_size.x, win_size.y, 8.f);
-
-        // frosted-glass backdrop (blurred game behind the menu), inset so the window border stays visible
-        glass::draw(
-            ImGui::GetWindowDrawList(),
-            ImVec2(win_pos.x + 1.f, win_pos.y + 1.f),
-            ImVec2(win_pos.x + win_size.x - 1.f, win_pos.y + win_size.y - 1.f),
-            7.f);
-
-        s_menu_pos = win_pos;
-        s_menu_size = win_size;
-        s_menuPlaced = true;
-
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.f, 0.f));
-        ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.f, 0.f, 0.f, 0.f));
-        ImGui::BeginChild("content", win_size, ImGuiChildFlags_Borders);
-        ImGui::PopStyleColor();
-        ImGui::PopStyleVar();
-
-        ImGui::SetCursorPos(ImVec2(content_margin, content_margin));
-        ImGui::PushStyleColor(ImGuiCol_Border, border_color_inner);
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.f, 0.f));
-        ImGui::BeginChild("content_inner", ImVec2(win_size.x - content_margin * 2.f, win_size.y - content_margin * 2.f), ImGuiChildFlags_Borders, ImGuiWindowFlags_NoScrollbar);
-        ImGui::PopStyleVar();
-        ImGui::PopStyleColor();
-
-        static const std::vector<const char*> sidebar_items = { "Combat", "Visuals", "Misc", "Local", "Settings" };
-        static const widgets::TabIcon sidebar_icons[] = {
-            widgets::TABICON_CROSSHAIR, widgets::TABICON_EYE, widgets::TABICON_SLIDERS,
-            widgets::TABICON_PERSON,    widgets::TABICON_GEAR
-        };
-        constexpr float tab_bar_height = 40.f;
-
-        const float inner_w = win_size.x - content_margin * 2.f - inner_padding * 2.f;
-
-        // matcha-style top tab bar (with inline icons)
-        ImGui::SetCursorPos(ImVec2(inner_padding, subtab_margin));
-        widgets::top_tabs(sidebar_items, &s_sidebar_selected, inner_w, tab_bar_height, sidebar_icons);
-
-        ImGui::SetCursorPos(ImVec2(inner_padding, subtab_margin + tab_bar_height + subtab_margin));
-        render_right_panel(s_sidebar_selected);
-
-        ImGui::EndChild();
-        ImGui::EndChild();
-
+    // menu drag / resize handles. Has to run while the menu window is still the
+    // current ImGui window (both the LiquidUI card and the fallback chrome).
+    static void menu_drag_resize(ImVec2 win_pos, ImVec2 win_size)
+    {
         constexpr float resize_border = 6.f;
         constexpr float resize_corner = 18.f;
-        constexpr float min_size_x = 408.f;
-        constexpr float min_size_y = 324.f;
+        constexpr float min_size_x = 470.f;    // room for sidebar + two columns
+        constexpr float min_size_y = 420.f;
         ImGuiIO& io = ImGui::GetIO();
 
         enum resize_handle { resize_none = -1, resize_left, resize_right, resize_bottom, resize_bottom_left, resize_bottom_right };
@@ -838,6 +849,7 @@ namespace gui
         else if (shown_handle == resize_bottom_right)
             ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeNWSE);
 
+
         if (active_handle != resize_none)
         {
             if (active_handle == resize_left || active_handle == resize_bottom_left)
@@ -868,8 +880,201 @@ namespace gui
             win_pos.y += io.MouseDelta.y;
             ImGui::SetWindowPos(win_pos);
         }
+    }
 
+    // -------------------------------------------------------------------------
+    // LiquidUI card for the menu: a frosted panel behind an ImGui window (same
+    // look as Glass::BeginCard, but the size stays ours so the menu keeps its
+    // own drag/resize handles instead of the card being auto-sized every frame)
+    // -------------------------------------------------------------------------
+    static size_t g_menu_panel = (size_t)-1;
+
+    static bool begin_menu_card(const char* id)
+    {
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(20.f, 18.f));
+        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(12.f, 10.f));
+        ImGui::PushStyleColor(ImGuiCol_WindowBg, IM_COL32(0, 0, 0, 0));
+
+        const ImGuiWindowFlags flags =
+            ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoTitleBar |
+            ImGuiWindowFlags_NoCollapse   | ImGuiWindowFlags_NoMove |
+            ImGuiWindowFlags_NoScrollbar  | ImGuiWindowFlags_NoResize |
+            ImGuiWindowFlags_NoSavedSettings;
+        const bool open = ImGui::Begin(id, nullptr, flags);
+
+        g_menu_panel = (size_t)-1;
+        if (Glass::g)
+        {
+            Glass::Primitive p{};           // filled in by end_menu_card()
+            p.corner_radius = menu_card_round;
+            p.fade = 1.f;
+            p.material = Glass::Material::Regular;
+            g_menu_panel = Glass::g->Submit(p);
+        }
+        return open;
+    }
+
+    static void end_menu_card()
+    {
+        const ImVec2 wp = ImGui::GetWindowPos();
+        const ImVec2 ws = ImGui::GetWindowSize();
+        if (Glass::g && g_menu_panel != (size_t)-1)
+        {
+            Glass::Primitive& p = Glass::g->At(g_menu_panel);
+            p.cx = wp.x + ws.x * 0.5f;
+            p.cy = wp.y + ws.y * 0.5f;
+            p.hw = ws.x * 0.5f;
+            p.hh = ws.y * 0.5f;
+        }
         ImGui::End();
+        ImGui::PopStyleColor();
+        ImGui::PopStyleVar(2);
+    }
+
+
+    // the card's interior: brand row, LiquidUI sidebar nav, page title and the
+    // selected page's controls
+    static void menu_card_body(float anim)
+    {
+        const ImVec2 win_pos = ImGui::GetWindowPos();
+        const ImVec2 win_size = ImGui::GetWindowSize();
+        s_menu_pos = win_pos;
+        s_menu_size = win_size;
+
+        // the dark backdrop carves a hole for the card; the frosted panel
+        // itself was queued by begin_menu_card()
+        glass::add_hole(win_pos.x, win_pos.y, win_size.x, win_size.y, menu_card_round);
+
+        ImDrawList* wdl = ImGui::GetWindowDrawList();
+        const ImVec2 o = ImGui::GetCursorScreenPos();
+        const ImVec2 avail = ImGui::GetContentRegionAvail();
+
+        // brand row: spark badge + name (same as the reference dashboard card)
+        {
+            const float bs = 38.f;
+            if (Glass::g)
+            {
+                Glass::Primitive badge;
+                badge.cx = o.x + bs * 0.5f;
+                badge.cy = o.y + bs * 0.5f;
+                badge.hw = bs * 0.5f;
+                badge.hh = bs * 0.5f;
+                badge.corner_radius = 12.f;
+                badge.fade = 1.f;
+                badge.material = Glass::Material::Thin;
+                Glass::g->Submit(badge);
+            }
+            Glass::DrawIcon(wdl, Glass::Icon::Spark,
+                            ImVec2(o.x + bs * 0.5f, o.y + bs * 0.5f),
+                            bs * 0.62f, IM_COL32(236, 237, 243, 255), 2.6f);
+            wdl->AddText(ImVec2(o.x + bs + 12.f, o.y + 11.f),
+                         IM_COL32(236, 237, 243, 255), "ardvark");
+        }
+
+        // page nav (LiquidUI sidebar, same widget the reference menu uses)
+        ImGui::SetCursorScreenPos(ImVec2(o.x, o.y + 56.f));
+        const int nav = Glass::SidebarNav("menu_nav", k_menu_icons, k_menu_labels,
+                                          k_menu_tints, 6, s_sidebar_selected,
+                                          menu_side_w - 6.f, 46.f);
+        if (nav >= 0 && nav != s_sidebar_selected)
+            s_sidebar_selected = nav;
+
+        // divider between the nav rail and the page
+        const float sep_x = o.x + menu_side_w + 8.f;
+        wdl->AddLine(ImVec2(sep_x, o.y + 2.f), ImVec2(sep_x, o.y + avail.y - 2.f), IM_COL32(0, 0, 0, 28), 1.f);
+        wdl->AddLine(ImVec2(sep_x + 1.f, o.y + 2.f), ImVec2(sep_x + 1.f, o.y + avail.y - 2.f), IM_COL32(255, 255, 255, 40), 1.f);
+
+        // page: title + the tab controls
+        const float cx = sep_x + 22.f;
+        const float cw = o.x + avail.x - cx;
+        const float chh = avail.y - 38.f;
+        wdl->AddText(ImVec2(cx, o.y + 9.f), IM_COL32(236, 237, 243, 235),
+                     k_menu_labels[s_sidebar_selected]);
+        if (cw > 60.f && chh > 60.f)
+        {
+            ImGui::SetCursorScreenPos(ImVec2(cx, o.y + 34.f));
+            menu_tab_content(s_sidebar_selected, cw, chh);
+        }
+
+        menu_drag_resize(win_pos, win_size);
+        (void)anim;
+    }
+
+
+    // -------------------------------------------------------------------------
+    // main menu: LiquidUI glass card + sidebar; if the glass renderer could not
+    // be created we fall back to the plain ImGui chrome with the old top tabs
+    // so the menu stays usable.
+    // -------------------------------------------------------------------------
+    static void render_menu_window(float anim)
+    {
+        menu_place(anim);
+        ImGui::PushStyleVar(ImGuiStyleVar_Alpha, anim);
+
+        if (glass::ready())
+        {
+            // fade the whole card (panel, nav, widgets) with the open/close anim
+            if (Glass::g) Glass::g->SetSubmitFade(anim);
+            Glass::SetInk(IM_COL32(236, 237, 243, 255), IM_COL32(151, 154, 168, 255));
+            Glass::SetDensity(1.0f);
+            Glass::SetWidgetScale(1.0f);
+
+            if (begin_menu_card("menu"))
+                menu_card_body(anim);
+            end_menu_card();
+
+            if (Glass::g) Glass::g->SetSubmitFade(1.f);
+        }
+        else
+        {
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.f, 0.f));
+            ImGui::PushStyleColor(ImGuiCol_Border, border_color_outer);
+            ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.05f, 0.055f, 0.065f, 0.30f));
+            ImGui::Begin("menu", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | 0);
+            ImGui::PopStyleColor(2);
+            ImGui::PopStyleVar();
+
+            const ImVec2 win_pos = ImGui::GetWindowPos();
+            const ImVec2 win_size = ImGui::GetWindowSize();
+            s_menu_pos = win_pos;
+            s_menu_size = win_size;
+
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.f, 0.f));
+            ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.f, 0.f, 0.f, 0.f));
+            ImGui::BeginChild("content", win_size, ImGuiChildFlags_Borders);
+            ImGui::PopStyleColor();
+            ImGui::PopStyleVar();
+
+            ImGui::SetCursorPos(ImVec2(content_margin, content_margin));
+            ImGui::PushStyleColor(ImGuiCol_Border, border_color_inner);
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.f, 0.f));
+            ImGui::BeginChild("content_inner", ImVec2(win_size.x - content_margin * 2.f, win_size.y - content_margin * 2.f), ImGuiChildFlags_Borders, ImGuiWindowFlags_NoScrollbar);
+            ImGui::PopStyleVar();
+            ImGui::PopStyleColor();
+
+            static const std::vector<const char*> sidebar_items = { "Combat", "Visuals", "Misc", "Local", "Settings" };
+            static const widgets::TabIcon sidebar_icons[] = {
+                widgets::TABICON_CROSSHAIR, widgets::TABICON_EYE, widgets::TABICON_SLIDERS,
+                widgets::TABICON_PERSON,    widgets::TABICON_GEAR
+            };
+            constexpr float tab_bar_height = 40.f;
+            const float inner_w = win_size.x - content_margin * 2.f - inner_padding * 2.f;
+
+            ImGui::SetCursorPos(ImVec2(inner_padding, subtab_margin));
+            widgets::top_tabs(sidebar_items, &s_sidebar_selected, inner_w, tab_bar_height, sidebar_icons);
+
+            ImGui::SetCursorPos(ImVec2(inner_padding, subtab_margin + tab_bar_height + subtab_margin));
+            render_right_panel(s_sidebar_selected);
+
+            ImGui::EndChild();
+            ImGui::EndChild();
+
+            menu_drag_resize(win_pos, win_size);
+
+            ImGui::End();
+        }
+
         ImGui::PopStyleVar();   // alpha
     }
 }
+

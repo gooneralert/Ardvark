@@ -6,8 +6,9 @@ namespace ng_tabs
 {
 	constexpr float content_pad = 6.f;
 	constexpr float content_spacing = 8.f;
-	constexpr float panel_gap = 6.f;
+	constexpr float panel_gap = 14.f;   // gap between the two feature columns
 
+	bool glass_mode();   // true when the LiquidUI glass kit drives the controls
 	void pad();
 	void begin_columns(float* out_left_w, float* out_right_w, float* out_h);
 	bool begin_panel(const char* id, float width, float height, bool scrollable = false);
@@ -23,4 +24,6 @@ namespace ng_tabs
 	bool row_checkbox_keybind(const char* label, bool* v, int* key);
 	bool row_multicombo(const char* id, const char* label, bool* selected, const std::vector<const char*>& items);
 	bool row_color(const char* label, float col[4]);
+	bool row_button(const char* label);
+	bool row_input_text(const char* label, char* buf, int len);
 }

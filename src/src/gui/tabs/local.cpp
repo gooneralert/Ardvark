@@ -59,11 +59,11 @@ void ng_tabs::draw_local_tab()
 			row_combo("anim pack", &m.anim_pack, anim_pack_names);
 
 		row_checkbox("fake headless", &m.fake_headless);
-		if (widgets::button("reset to show (headless)"))
+		if (row_button("reset to show (headless)"))
 			m.reset_fake_headless = true;
 
 		row_checkbox("korblox", &m.korblox);
-		if (widgets::button("reset to show (korblox)"))
+		if (row_button("reset to show (korblox)"))
 			m.reset_korblox = true;
 
 		row_checkbox("noclip", &m.noclip);

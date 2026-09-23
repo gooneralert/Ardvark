@@ -620,15 +620,36 @@ bool  music{ false };   // music player window
             int   font{ 0 }; // proxima soft bold
             bool  vsync{ false };     // sync overlay present to the monitor's refresh
             int   fps_cap{ 0 };       // 0 = uncapped, else overlay render cap (fps)
-            float frost{ 0.10f };  // glass milkiness 0..1 (tint + white wash, 0 = clear)
-            float blur{ 6.f };    // glass blur strength 0..100 (default 6)
+            float frost{ 0.55f };  // glass milkiness 0..1 (tint + white wash, 0 = clear)
+            float blur{ 90.f };   // glass blur strength 0..100 (heavy frost by default)
             float tint[4]{ 27.f / 255.f, 27.f / 255.f, 29.f / 255.f, 1.f };  // glass tint color (rgb + strength), default #1B1B1DFF
+            // "Customize" tab - live LiquidUI glass-material knobs, pushed
+            // into the renderer every frame (see tabs/customize.cpp)
+            float glass_sat{ 1.35f };      // material saturation 0.3..3
+            float glass_refr{ 18.6f };     // refraction strength 0..60
+            float glass_chroma{ 2.38f };   // chromatic dispersion 0..8
+            float glass_edge{ 0.16f };     // edge/rim boost 0..1
+            float glass_shadow{ 0.145f };  // panel drop shadow 0..1
+            float glass_flow{ 0.f };       // liquid flow 0..10
+            float light1_angle{ 341.f };   // rim light 1 angle (deg) / strength
+            float light1_amt{ 1.f };
+            float light2_angle{ 161.f };
+            float light2_amt{ 0.f };
+            float fresnel{ 2.5f };         // edge-config knobs
+            float bevel{ 0.6f };
+            float specular_amt{ 1.05f };
+            float sheen{ 0.45f };
+            float grain{ 0.9f };
+            float ambient_rim{ 0.55f };
+            int   appearance{ 0 };         // 0 = dark, 1 = light
+            int   blur_hz{ 30 };           // desktop-capture + blur refresh rate (Hz)
+            bool  dim_backdrop{ false };   // dim the desktop behind the menu (off = glass only)
             bool  watermark{ false };
             float watermark_x{ 10.f };
             float watermark_y{ 10.f };
             // build, player, place, game, time, fps
             bool  watermark_fields[WM_FIELD_COUNT]{ true, false, true, false, true, true };
-            float accent[4]{ 51.f / 255.f, 122.f / 255.f, 231.f / 255.f, 1.f };
+            float accent[4]{ 0.80f, 0.48f, 1.0f, 1.f };   // violet accent (kit toggles/sliders)
             float text_active[4]{ 1.f, 1.f, 1.f, 1.f };
             float text_inactive[4]{ 136.f / 255.f, 136.f / 255.f, 136.f / 255.f, 1.f };
             float outer_border[4]{ 0.f, 0.f, 0.f, 1.f };

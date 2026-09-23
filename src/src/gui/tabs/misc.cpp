@@ -89,9 +89,9 @@ void ng_tabs::draw_misc_tab()
 			row_slider_f("glare", &w.atmo_glare, 0.f, 10.f, "%.2f");
 			row_slider_f("atmo offset", &w.atmo_offset, 0.f, 1.f, "%.2f");
 			pad();
-			widgets::color_edit("atmo color", w.atmo_color);
+			row_color("atmo color", w.atmo_color);
 			pad();
-			widgets::color_edit("atmo decay", w.atmo_decay);
+			row_color("atmo decay", w.atmo_decay);
 		}
 
 		row_checkbox("sky", &w.sky);
@@ -148,9 +148,9 @@ void ng_tabs::draw_misc_tab()
 		{
 			row_slider_f("grass len", &w.grass_len, 0.f, 1.f, "%.2f");
 			pad();
-			widgets::color_edit("grass color", w.grass_col);
+			row_color("grass color", w.grass_col);
 			pad();
-			widgets::color_edit("materials color", w.water_col);
+			row_color("materials color", w.water_col);
 			row_slider_f("water refl", &w.water_refl, 0.f, 1.f, "%.2f");
 			row_slider_f("water trans", &w.water_trans, 0.f, 1.f, "%.2f");
 		}
@@ -177,9 +177,9 @@ void ng_tabs::draw_misc_tab()
 			if (g_Settings.crosshair.dot)
 				row_slider_f("dot size", &g_Settings.crosshair.dot_size, 1.f, 8.f, "%.1f");
 			pad();
-			widgets::color_edit("cross color", g_Settings.crosshair.color);
+			row_color("cross color", g_Settings.crosshair.color);
 			pad();
-			widgets::color_edit("outline color", g_Settings.crosshair.outline_color);
+			row_color("outline color", g_Settings.crosshair.outline_color);
 		}
 	}
 	end_panel();
@@ -202,7 +202,7 @@ void ng_tabs::draw_misc_tab()
 			{
 				row_combo("hb viz mode", &g_Settings.hitbox.viz_mode, hb_viz);
 				pad();
-				widgets::color_edit("hb color", g_Settings.hitbox.viz_color);
+				row_color("hb color", g_Settings.hitbox.viz_color);
 			}
 		}
 

@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="Debug|Win32">
@@ -260,6 +260,7 @@
     <ClInclude Include="src\music-player\include\music-player_internal.h" />
     <ClInclude Include="src\music-player\include\music-player_ui.h" />
     <ClInclude Include="src\gui\glass.h" />
+    <ClInclude Include="src\gui\liquid_ui.h" />
     <ClInclude Include="src\gui\gui.h" />
     <ClInclude Include="src\gui\Menu.h" />
     <ClInclude Include="src\gui\colors\colors.h" />
@@ -268,6 +269,7 @@
     <ClInclude Include="src\gui\tabs\misc.h" />
     <ClInclude Include="src\gui\tabs\local.h" />
     <ClInclude Include="src\gui\tabs\settings_tab.h" />
+    <ClInclude Include="src\gui\tabs\customize.h" />
     <ClInclude Include="src\gui\tabs\trigger.h" />
     <ClInclude Include="src\gui\tabs\helpers.h" />
     <ClInclude Include="src\gui\icons.h" />
@@ -744,6 +746,20 @@
     <ClCompile Include="src\gui\glass.cpp" />
     <ClCompile Include="src\gui\gui.cpp" />
     <ClCompile Include="src\gui\Menu.cpp" />
+    <!-- LiquidUI (liquidDX11) glass kit: renderer + widget kit, desktop-capture
+         blur chain and the extra surfaces. Vendored sources, compiled as-is
+         (they do not use our pch) with their own object names so they cannot
+         clash with src\gui\glass.cpp. -->
+    <ClCompile Include="src\gui\LiquidUI\examples\example_win32_directx11\src\glass\glass.cpp">
+      <ObjectFileName>$(IntDir)liquidui_glass.obj</ObjectFileName>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <PreprocessorDefinitions>NOMINMAX;_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <ClCompile Include="src\gui\LiquidUI\examples\example_win32_directx11\src\glass\backdrop.cpp">
+      <ObjectFileName>$(IntDir)liquidui_backdrop.obj</ObjectFileName>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <PreprocessorDefinitions>NOMINMAX;_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
     <ClCompile Include="src\gui\tabs\aim.cpp">
       <ObjectFileName>$(IntDir)gui_tabs_aim.obj</ObjectFileName>
     </ClCompile>
@@ -755,6 +771,7 @@
     </ClCompile>
     <ClCompile Include="src\gui\tabs\local.cpp" />
     <ClCompile Include="src\gui\tabs\settings_tab.cpp" />
+    <ClCompile Include="src\gui\tabs\customize.cpp" />
     <ClCompile Include="src\gui\tabs\helpers.cpp" />
     <ClCompile Include="src\gui\tabs\trigger.cpp" />
     <ClCompile Include="src\gui\colors\colors.cpp" />

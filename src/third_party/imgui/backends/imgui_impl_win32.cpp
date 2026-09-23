@@ -9,7 +9,6 @@
 #include <windows.h>
 #include <windowsx.h>
 #include <tchar.h>
-#include <dwmapi.h>
 
 #ifndef IMGUI_IMPL_WIN32_DISABLE_GAMEPAD
 #include <xinput.h>
@@ -770,38 +769,10 @@ float ImGui_ImplWin32_GetDpiScaleForHwnd(void* hwnd)
     return ImGui_ImplWin32_GetDpiScaleForMonitor(monitor);
 }
 
-#if defined(_MSC_VER)
-#pragma comment(lib, "dwmapi")
-#endif
-
-void ImGui_ImplWin32_EnableAlphaCompositing(void* hwnd)
-{
-    if (!_IsWindowsVistaOrGreater())
-        return;
-
-    BOOL composition;
-    if (FAILED(::DwmIsCompositionEnabled(&composition)) || !composition)
-        return;
-
-    BOOL opaque;
-    DWORD color;
-    if (_IsWindows8OrGreater() || (SUCCEEDED(::DwmGetColorizationColor(&color, &opaque)) && !opaque))
-    {
-        HRGN region = ::CreateRectRgn(0, 0, -1, -1);
-        DWM_BLURBEHIND bb = {};
-        bb.dwFlags = DWM_BB_ENABLE | DWM_BB_BLURREGION;
-        bb.hRgnBlur = region;
-        bb.fEnable = TRUE;
-        ::DwmEnableBlurBehindWindow((HWND)hwnd, &bb);
-        ::DeleteObject(region);
-    }
-    else
-    {
-        DWM_BLURBEHIND bb = {};
-        bb.dwFlags = DWM_BB_ENABLE;
-        ::DwmEnableBlurBehindWindow((HWND)hwnd, &bb);
-    }
-}
+// NOTE: ImGui_ImplWin32_EnableAlphaCompositing() (the DWM blur-behind helper)
+// was removed from this vendored copy on purpose: the overlay never uses
+// Windows acrylic or any DWM blur - every frosted panel is drawn by the
+// LiquidUI glass renderer from its own DXGI desktop capture.
 
 #if defined(__GNUC__)
 #pragma GCC diagnostic pop
