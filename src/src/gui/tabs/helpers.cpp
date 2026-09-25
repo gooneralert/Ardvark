@@ -7,6 +7,7 @@
 #include "imgui.h"
 #include <cstdio>
 #include <vector>
+#include <unordered_map>
 #include <windows.h>
 
 namespace ng_tabs
@@ -20,6 +21,13 @@ namespace ng_tabs
 	// we fall back to the legacy ImGui widgets so the menu stays usable.
 	// -------------------------------------------------------------------------
 	bool glass_mode() { return glass::ready() && Glass::g != nullptr; }
+
+	// Rows are normally highlighted with a glass hover plate. Inside a *solid*
+	// popup (the profile menu) that plate would be invisible: the whole glass
+	// pass runs before any ImGui geometry, so the popup's own background paints
+	// over it. Rows then draw their hover with ImGui instead.
+	static bool s_imgui_chrome = false;
+	void rows_use_imgui_chrome(bool on) { s_imgui_chrome = on; }
 
 	namespace
 	{
@@ -50,7 +58,7 @@ namespace ng_tabs
 		// tab did to the cursor before calling it
 		struct RowBox { float left, right, width; };
 
-		RowBox row_box(float pad = 10.f)
+		RowBox row_box(float pad = content_pad)
 		{
 			const ImVec2 wp = ImGui::GetWindowPos();
 			const ImVec2 ws = ImGui::GetWindowSize();
@@ -73,218 +81,341 @@ namespace ng_tabs
 
 		// the feature switch: one full-width row, label on the left, the
 		// LiquidUI pill on the right - this is how features turn on/off
-		bool feature_toggle(const char* label, bool* v)
+		// ------------------------------------------------------------------
+		// row chrome. Every control is one row: the label sits at the left
+		// edge of the box, its control is right aligned in a shared control
+		// column, and a hairline closes the row - the reference layout.
+		// ------------------------------------------------------------------
+		struct Row
 		{
-			ImGui::PushID(label);
-			const RowAnim an = row_anim("tg");
-			const RowBox b = row_box();
-			const float rowh = 36.f;
-			ImVec2 cur = row_begin(b);
-			ImGui::InvisibleButton("##tg", ImVec2(b.width, rowh));
-			const bool hov = ImGui::IsItemHovered();
-			const bool clicked = ImGui::IsItemDeactivated() && hov;
-			if (clicked) *v = !*v;
+			RowBox box;
+			ImVec2 pos{};        // un-animated row origin
+			float  y        = 0.f;   // animated row top
+			float  h        = k_row_h;
+			float  a        = 1.f;   // reveal animation
+			float  hover    = 0.f;
+			float  ctl_x    = 0.f;   // left edge of the control column
+			float  ctl_w    = 0.f;
+			bool   hovered  = false;
+			bool   active   = false;
+			bool   clicked  = false;
+		};
 
-			const ImGuiID id = ImGui::GetID("##tg");
-			const float dt = ImGui::GetIO().DeltaTime;
-			Glass::Spring& k = Glass::g->springs().Get((uint32_t)id, 2, Glass::SpringStyle::Critical, *v ? 1.f : 0.f);
-			k.target = *v ? 1.f : 0.f;
-			k.Tick(dt);
+		ImU32 lerp_col(ImU32 a, ImU32 b, float t)
+		{
+			t = clamp01(t);
+			const float ia = 1.f - t;
+			const int r = (int)(((a >> IM_COL32_R_SHIFT) & 0xFF) * ia + ((b >> IM_COL32_R_SHIFT) & 0xFF) * t);
+			const int g = (int)(((a >> IM_COL32_G_SHIFT) & 0xFF) * ia + ((b >> IM_COL32_G_SHIFT) & 0xFF) * t);
+			const int bl = (int)(((a >> IM_COL32_B_SHIFT) & 0xFF) * ia + ((b >> IM_COL32_B_SHIFT) & 0xFF) * t);
+			const int al = (int)(((a >> IM_COL32_A_SHIFT) & 0xFF) * ia + ((b >> IM_COL32_A_SHIFT) & 0xFF) * t);
+			return IM_COL32(r, g, bl, al);
+		}
+
+		// the accent the LiquidUI kit currently uses (accent palette swatch)
+		ImU32 accent_col(float a)
+		{
+			const float* c = Glass::EditParams(Glass::Material::Accent).tint_rgb;
+			return IM_COL32((int)(c[0] * 255.f), (int)(c[1] * 255.f), (int)(c[2] * 255.f),
+			                (int)(255.f * clamp01(a)));
+		}
+
+		Row row_begin(const char* label, float h, float ctl_w, const char* anim_key)
+		{
+			Row r{};
+			ImGui::PushID(label ? label : "row");
+			r.box = row_box();
+			r.h = h;
+			r.ctl_w = ctl_w;
+			r.ctl_x = r.box.right - ctl_w;
+
+			const RowAnim an = row_anim(anim_key);
+			r.a = an.a;
+
+			r.pos = row_begin(r.box);
+			// AllowOverlap: the row's own hit area spans the full width, so
+			// without this the *later* widgets that sit on top of it (the
+			// keybind chip, the colour swatch) can never take hover - which is
+			// why the keybind chips would not react to a click
+			ImGui::SetNextItemAllowOverlap();
+			ImGui::InvisibleButton("##row", ImVec2(r.box.width, h));
+			r.hovered = ImGui::IsItemHovered();
+			r.active = ImGui::IsItemActive();
+			r.clicked = ImGui::IsItemDeactivated() && r.hovered;
+			r.y = r.pos.y + an.dy;
+
+			const ImGuiID id = ImGui::GetID("##row");
 			Glass::Spring& hv = Glass::g->springs().Get((uint32_t)id, 3, Glass::SpringStyle::Critical, 0.f);
-			hv.target = hov ? 1.f : 0.f;
-			hv.Tick(dt);
+			hv.target = (r.hovered || r.active) ? 1.f : 0.f;
+			hv.Tick(ImGui::GetIO().DeltaTime);
+			r.hover = clamp01(hv.x);
 
-			const float ry = cur.y + an.dy;
-
-			// subtle hover plate behind the row
+			// soft hover plate behind the row
 			if (hv.x > 0.01f)
 			{
-				Glass::Primitive p{};
-				p.cx = b.left + b.width * 0.5f;
-				p.cy = ry + rowh * 0.5f;
-				p.hw = b.width * 0.5f;
-				p.hh = rowh * 0.5f;
-				p.corner_radius = 10.f;
-				p.fade = hv.x * 0.55f * an.a;
-				p.material = Glass::Material::Thin;
-				Glass::g->Submit(p);
+				if (s_imgui_chrome)
+				{
+					ImGui::GetWindowDrawList()->AddRectFilled(
+						ImVec2(r.box.left, r.y), ImVec2(r.box.right, r.y + h),
+						IM_COL32(255, 255, 255, (int)(26.f * hv.x * r.a)), 10.f);
+				}
+				else
+				{
+					Glass::Primitive p{};
+					p.cx = r.box.left + r.box.width * 0.5f;
+					p.cy = r.y + h * 0.5f;
+					p.hw = r.box.width * 0.5f;
+					p.hh = h * 0.5f;
+					p.corner_radius = 10.f;
+					p.fade = hv.x * 0.5f * r.a;
+					p.material = Glass::Material::Thin;
+					Glass::g->Submit(p);
+				}
+			}
+
+			if (label && *label)
+				ImGui::GetWindowDrawList()->AddText(
+					ImVec2(r.box.left, r.y + (h - ImGui::GetTextLineHeight()) * 0.5f),
+					ink_a(Glass::InkColor(), r.a), label);
+
+			return r;
+		}
+
+		// closes the row: hairline along the bottom edge, cursor onto the next
+		void row_end(const Row& r)
+		{
+			if (r.a > 0.01f)
+				ImGui::GetWindowDrawList()->AddLine(
+					ImVec2(r.box.left - content_pad + 2.f, r.y + r.h - 1.f),
+					ImVec2(r.box.right + content_pad - 2.f, r.y + r.h - 1.f),
+					IM_COL32(255, 255, 255, (int)(12.f * r.a)), 1.f);
+
+			ImGui::SetCursorScreenPos(ImVec2(r.pos.x, r.pos.y + r.h));
+			ImGui::Dummy(ImVec2(0.01f, 0.01f));
+			ImGui::PopID();
+		}
+
+		// the feature switch: label left, pill switch right. `more` marks a
+		// row that owns sub-options (the reference draws "..." beside it);
+		// when `open` is given the marker is clickable and toggles it, so a
+		// row can carry hidden sub-options even while it is switched on
+		bool feature_toggle(const char* label, bool* v, bool more, bool* open = nullptr)
+		{
+			const bool dots = more || (open != nullptr);
+			const float ctl_w = k_switch_w + (dots ? 26.f : 0.f);
+			Row r = row_begin(label, k_row_h, ctl_w, "tg");
+
+			const float sw = k_switch_w, sh = k_switch_h, sp = 3.f;
+			const float sx = r.box.right - sw;
+			const float sy = r.y + (r.h - sh) * 0.5f;
+
+			bool on_dots = false;
+			if (open && r.clicked)
+			{
+				const ImVec2 d0(sx - 26.f, r.y + 4.f), d1(sx - 4.f, r.y + r.h - 4.f);
+				on_dots = ImGui::IsMouseHoveringRect(d0, d1);
+			}
+			if (r.clicked)
+			{
+				if (on_dots) *open = !*open;
+				else         *v = !*v;
+			}
+
+			const ImGuiID id = ImGui::GetID("##row");
+			Glass::Spring& k = Glass::g->springs().Get((uint32_t)id, 2, Glass::SpringStyle::Critical, *v ? 1.f : 0.f);
+			k.target = *v ? 1.f : 0.f;
+			k.Tick(ImGui::GetIO().DeltaTime);
+			const float on = clamp01(k.x);
+
+			ImDrawList* dl = ImGui::GetWindowDrawList();
+			// the track fills with the accent when on; the knob is a crisp
+			// white puck drawn by ImGui rather than a glass primitive - a glass
+			// knob sitting on an accent track blended into it and the switch
+			// read as one solid blue slab with no visible thumb
+			const ImU32 track = lerp_col(IM_COL32(64, 64, 72, (int)(215 * r.a)), accent_col(r.a), on);
+			dl->AddRectFilled(ImVec2(sx, sy), ImVec2(sx + sw, sy + sh), track, sh * 0.5f);
+			dl->AddRect(ImVec2(sx, sy), ImVec2(sx + sw, sy + sh),
+			            IM_COL32(255, 255, 255, (int)(34 * r.a)), sh * 0.5f);
+
+			// the reference's switch keeps its thumb at the RIGHT end in both
+			// states - the track colour alone carries on/off
+			const ImVec2 kc(sx + sw - sh * 0.5f, sy + sh * 0.5f);
+			const float kr = sh * 0.5f - sp;
+			dl->AddCircleFilled(ImVec2(kc.x, kc.y + 1.f), kr, IM_COL32(0, 0, 0, (int)(70 * r.a)), 24);
+			dl->AddCircleFilled(kc, kr, ink_a(IM_COL32(245, 245, 248, 255), r.a), 24);
+
+			if (dots)
+			{
+				const float cx = sx - 20.f, cy = sy + sh * 0.5f;
+				for (int i = -1; i <= 1; ++i)
+					dl->AddCircleFilled(ImVec2(cx, cy + i * 5.f), 1.5f,
+					                    IM_COL32(170, 170, 182, (int)(220 * r.a)));
+			}
+
+			row_end(r);
+			return r.clicked;
+		}
+
+		// the reference's expandable rows: label left, chevron right, plus the
+		// white rounded square for rows that own a master switch. The square
+		// toggles the feature, anywhere else on the row expands it.
+		bool expand_row_impl(const char* label, bool* open, bool* check)
+		{
+			const float ctl_w = check ? (16.f + 22.f + 8.f) : 22.f;
+			Row r = row_begin(label, k_row_h, ctl_w, "ex");
+
+			const float bs = 16.f;
+			const float bx = r.box.right - 22.f - bs;
+			const ImVec2 mn(bx, r.y + (r.h - bs) * 0.5f);
+			const ImVec2 mx(bx + bs, mn.y + bs);
+
+			if (r.clicked)
+			{
+				if (check && ImGui::IsMouseHoveringRect(mn, mx))
+					*check = !*check;
+				else if (open)
+					*open = !*open;
 			}
 
 			ImDrawList* dl = ImGui::GetWindowDrawList();
-			ImVec2 ts = ImGui::CalcTextSize(label ? label : "");
-			dl->AddText(ImVec2(b.left, ry + (rowh - ts.y) * 0.5f),
-			            ink_a(Glass::InkColor(), an.a), label ? label : "");
 
-			const float sw = 46.f, sh = 26.f, sp = 3.f;
-			const ImVec2 smin(b.right - sw, ry + (rowh - sh) * 0.5f);
-			Glass::Primitive track{};
-			track.cx = smin.x + sw * 0.5f;
-			track.cy = smin.y + sh * 0.5f;
-			track.hw = sw * 0.5f;
-			track.hh = sh * 0.5f;
-			track.corner_radius = sh * 0.5f;
-			track.fade = an.a;
-			track.material = Glass::Material::Thin;
-			Glass::g->Submit(track);
-
-			const float on = clamp01(k.x);
-			if (on > 0.005f)
+			if (check)
 			{
-				Glass::Primitive fill = track;
-				fill.material = Glass::Material::Accent;
-				fill.fade = on * an.a;
-				Glass::g->Submit(fill);
+				if (*check)
+					dl->AddRectFilled(mn, mx, ink_a(IM_COL32(238, 239, 245, 255), r.a), 4.f);
+				else
+				{
+					dl->AddRectFilled(mn, mx, IM_COL32(255, 255, 255, (int)(26 * r.a)), 4.f);
+					dl->AddRect(mn, mx, IM_COL32(255, 255, 255, (int)(70 * r.a)), 4.f);
+				}
 			}
 
-			const float kr = sh * 0.5f - sp;
-			Glass::Primitive knob{};
-			knob.cx = smin.x + sh * 0.5f + (sw - sh) * on;
-			knob.cy = smin.y + sh * 0.5f;
-			knob.hw = kr;
-			knob.hh = kr;
-			knob.corner_radius = kr;
-			knob.fade = an.a;
-			knob.material = Glass::Material::Knob;
-			Glass::g->Submit(knob);
+			Glass::DrawIcon(dl, Glass::Icon::ChevronR,
+			                ImVec2(r.box.right - 8.f, r.y + r.h * 0.5f), 5.f,
+			                ink_a(Glass::InkSoftColor(), r.a), 2.f);
 
-			ImGui::PopID();
-			return clicked;
+			row_end(r);
+			return open ? *open : false;
 		}
 
 		// one line of label + live value, thin track underneath - the way a
 		// setting gets adjusted
+		// small plate holding the current value - the reference shows the
+		// number in a box at the end of the row
+		void value_box(ImVec2 mn, ImVec2 mx, const char* text, float a, bool hot)
+		{
+			ImDrawList* dl = ImGui::GetWindowDrawList();
+			dl->AddRectFilled(mn, mx, IM_COL32(255, 255, 255, (int)((hot ? 28.f : 16.f) * a)), 8.f);
+			dl->AddRect(mn, mx, IM_COL32(255, 255, 255, (int)((hot ? 44.f : 26.f) * a)), 8.f);
+			const ImVec2 ts = ImGui::CalcTextSize(text);
+			dl->AddText(ImVec2(mn.x + ((mx.x - mn.x) - ts.x) * 0.5f,
+			                   mn.y + ((mx.y - mn.y) - ts.y) * 0.5f),
+			            ink_a(Glass::InkColor(), a), text);
+		}
+
+		// the settings slider: label left, thin accent track, value box right
 		bool settings_slider(const char* label, float* v, float mn, float mx, const char* fmt)
 		{
-			ImGui::PushID(label);
+			const float ctl_w = k_box_w + 14.f + k_track_w;
+			Row r = row_begin(label, k_row_h, ctl_w, "sl");
 			const float old = *v;
-			const RowAnim an = row_anim("sl");
-			const RowBox b = row_box();
-			const float rowh = 46.f;
-			const float kr = 7.f;
-			ImVec2 cur = row_begin(b);
-			ImGui::InvisibleButton("##sl", ImVec2(b.width, rowh));
-			const bool act = ImGui::IsItemActive();
-			const bool hov = ImGui::IsItemHovered();
-			if (act)
+
+			const float bx = r.box.right - k_box_w;           // value box left
+			const float tx = bx - 14.f - k_track_w;           // track left
+			const float ty = r.y + r.h * 0.5f;
+			const float kr = 6.f;
+
+			if (r.active || r.clicked)
 			{
-				float t = (ImGui::GetIO().MousePos.x - b.left - kr) / (std::max)(1.f, b.width - 2.f * kr);
-				t = clamp01(t);
-				*v = mn + t * (mx - mn);
+				float t = (ImGui::GetIO().MousePos.x - tx) / (std::max)(1.f, k_track_w);
+				*v = mn + clamp01(t) * (mx - mn);
 			}
 
-			const float ry = cur.y + an.dy;
-			const ImU32 ink = ink_a(Glass::InkColor(), an.a);
-			const ImU32 inksoft = ink_a(Glass::InkSoftColor(), an.a);
-
+			const float t = clamp01((mx != mn) ? ((*v - mn) / (mx - mn)) : 0.f);
 			ImDrawList* dl = ImGui::GetWindowDrawList();
-			dl->AddText(ImVec2(b.left, ry + 4.f), ink, label ? label : "");
+			dl->AddRectFilled(ImVec2(tx, ty - 2.f), ImVec2(tx + k_track_w, ty + 2.f),
+			                  IM_COL32(255, 255, 255, (int)(36 * r.a)), 2.f);
+			if (t > 0.002f)
+				dl->AddRectFilled(ImVec2(tx, ty - 2.f), ImVec2(tx + k_track_w * t, ty + 2.f),
+				                  accent_col(r.a), 2.f);
+
+			const ImVec2 kc(tx + k_track_w * t, ty);
+			const float krr = kr * (r.active ? 1.3f : (r.hovered ? 1.12f : 1.f));
+			dl->AddCircleFilled(ImVec2(kc.x, kc.y + 1.f), krr, IM_COL32(0, 0, 0, (int)(70 * r.a)), 20);
+			dl->AddCircleFilled(kc, krr, ink_a(IM_COL32(245, 245, 248, 255), r.a), 20);
 
 			char buf[64];
 			_snprintf_s(buf, sizeof(buf), _TRUNCATE, (fmt && *fmt) ? fmt : "%.2f", *v);
-			ImVec2 vs = ImGui::CalcTextSize(buf);
-			dl->AddText(ImVec2(b.right - vs.x, ry + 4.f), act ? ink : inksoft, buf);
+			value_box(ImVec2(bx, ty - k_ctl_h * 0.5f), ImVec2(bx + k_box_w, ty + k_ctl_h * 0.5f),
+			          buf, r.a, r.hovered || r.active);
 
-			const float ty = ry + rowh - 10.f;
-			const float t = clamp01((mx != mn) ? ((*v - mn) / (mx - mn)) : 0.f);
-
-			Glass::Primitive bg{};
-			bg.cx = b.left + b.width * 0.5f;
-			bg.cy = ty;
-			bg.hw = b.width * 0.5f;
-			bg.hh = 3.f;
-			bg.corner_radius = 3.f;
-			bg.fade = an.a;
-			bg.material = Glass::Material::Thin;
-			Glass::g->Submit(bg);
-
-			if (t > 0.002f)
-			{
-				Glass::Primitive fl{};
-				fl.hw = (b.width * 0.5f) * t;
-				fl.cx = b.left + fl.hw;
-				fl.cy = ty;
-				fl.hh = 3.f;
-				fl.corner_radius = 3.f;
-				fl.fade = an.a;
-				fl.material = Glass::Material::Accent;
-				Glass::g->Submit(fl);
-			}
-
-			const float r = kr * (act ? 1.3f : (hov ? 1.12f : 1.f));
-			Glass::Primitive kn{};
-			kn.cx = b.left + kr + t * (b.width - 2.f * kr);
-			kn.cy = ty;
-			kn.hw = r;
-			kn.hh = r;
-			kn.corner_radius = r;
-			kn.fade = an.a;
-			kn.material = Glass::Material::Knob;
-			Glass::g->Submit(kn);
-
-			ImGui::PopID();
+			row_end(r);
 			return *v != old;
 		}
 
 		// value dropdown: label on the left, current value + chevron on the
 		// right, a compact popup for picking
-		bool settings_dropdown(const char* label, const char* const* items, int count, int* sel)
+		// value dropdown: label left, current value in a box on the right,
+		// popup list underneath it
+		// `open` marks a row that owns sub-options: it reserves the reference's
+		// "..." column to the left of the box, and that column expands the row
+		// while clicking the box itself still opens the list
+		bool settings_dropdown(const char* label, const char* const* items, int count, int* sel,
+		                       bool* open = nullptr)
 		{
 			bool changed = false;
-			ImGui::PushID(label);
-			const RowAnim an = row_anim("dd");
-			const RowBox b = row_box();
-			const float rowh = 36.f;
-			ImVec2 cur = row_begin(b);
-			ImGui::InvisibleButton("##dd", ImVec2(b.width, rowh));
-			const bool hov = ImGui::IsItemHovered();
-			if (ImGui::IsItemDeactivated() && hov)
-				ImGui::OpenPopup("##ddpop");
-
-			const ImGuiID id = ImGui::GetID("##dd");
-			Glass::Spring& hv = Glass::g->springs().Get((uint32_t)id, 21, Glass::SpringStyle::Critical, 0.f);
-			hv.target = hov ? 1.f : 0.f;
-			hv.Tick(ImGui::GetIO().DeltaTime);
-
-			const float ry = cur.y + an.dy;
-
-			if (hv.x > 0.01f)
-			{
-				Glass::Primitive p{};
-				p.cx = b.left + b.width * 0.5f;
-				p.cy = ry + rowh * 0.5f;
-				p.hw = b.width * 0.5f;
-				p.hh = rowh * 0.5f;
-				p.corner_radius = 10.f;
-				p.fade = hv.x * 0.55f * an.a;
-				p.material = Glass::Material::Thin;
-				Glass::g->Submit(p);
-			}
+			const char* cur_val = (sel && *sel >= 0 && *sel < count) ? items[*sel] : "-";
+			const float dots_w = open ? 26.f : 0.f;
+			Row r = row_begin(label, k_row_h, k_drop_w + dots_w, "dd");
 
 			ImDrawList* dl = ImGui::GetWindowDrawList();
-			ImVec2 ts = ImGui::CalcTextSize(label ? label : "");
-			dl->AddText(ImVec2(b.left, ry + (rowh - ts.y) * 0.5f),
-			            ink_a(Glass::InkColor(), an.a), label ? label : "");
 
-			const char* val = (sel && *sel >= 0 && *sel < count) ? items[*sel] : "-";
-			ImVec2 vs = ImGui::CalcTextSize(val);
-			const float cw = 10.f;
-			dl->AddText(ImVec2(b.right - cw - 7.f - vs.x, ry + (rowh - vs.y) * 0.5f),
-			            ink_a(Glass::InkSoftColor(), an.a), val);
-			Glass::DrawIcon(dl, Glass::Icon::ChevronD,
-			                ImVec2(b.right - cw * 0.5f, ry + rowh * 0.5f),
-			                cw * 0.5f, ink_a(hov ? Glass::InkColor() : Glass::InkSoftColor(), an.a), 2.f);
+			bool on_dots = false;
+			if (open && r.clicked)
+			{
+				const ImVec2 d0(r.box.right - k_drop_w - 26.f, r.y + 4.f);
+				const ImVec2 d1(r.box.right - k_drop_w - 4.f, r.y + r.h - 4.f);
+				on_dots = ImGui::IsMouseHoveringRect(d0, d1);
+			}
+			if (r.clicked)
+			{
+				if (on_dots) *open = !*open;
+				else         ImGui::OpenPopup("##ddpop");
+			}
+			const ImVec2 mn(r.box.right - k_drop_w, r.y + (r.h - k_drop_h) * 0.5f);
+			const ImVec2 mx(mn.x + k_drop_w, mn.y + k_drop_h);
+			// Matcha's dropdown: value left aligned with padding, chevron hard
+			// right - not the centred value box the other controls share
+			{
+				const bool hot = r.hovered || ImGui::IsPopupOpen("##ddpop");
+				dl->AddRectFilled(mn, mx, IM_COL32(255, 255, 255, (int)((hot ? 28.f : 16.f) * r.a)), 8.f);
+				dl->AddRect(mn, mx, IM_COL32(255, 255, 255, (int)((hot ? 44.f : 26.f) * r.a)), 8.f);
 
-			const float* ar = Glass::EditParams(Glass::Material::Accent).tint_rgb;
-			const ImVec4 acc(ar[0], ar[1], ar[2], 0.96f);
+				const ImVec2 ts = ImGui::CalcTextSize(cur_val);
+				dl->AddText(ImVec2(mn.x + 13.f, mn.y + (k_drop_h - ts.y) * 0.5f),
+				            ink_a(Glass::InkColor(), r.a), cur_val);
+			}
+			Glass::DrawIcon(dl, Glass::Icon::ChevronD, ImVec2(mx.x - 13.f, mn.y + k_drop_h * 0.5f),
+			                5.f, ink_a(Glass::InkSoftColor(), r.a), 2.f);
+
+			if (open)
+			{
+				const float cx = r.box.right - k_drop_w - 20.f, cy = r.y + r.h * 0.5f;
+				for (int i = -1; i <= 1; ++i)
+					dl->AddCircleFilled(ImVec2(cx, cy + i * 5.f), 1.5f,
+					                    IM_COL32(170, 170, 182, (int)(220 * r.a)));
+			}
+
 			ImGui::PushStyleColor(ImGuiCol_PopupBg, ImVec4(0.07f, 0.075f, 0.09f, 0.985f));
 			ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(1.f, 1.f, 1.f, 0.08f));
-			ImGui::PushStyleColor(ImGuiCol_Header, acc);
-			ImGui::PushStyleColor(ImGuiCol_HeaderHovered, acc);
+			ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(1.f, 1.f, 1.f, 0.10f));
+			ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(1.f, 1.f, 1.f, 0.16f));
 			ImGui::PushStyleVar(ImGuiStyleVar_PopupRounding, 10.f);
 			ImGui::PushStyleVar(ImGuiStyleVar_PopupBorderSize, 1.f);
+			ImGui::SetNextWindowPos(ImVec2(mn.x, mx.y + 4.f));
 			if (ImGui::BeginPopup("##ddpop"))
 			{
-				const float pw = (std::max)(b.width, 150.f);
+				const float pw = (std::max)(k_drop_w, 150.f);
 				for (int i = 0; i < count; ++i)
 				{
 					ImGui::PushID(i);
@@ -292,6 +423,7 @@ namespace ng_tabs
 					                      ImVec2(pw, ImGui::GetTextLineHeight() + 8.f)))
 					{
 						if (sel && *sel != i) { *sel = i; changed = true; }
+						ImGui::CloseCurrentPopup();
 					}
 					ImGui::PopID();
 				}
@@ -299,10 +431,10 @@ namespace ng_tabs
 			}
 			ImGui::PopStyleVar(2);
 			ImGui::PopStyleColor(4);
-			ImGui::PopID();
+
+			row_end(r);
 			return changed;
 		}
-
 		// ------------------------------------------------------------------
 		// VK keybind capture (mirrors widgets::keybind) wearing a LiquidUI
 		// chip. The kit's own Keybind stores ImGuiKey values while our
@@ -415,72 +547,53 @@ namespace ng_tabs
 			return changed;
 		}
 
-		// key chip right-aligned inside a fixed-height row
+		// key chip right-aligned inside a row
 		void glass_key_chip_row(const char* label, int* key, float row_w)
 		{
 			(void)row_w;                      // the row box owns the geometry
-			const RowAnim an = row_anim("key");
-			const RowBox b = row_box();
-			const float rowh = 40.f;
-			ImVec2 pos = row_begin(b);
-			ImGui::Dummy(ImVec2(b.width, rowh));
-
-			const float ry = pos.y + an.dy;
-
-			ImDrawList* dl = ImGui::GetWindowDrawList();
-			dl->AddText(ImVec2(b.left, ry + (rowh - ImGui::GetTextLineHeight()) * 0.5f),
-			            ink_a(Glass::InkColor(), an.a), label ? label : "");
-
 			char buf[32];
 			_snprintf_s(buf, sizeof(buf), _TRUNCATE, "[%s]", widgets::key_name(*key));
 			const float chw = ImGui::CalcTextSize(buf).x + 26.f;
-			ImGui::SetCursorScreenPos(ImVec2(b.right - chw, ry + (rowh - 30.f) * 0.5f));
+
+			Row r = row_begin(label, k_row_h, chw, "key");
+			ImGui::SetCursorScreenPos(ImVec2(r.ctl_x, r.y + (r.h - 30.f) * 0.5f));
 			glass_key_chip(key);
-			ImGui::SetCursorScreenPos(ImVec2(pos.x, pos.y + rowh));
+			row_end(r);
 		}
 
-		// the kit's ColorButton opens an rgb-only picker; our colors carry
-		// alpha, so the glass color row keeps the row pattern (label left,
-		// swatch right) and opens the existing rgba picker popup
+		// color row: label left, swatch right, opens the rgba picker
 		void glass_color_row(const char* label, float col[4])
 		{
-			ImGui::PushID(label);
-			const RowAnim an = row_anim("col");
-			const RowBox b = row_box();
-			const float rowh = 36.f;
-			ImVec2 pos = row_begin(b);
-			ImGui::Dummy(ImVec2(b.width, rowh));
+			Row r = row_begin(label, k_row_h, k_swatch_w, "col");
 
-			const float ry = pos.y + an.dy;
-
-			ImDrawList* dl = ImGui::GetWindowDrawList();
-			ImVec2 ts = ImGui::CalcTextSize(label ? label : "");
-			dl->AddText(ImVec2(b.left, ry + (rowh - ts.y) * 0.5f),
-			            ink_a(Glass::InkColor(), an.a), label ? label : "");
-
-			const float sw = 46.f, sh = 26.f;
-			ImVec2 smin(b.right - sw, ry + (rowh - sh) * 0.5f);
-			ImVec2 smax(smin.x + sw, smin.y + sh);
+			const float sw = k_swatch_w, sh = k_swatch_w;
+			const ImVec2 smin(r.box.right - sw, r.y + (r.h - sh) * 0.5f);
+			const ImVec2 smax(smin.x + sw, smin.y + sh);
 			ImGui::SetCursorScreenPos(smin);
 			ImGui::InvisibleButton("##swatch", ImVec2(sw, sh));
-			const bool clicked = ImGui::IsItemDeactivated() && ImGui::IsItemHovered();
-			if (clicked)
+			if (ImGui::IsItemDeactivated() && ImGui::IsItemHovered())
 				ImGui::OpenPopup("##col_pop");
 
+			ImDrawList* dl = ImGui::GetWindowDrawList();
 			dl->AddRectFilled(smin, smax,
 				IM_COL32((int)(col[0] * 255.f), (int)(col[1] * 255.f),
-				         (int)(col[2] * 255.f), (int)(col[3] * 255.f * an.a)), 8.f);
-			dl->AddRect(smin, smax, IM_COL32(255, 255, 255, (int)(46 * an.a)), 8.f);
+				         (int)(col[2] * 255.f), (int)(col[3] * 255.f * r.a)), 7.f);
+			dl->AddRect(smin, smax, IM_COL32(255, 255, 255, (int)((r.hovered ? 70.f : 52.f) * r.a)), 7.f, 0, 1.f);
 
-			ImGui::SetCursorScreenPos(ImVec2(pos.x, pos.y + rowh));
+			row_end(r);
 
 			if (ImGui::BeginPopup("##col_pop"))
 			{
 				widgets::color_picker("##picker", col);
 				ImGui::EndPopup();
 			}
-			ImGui::PopID();
 		}
+	}
+
+	// exported wrapper - the implementation lives in the anonymous namespace above
+	bool expand_row(const char* label, bool* open, bool* check)
+	{
+		return expand_row_impl(label, open, check);
 	}
 
 	void pad()
@@ -530,8 +643,6 @@ namespace ng_tabs
 				p.fade = Glass::g->SubmitFadeValue();
 				p.material = Glass::Material::Thin;
 				Glass::g->Submit(p);
-
-				Glass::g->SetClipRect(o.x, o.y, o.x + s.x, o.y + s.y);
 			}
 
 			float content_w = width - content_pad * 2.f;
@@ -562,8 +673,6 @@ namespace ng_tabs
 			ImGui::PopItemWidth();
 			ImGui::PopStyleVar();
 			ImGui::EndChild();
-			if (Glass::g)
-				Glass::g->ClearClipRect();
 			return;
 		}
 
@@ -572,6 +681,144 @@ namespace ng_tabs
 		ImGui::EndChild();
 		ImGui::PopStyleColor();
 	}
+	// -------------------------------------------------------------------------
+	// page layout (the reference structure): a page is two columns, and each
+	// column is a stack of "SECTION header + box" pairs that size themselves
+	// to their rows
+	// -------------------------------------------------------------------------
+	static std::vector<size_t> s_section_stack;
+
+	void begin_column(const char* id, float width, float height)
+	{
+		// a thin, unobtrusive scrollbar: a page whose sections are taller than
+		// the card scrolls instead of spilling past the bottom of the menu
+		ImGui::PushStyleColor(ImGuiCol_ScrollbarBg, ImVec4(0.f, 0.f, 0.f, 0.f));
+		ImGui::PushStyleColor(ImGuiCol_ScrollbarGrab, ImVec4(1.f, 1.f, 1.f, 0.16f));
+		ImGui::PushStyleColor(ImGuiCol_ScrollbarGrabHovered, ImVec4(1.f, 1.f, 1.f, 0.26f));
+		ImGui::PushStyleColor(ImGuiCol_ScrollbarGrabActive, ImVec4(1.f, 1.f, 1.f, 0.34f));
+
+		if (glass_mode())
+		{
+			ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.f, 0.f, 0.f, 0.f));
+			ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.f, 0.f));
+			ImGui::PushStyleVar(ImGuiStyleVar_ScrollbarSize, 4.f);
+			ImGui::BeginChild(id, ImVec2(width, height), ImGuiChildFlags_None,
+				ImGuiWindowFlags_NoBackground);
+			ImGui::PopStyleVar(2);
+			ImGui::PopStyleColor();
+			ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0.f, 0.f));
+			return;
+		}
+
+		ImGui::BeginChild(id, ImVec2(width, height), ImGuiChildFlags_None, 0);
+		ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0.f, 4.f));
+	}
+
+	void end_column()
+	{
+		ImGui::PopStyleVar();
+		ImGui::EndChild();
+		ImGui::PopStyleColor(4);   // scrollbar colours
+	}
+
+	// "MAIN", "SELECTION", ... - small, letter spaced, hairline underneath
+	void section_header(const char* text)
+	{
+		ImDrawList* dl = ImGui::GetWindowDrawList();
+		const ImVec2 o = ImGui::GetCursorScreenPos();
+		const float w = ImGui::GetContentRegionAvail().x;
+
+		if (!glass_mode())
+		{
+			ImGui::TextUnformatted(text);
+			ImGui::Separator();
+			return;
+		}
+
+		const float fs = ImGui::GetFontSize() * 0.82f;
+		float x = o.x;
+		for (const char* p = text; *p; ++p)
+		{
+			char ch[2] = { (char)toupper((unsigned char)*p), 0 };
+			dl->AddText(ImGui::GetFont(), fs, ImVec2(x, o.y), Glass::InkSoftColor(), ch);
+			x += ImGui::GetFont()->CalcTextSizeA(fs, FLT_MAX, 0.f, ch).x + 1.f;
+		}
+		// the reference has no rule under its section labels, just the label
+		ImGui::Dummy(ImVec2(w, 24.f));
+	}
+
+	// a box around its rows; the plate is submitted up front and its geometry
+	// filled in when the box closes (so it always matches the real content)
+	bool begin_section(const char* id)
+	{
+		if (!glass_mode())
+			return begin_panel(id, ImGui::GetContentRegionAvail().x, 0.f, false);
+
+		ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(content_pad, 6.f));
+		ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.f, 0.f, 0.f, 0.f));
+		ImGui::BeginChild(id, ImVec2(0.f, 0.f),
+			ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_AlwaysUseWindowPadding,
+			ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoScrollbar |
+			ImGuiWindowFlags_NoScrollWithMouse);
+		ImGui::PopStyleColor();
+
+		size_t idx = (size_t)-1;
+		if (Glass::g)
+		{
+			Glass::Primitive p{};
+			// the section plate is deliberately faint: the reference's boxes are
+			// only a hair lighter than the card behind them
+			// the reference's boxes are clearly a backdrop behind the rows - they
+			// read as a distinct plate over the card, not a hairline
+			p.fade = Glass::g->SubmitFadeValue() * 0.55f;
+			p.material = Glass::Material::Thin;
+			p.corner_radius = 10.f;
+			// geometry is filled in by end_section(); the scissor is
+			// per-primitive now (Renderer::Submit clips every primitive to the
+			// rect its own window/child may paint into), so the old global
+			// SetClipRect call here - which was last-write-wins for the whole
+			// frame - is gone
+			idx = Glass::g->Submit(p);
+		}
+		s_section_stack.push_back(idx);
+
+		ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0.f, 0.f));
+		ImGui::PushItemWidth(ImGui::GetWindowSize().x - content_pad * 2.f);
+		return true;
+	}
+
+	void end_section()
+	{
+		if (!glass_mode())
+		{
+			end_panel();
+			return;
+		}
+
+		const ImVec2 o = ImGui::GetWindowPos();
+		const ImVec2 s = ImGui::GetWindowSize();
+		if (!s_section_stack.empty())
+		{
+			const size_t idx = s_section_stack.back();
+			s_section_stack.pop_back();
+			if (Glass::g && idx != (size_t)-1)
+			{
+				Glass::Primitive& p = Glass::g->At(idx);
+				p.cx = o.x + s.x * 0.5f;
+				p.cy = o.y + s.y * 0.5f;
+				p.hw = s.x * 0.5f;
+				p.hh = s.y * 0.5f;
+			}
+		}
+
+		ImGui::PopStyleVar();          // item spacing
+		ImGui::PopItemWidth();
+		ImGui::EndChild();
+		ImGui::PopStyleVar();          // window padding
+
+		ImGui::Dummy(ImVec2(0.f, 10.f));   // gap before the next section header
+	}
+
 
 	void row_keybind(const char* id, const char* label, int* key, int* mode)
 	{
@@ -683,6 +930,24 @@ namespace ng_tabs
 		return widgets::combo(label, cur, items);
 	}
 
+	// same dropdown, flagged as owning sub-options (the "..." marker expands `open`)
+	bool row_combo_more(const char* label, int* cur, const std::vector<const char*>& items, bool* open)
+	{
+		if (glass_mode())
+		{
+			ImGui::PushID(label);
+			const int old = *cur;
+			settings_dropdown(label, items.data(), (int)items.size(), cur, open);
+			ImGui::PopID();
+			return old != *cur;
+		}
+
+		// no markers in the ImGui fallback path - `open` is left alone so a row
+		// that was already expanded stays reachable if the glass renderer fails
+		pad();
+		return widgets::combo(label, cur, items);
+	}
+
 	bool row_slider_f(const char* label, float* v, float mn, float mx, const char* fmt)
 	{
 		if (glass_mode())
@@ -716,8 +981,29 @@ namespace ng_tabs
 	bool row_checkbox(const char* label, bool* v)
 	{
 		if (glass_mode())
-			return feature_toggle(label, v);
+			return feature_toggle(label, v, false);
 
+		pad();
+		return widgets::checkbox(label, v);
+	}
+
+	// same row, but flagged as owning sub-options (draws the "..." marker)
+	bool row_checkbox_more(const char* label, bool* v)
+	{
+		if (glass_mode())
+			return feature_toggle(label, v, true);
+
+		pad();
+		return widgets::checkbox(label, v);
+	}
+
+	// the marker itself toggles `open` instead of the switch
+	bool row_checkbox_expand(const char* label, bool* v, bool* open)
+	{
+		if (glass_mode())
+			return feature_toggle(label, v, true, open);
+
+		if (open) *open = false;   // no markers in the fallback path
 		pad();
 		return widgets::checkbox(label, v);
 	}
@@ -727,7 +1013,7 @@ namespace ng_tabs
 		if (glass_mode())
 		{
 			const bool old = *v;
-			feature_toggle(label, v);
+			feature_toggle(label, v, false);
 			if (*v)
 				glass_color_row("color", col);
 			return old != *v;
@@ -743,7 +1029,7 @@ namespace ng_tabs
 		{
 			const bool old = *v;
 			ImGui::PushID(label);
-			feature_toggle(label, v);
+			feature_toggle(label, v, false);
 			if (*v)
 			{
 				const float row_w = (std::min)(ImGui::GetContentRegionAvail().x, 320.f);
@@ -864,5 +1150,37 @@ namespace ng_tabs
 			return Glass::TextField(label ? label : "##field", buf, len);
 
 		return widgets::input_text(label, buf, len);
+	}
+
+	// muted caption row - used for empty states and page notes
+	void row_note(const char* text)
+	{
+		if (glass_mode())
+		{
+			const Row r = row_begin(nullptr, k_row_h, 0.f, "note");
+			ImGui::GetWindowDrawList()->AddText(
+				ImVec2(r.box.left, r.y + (r.h - ImGui::GetTextLineHeight()) * 0.5f),
+				ink_a(Glass::InkSoftColor(), r.a), text ? text : "");
+			row_end(r);
+			return;
+		}
+
+		pad();
+		ImGui::TextUnformatted(text ? text : "");
+	}
+
+	// a feature that does not exist yet: the row and its switch are real and the
+	// state is kept per row, nothing else consumes it
+	bool row_placeholder(const char* label)
+	{
+		static std::unordered_map<unsigned int, bool> s_ph;
+
+		const unsigned int key = (unsigned int)ImGui::GetID(label);
+		bool& v = s_ph[key];
+		if (glass_mode())
+			return feature_toggle(label, &v, false);
+
+		pad();
+		return widgets::checkbox(label, &v);
 	}
 }

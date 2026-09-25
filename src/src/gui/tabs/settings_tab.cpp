@@ -26,8 +26,11 @@ void ng_tabs::draw_settings_tab(int* menu_kb, bool* kb_skip)
 		"build", "player", "place id", "game id", "time", "fps"
 	};
 
-	begin_panel("##set_menu", left_w, h);
+	begin_column("##opt_l", left_w, h);
 	{
+		section_header("GENERAL");
+		begin_section("##set_menu");
+		{
 		if (menu_kb)
 		{
 			int before = *menu_kb;
@@ -39,7 +42,8 @@ void ng_tabs::draw_settings_tab(int* menu_kb, bool* kb_skip)
 		g_Settings.esp.preview = false;
 
 		static const std::vector<const char*> gui_fonts = {
-			"proxima soft bold", "fredoka one", "tahoma bold", "proggy clean", "visitor", "verdana", "segoe ui", "imgui default"
+			"proxima soft bold", "fredoka one", "tahoma bold", "proggy clean", "visitor", "verdana", "segoe ui", "imgui default",
+			"proxima soft extrabold"
 		};
 		row_combo("gui font", &g_Settings.gui.font, gui_fonts);
 
@@ -54,6 +58,12 @@ void ng_tabs::draw_settings_tab(int* menu_kb, bool* kb_skip)
 			);
 		}
 
+		}
+		end_section();
+
+		section_header("ENGINE");
+		begin_section("##set_engine");
+		{
 		row_checkbox("raycast engine", &g_Settings.misc.raycast_engine);
 
 		{
@@ -121,6 +131,12 @@ void ng_tabs::draw_settings_tab(int* menu_kb, bool* kb_skip)
 
 		row_slider_f("lua tick (ms)", &g_Settings.lua.ticks_ms, 1.f, 15.f, "%.0f");
 
+		}
+		end_section();
+
+		section_header("OVERLAY");
+		begin_section("##set_overlay");
+		{
 		row_checkbox("overlay vsync", &g_Settings.gui.vsync);
 
 		row_slider_i("overlay fps cap", &g_Settings.gui.fps_cap, 0, 1440);
@@ -130,13 +146,18 @@ void ng_tabs::draw_settings_tab(int* menu_kb, bool* kb_skip)
 		row_slider_f("glass frost", &g_Settings.gui.frost, 0.f, 1.f, "%.2f");
 
 		row_color("glass tint", g_Settings.gui.tint);
+		}
+		end_section();
 	}
-	end_panel();
+	end_column();
 
 	ImGui::SameLine(0.f, panel_gap);
 
-	begin_panel("##set_cfgs", right_w, h);
+	begin_column("##opt_r", right_w, h);
 	{
+		section_header("CONFIG");
+		begin_section("##set_cfgs");
+		{
 		static char s_cfg_name[64] = "default";
 		static int s_cfg_sel = -1;
 		static char s_cfg_items[64][128]{};
@@ -233,6 +254,8 @@ void ng_tabs::draw_settings_tab(int* menu_kb, bool* kb_skip)
 			}
 			ImGui::EndListBox();
 		}
+		}
+		end_section();
 	}
-	end_panel();
+	end_column();
 }

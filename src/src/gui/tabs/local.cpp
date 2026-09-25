@@ -24,9 +24,12 @@ void ng_tabs::draw_local_tab()
 		Features::CharMods::AnimPackNames(),
 		Features::CharMods::AnimPackNames() + Features::CharMods::AnimPackCount());
 
-	begin_panel("##local_move", left_w, h);
+	begin_column("##char_l", left_w, h);
 	{
-		row_checkbox("walkspeed", &m.walkspeed);
+		section_header("MOVEMENT");
+		begin_section("##local_move");
+		{
+			row_checkbox("walkspeed", &m.walkspeed);
 		if (m.walkspeed)
 		{
 			row_keybind("##ws_kb", "ws key", &m.walkspeed_key, &m.walkspeed_key_mode);
@@ -76,23 +79,30 @@ void ng_tabs::draw_local_tab()
 		}
 
 		row_checkbox("desync", &m.desync);
+		}
+		end_section();
 	}
-	end_panel();
+	end_column();
 
 	ImGui::SameLine(0.f, panel_gap);
 
-	begin_panel("##local_cam", right_w, h);
+	begin_column("##char_r", right_w, h);
 	{
-		row_keybind("##freecam", "freecam", &m.freecam_key, &m.freecam_mode);
-		row_slider_f("freecam speed", &m.freecam_speed, 10.f, 300.f, "%.0f");
-		row_slider_f("freecam sens", &m.freecam_sens, 0.05f, 1.f, "%.2f");
-
-		row_checkbox("third person", &m.third_person);
-		if (m.third_person)
+		section_header("CAMERA");
+		begin_section("##local_cam");
 		{
-			row_keybind("##tp_kb", "tp key", &m.third_person_key, &m.third_person_mode);
-			row_slider_f("camera back/up", &m.third_person_distance, 1.f, 120.f, "%.1f");
+			row_keybind("##freecam", "freecam", &m.freecam_key, &m.freecam_mode);
+			row_slider_f("freecam speed", &m.freecam_speed, 10.f, 300.f, "%.0f");
+			row_slider_f("freecam sens", &m.freecam_sens, 0.05f, 1.f, "%.2f");
+
+			row_checkbox("third person", &m.third_person);
+			if (m.third_person)
+			{
+				row_keybind("##tp_kb", "tp key", &m.third_person_key, &m.third_person_mode);
+				row_slider_f("camera back/up", &m.third_person_distance, 1.f, 120.f, "%.1f");
+			}
 		}
+		end_section();
 	}
-	end_panel();
+	end_column();
 }

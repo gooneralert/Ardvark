@@ -16,6 +16,9 @@ namespace fonts {
 
     ImFont* fredoka_one = nullptr;
     ImFont* proxima_soft_bold = nullptr;
+    // heavier weight for the wordmark, loaded from .ttf next to the exe
+    // (see add_proxima)
+    ImFont* proxima_soft_extrabold = nullptr;
     ImFont* imgui = nullptr;
     ImFont* tahoma_bold = nullptr;
     ImFont* proggy_clean = nullptr;
@@ -62,6 +65,39 @@ namespace fonts {
         io.Fonts->AddFontFromMemoryTTF(Tahoma, sizeof(Tahoma), size, &cfg, ranges_cyr);
     }
 
+    // Proxima Soft weights that ship as .ttf beside the exe (the post-build copy
+    // puts them in a "fonts" folder) with the source tree as a fallback - the
+    // same pattern the music player's Inter fonts use. Returns `def` when none
+    // of the paths exist, so the caller always has a usable font.
+    static ImFont* add_proxima(ImGuiIO& io, const char* file, float size,
+                               const ImWchar* ranges, const ImWchar* ranges_cyr,
+                               ImFont* def)
+    {
+        char base[MAX_PATH] = {};
+        GetModuleFileNameA(nullptr, base, MAX_PATH);
+        char* slash = strrchr(base, '\\');
+        if (slash) *(slash + 1) = 0;
+        const std::string dir = base;
+
+        const std::string tries[3] = {
+            dir + "fonts\\" + file,
+            dir + "..\\..\\src\\gui\\resources\\fonts\\" + file,
+            std::string("src/gui/resources/fonts/") + file,
+        };
+
+        for (const std::string& p : tries)
+        {
+            ImFontConfig cfg;
+            cfg_aa(cfg, size, true);
+            if (ImFont* f = io.Fonts->AddFontFromFileTTF(p.c_str(), size, &cfg, ranges))
+            {
+                merge_cyr(io, size, ranges_cyr);
+                return f;
+            }
+        }
+        return def;
+    }
+
     void load(ImGuiIO& io)
     {
         io.Fonts->SetFontLoader(ImGuiFreeType::GetFontLoader());
@@ -84,6 +120,15 @@ namespace fonts {
         proxima_soft_bold = io.Fonts->AddFontFromMemoryTTF(
             ProximaSoftBold, sizeof(ProximaSoftBold), 14.f, &psb, ranges_def);
         merge_cyr(io, 14.f, ranges_cyr);
+
+        // heavier weight for the wordmark, from disk (falls back to the embedded
+        // Bold when the .ttf is not next to the build).
+        // NOTE: the "Light" and "SemiBold" downloads came back as the *Italic*
+        // faces (post.italicAngle -12.5, style name "Light Italic" /
+        // "SemiBold Italic"), so they are deliberately NOT registered - a full
+        // italic menu was the result. Re-download the upright weights to add them.
+        proxima_soft_extrabold = add_proxima(io, "ProximaSoft-ExtraBold.ttf", 15.f,
+                                             ranges_def, ranges_cyr, proxima_soft_bold);
 
         ImFontConfig tah;
         cfg_aa(tah, 14.f, false);

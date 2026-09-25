@@ -185,6 +185,12 @@
     <Manifest>
       <EnableSegmentHeap>true</EnableSegmentHeap>
     </Manifest>
+    <PostBuildEvent>
+      <!-- ship the preview model next to the exe: the loader looks in
+           assets\roblox-noob beside the exe first, then walks up the tree -->
+      <Command>xcopy /y /i /d "$(ProjectDir)assets\roblox-noob\*" "$(TargetDir)assets\roblox-noob" &gt;NUL
+xcopy /y /i /d "$(ProjectDir)src\gui\resources\fonts\*.ttf" "$(TargetDir)fonts" &gt;NUL</Command>
+    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="src\pch.h" />

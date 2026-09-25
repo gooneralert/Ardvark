@@ -2,6 +2,7 @@
 #define NOMINMAX
 #define IMGUI_DEFINE_MATH_OPERATORS
 #include "ESPPreview.h"
+#include "core/console/Console.h"
 #include "EspLayout.h"
 #include "PreviewRenderer.h"
 #include "AvatarLoader.h"
@@ -509,7 +510,33 @@ void DrawFadeDot(ImDrawList* dl, const ImVec2& c, int tier, bool hover)
 
 namespace Cheat::Visuals {
 
-// грузим модельку для превью
+// ---------------------------------------------------------------------------
+// The noob: our preview character. The model + texture live in
+// assets/roblox-noob (moved out of src/src/roblox-noob so they ship with the
+// build). Found next to the exe first, then by walking up, so it works both
+// from the copied output folder and straight out of the source tree.
+// ---------------------------------------------------------------------------
+static std::string FindNoobAsset(const char* rel)
+{
+    char mod[MAX_PATH]{};
+    GetModuleFileNameA(nullptr, mod, MAX_PATH);
+    std::string base(mod);
+    const size_t cut0 = base.find_last_of("\\/");
+    if (cut0 != std::string::npos) base.resize(cut0);
+
+    for (int up = 0; up < 7; ++up)
+    {
+        const std::string cand = base + "\\" + rel;
+        const DWORD attr = GetFileAttributesA(cand.c_str());
+        if (attr != INVALID_FILE_ATTRIBUTES && !(attr & FILE_ATTRIBUTE_DIRECTORY))
+            return cand;
+        const size_t cut = base.find_last_of("\\/");
+        if (cut == std::string::npos) break;
+        base.resize(cut);
+    }
+    return {};
+}
+
 void ESPPreview::Initialize()
 {
     if (g_InitDone)
@@ -519,6 +546,26 @@ void ESPPreview::Initialize()
 
     if (!g_Renderer.Initialize(Cheat::Core::g_Device, Cheat::Core::g_DeviceContext, 600, 900))
         return;
+
+    // load the noob once - geometry (skeleton / aim parts / esp box come from
+    // the OBJ loader's body-part classification) + its texture atlas
+    static bool s_noob_done = false;
+    if (!s_noob_done)
+    {
+        s_noob_done = true;
+        const std::string obj = FindNoobAsset("assets\\roblox-noob\\Character Roblox.obj");
+        const std::string tex = FindNoobAsset("assets\\roblox-noob\\Noob1Tex.png");
+
+        bool ok = false;
+        if (!obj.empty()) ok = g_Renderer.LoadModel(obj);
+        if (ok && !tex.empty()) g_Renderer.LoadTexture(tex);
+
+        if (ok)
+            Cheat::Console::Log(Cheat::Console::Color::Gray, "[preview] noob loaded: %s", obj.c_str());
+        else
+            Cheat::Console::Log(Cheat::Console::Color::Red,
+                                "[preview] noob model not found - expected assets\\roblox-noob\\Character Roblox.obj");
+    }
 
     g_InitDone = true;
 }
@@ -534,29 +581,9 @@ void ESPPreview::Render()
 {
     if (!g_InitDone) Initialize();
 
-    // The real local-player avatar is downloaded in the background at launch;
-    // once ready, swap out the premade model (the premade one stays as a
-    // fallback if the fetch failed or the game hasn't been joined yet).
-    {
-        Cheat::Features::AvatarLoader::Model av;
-        if (Cheat::Features::AvatarLoader::ConsumeReady(av))
-        {
-            std::vector<Cheat::Core::PreviewRenderer::PreviewMaterial> mats;
-            mats.reserve(av.materials.size());
-            for (auto& m : av.materials)
-            {
-                Cheat::Core::PreviewRenderer::PreviewMaterial pm;
-                pm.name = std::move(m.name);
-                pm.png = std::move(m.png);
-                pm.kd[0] = m.kd[0];
-                pm.kd[1] = m.kd[1];
-                pm.kd[2] = m.kd[2];
-                mats.push_back(std::move(pm));
-            }
-            if (!av.obj.empty() && !mats.empty())
-                g_Renderer.LoadAvatar(av.obj, mats);
-        }
-    }
+    // The background avatar download (AvatarLoader) used to swap in here. The
+    // preview character is now the noob model, loaded once in Initialize(); to
+    // go back to the downloaded avatar, re-enable the ConsumeReady block below.
 
     auto& s = Cheat::g_Settings;
     float now = (float)ImGui::GetTime();

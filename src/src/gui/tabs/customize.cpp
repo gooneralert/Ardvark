@@ -74,12 +74,21 @@ void ng_tabs::draw_customize_tab()
 
 	// left column: the live glass-material knobs (ported from the example's
 	// Customize page - GLASS MATERIAL / LIGHTING / MORE GLASS)
-	begin_panel("##cu_perf", left_w, h, true);
+	begin_column("##cu_l", left_w, h);
 	{
+		section_header("PERFORMANCE");
+		begin_section("##cu_perf");
+		{
 		// the example's PERFORMANCE panel: overlay + glass refresh rates
 		row_slider_i("overlay refresh (Hz)", &gui.fps_cap, 0, 480);
 		row_slider_i("glass refresh (Hz)", &gui.blur_hz, 1, 240);
 
+		}
+		end_section();
+
+		section_header("GLASS");
+		begin_section("##cu_glass");
+		{
 		row_slider_f("saturation", &gui.glass_sat, 0.3f, 3.f, "%.2f");
 		row_slider_f("refraction", &gui.glass_refr, 0.f, 60.f, "%.1f");
 		row_slider_f("chroma", &gui.glass_chroma, 0.f, 8.f, "%.2f");
@@ -92,20 +101,31 @@ void ng_tabs::draw_customize_tab()
 		row_slider_f("light 2 angle", &gui.light2_angle, 0.f, 360.f, "%.0f");
 		row_slider_f("light 2 strength", &gui.light2_amt, 0.f, 3.f, "%.2f");
 
+		}
+		end_section();
+
+		section_header("EDGE");
+		begin_section("##cu_edge");
+		{
 		row_slider_f("fresnel", &gui.fresnel, 1.f, 6.f, "%.2f");
 		row_slider_f("bevel", &gui.bevel, 0.f, 2.f, "%.2f");
 		row_slider_f("specular", &gui.specular_amt, 0.f, 3.f, "%.2f");
 		row_slider_f("sheen", &gui.sheen, 0.f, 3.f, "%.2f");
 		row_slider_f("grain", &gui.grain, 0.f, 4.f, "%.2f");
 		row_slider_f("ambient rim", &gui.ambient_rim, 0.f, 2.f, "%.2f");
+		}
+		end_section();
 	}
-	end_panel();
+	end_column();
 
 	ImGui::SameLine(0.f, panel_gap);
 
 	// right column: appearance + accent (example's APPEARANCE / ACCENT COLOR)
-	begin_panel("##cu_theme", right_w, h, true);
+	begin_column("##cu_r", right_w, h);
 	{
+		section_header("THEME");
+		begin_section("##cu_theme");
+		{
 		static const std::vector<const char*> k_theme = { "dark", "light" };
 		row_combo("theme", &gui.appearance, k_theme);
 
@@ -116,6 +136,8 @@ void ng_tabs::draw_customize_tab()
 		// custom accent through the same rgba swatch row everything else uses
 		gui.accent[3] = 1.f;
 		row_color("custom accent", gui.accent);
+		}
+		end_section();
 	}
-	end_panel();
+	end_column();
 }

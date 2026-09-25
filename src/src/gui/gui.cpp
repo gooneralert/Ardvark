@@ -8,11 +8,14 @@
 #include "tabs/aim.h"
 #include "tabs/esp.h"
 #include "tabs/misc.h"
+#include "tabs/helpers.h"
+#include "resources/fonts/fonts.h"
 #include "tabs/local.h"
 #include "tabs/settings_tab.h"
 #include "tabs/customize.h"
 #include "tabs/trigger.h"
 #include "app/Settings.h"
+#include "core/config/Config.h"
 #include "core/globals/Globals.h"
 #include "core/console/Console.h"
 #include "core/roblox/classes/Classes.h"
@@ -42,6 +45,39 @@ namespace gui
 
     const ImVec4 border_color_outer = ImVec4(0.92f, 0.94f, 0.93f, 1.f); // matcha near-white
     const ImVec4 border_color_inner = ImVec4(0.18f, 0.18f, 0.18f, 1.f);
+
+    // sidebar pages, in the reference's order and grouping
+    enum : int
+    {
+        page_aimbot = 0, page_silent, page_trigger,
+        page_players, page_extras, page_world, page_character,
+        page_npc, page_teams, page_options, page_customize, page_count
+    };
+
+    static const char* k_page_titles[page_count] = {
+        "Aimbot", "Silent", "Trigger", "Players", "Extras", "World",
+        "Character", "NPC", "Teams", "Options", "Customize"
+    };
+
+    // sidebar model: group headers plus pages, with the visuals sub-pages
+    // (Players / Extras) nested under Visuals - the reference's arrangement
+    struct NavRow { const char* group; const char* label; Glass::Icon icon; int page; bool sub; };
+    static const NavRow k_nav[] = {
+        { "AIMBOT", "Aimbot",    Glass::Icon::Crosshairs, page_aimbot,    false },
+        { nullptr,  "Silent",    Glass::Icon::Person,     page_silent,    false },
+        { nullptr,  "Trigger",   Glass::Icon::Bolt,       page_trigger,   false },
+
+        { "COMMON", "Visuals",   Glass::Icon::Eye,        page_players,   false },
+        { nullptr,  "Players",   Glass::Icon::Users,      page_players,   true  },
+        { nullptr,  "Extras",    Glass::Icon::Gem,        page_extras,    true  },
+        { nullptr,  "World",     Glass::Icon::Globe,      page_world,     false },
+        { nullptr,  "Character", Glass::Icon::Running,    page_character, false },
+        { nullptr,  "NPC",       Glass::Icon::Box,        page_npc,       false },
+        { nullptr,  "Teams",     Glass::Icon::Flag,       page_teams,     false },
+        { nullptr,  "Options",   Glass::Icon::Sliders,    page_options,   false },
+        { nullptr,  "Customize", Glass::Icon::Paintbrush, page_customize, false },
+    };
+    static const int k_nav_count = (int)(sizeof(k_nav) / sizeof(k_nav[0]));
 
     static int  s_sidebar_selected = 0;
     static bool s_menu_open = true;
@@ -215,22 +251,72 @@ namespace gui
         c[ImGuiCol_ModalWindowDimBg]      = ImVec4(0.f, 0.f, 0.f, 0.45f);
     }
 
-    // the selected page's controls - shared by the LiquidUI card and the plain
-    // ImGui fallback chrome
-    static void menu_tab_pages(int sidebar_selected)
+    // -------------------------------------------------------------------------
+    // Teams page - the reference's TEAMS / QUICK ACTIONS / GAME TEAMS layout.
+    // We have no team database yet, so every row here is a placeholder that
+    // remembers its own state; nothing consumes it.
+    // -------------------------------------------------------------------------
+    static void draw_teams_page()
     {
-        if (sidebar_selected == 0)
-            ng_tabs::draw_aim_tab();          // combat: aimbot + silent + triggerbot
-        else if (sidebar_selected == 1)
-            ng_tabs::draw_esp_tab();
-        else if (sidebar_selected == 2)
-            ng_tabs::draw_misc_tab();
-        else if (sidebar_selected == 3)
-            ng_tabs::draw_local_tab();
-        else if (sidebar_selected == 4)
-            ng_tabs::draw_settings_tab(&menu_kb, &menu_kb_skip);
-        else
-            ng_tabs::draw_customize_tab();    // the example's Customize page
+        using namespace ng_tabs;
+
+        float left_w = 0.f, right_w = 0.f, h = 0.f;
+        begin_columns(&left_w, &right_w, &h);
+
+        begin_column("##tm_l", left_w, h);
+        {
+            section_header("TEAMS");
+            begin_section("##tm_teams");
+            {
+                row_placeholder("use custom teams");
+                row_placeholder("auto detect allied team");
+                row_note("no teams in this game");
+            }
+            end_section();
+        }
+        end_column();
+
+        ImGui::SameLine(0.f, panel_gap);
+
+        begin_column("##tm_r", right_w, h);
+        {
+            section_header("QUICK ACTIONS");
+            begin_section("##tm_quick");
+            {
+                row_placeholder("all enemy");
+                row_placeholder("all ally");
+                row_placeholder("reset to default");
+            }
+            end_section();
+
+            section_header("GAME TEAMS [0]");
+            begin_section("##tm_list");
+            {
+                row_note("no team list available");
+            }
+            end_section();
+        }
+        end_column();
+    }
+
+    // the selected page's controls - shared by the LiquidUI card and the plain
+    // ImGui fallback chrome. Pages mirror the reference's tab layout.
+    static void menu_tab_pages(int page)
+    {
+        switch (page)
+        {
+        case page_aimbot:    ng_tabs::draw_aimbot_page();   break;
+        case page_silent:    ng_tabs::draw_silent_page();   break;
+        case page_trigger:   ng_tabs::draw_trigger_page();  break;
+        case page_players:   ng_tabs::draw_esp_tab();       break;
+        case page_extras:    ng_tabs::draw_extras_page();   break;
+        case page_world:     ng_tabs::draw_world_page();    break;
+        case page_character: ng_tabs::draw_local_tab();     break;
+        case page_npc:       ng_tabs::draw_npc_page();      break;
+        case page_teams:     draw_teams_page();             break;
+        case page_options:   ng_tabs::draw_settings_tab(&menu_kb, &menu_kb_skip); break;
+        default:             ng_tabs::draw_customize_tab(); break;
+        }
     }
 
     // draws the selected page into a child of the given size, placed at the
@@ -540,17 +626,9 @@ namespace gui
         esp_preview_open = Cheat::g_Settings.misc.esp_preview;
         music_open = Cheat::g_Settings.misc.music;   // re-sync after navbar clicks
 
-        // ESP preview: only while the Visuals tab is active; slides out from
-        // underneath the main GUI (rendered before it so the menu covers it)
-        {
-            const float dt = ImGui::GetIO().DeltaTime > 0.f ? ImGui::GetIO().DeltaTime : 1.f / 60.f;
-            const bool esp_wanted = s_menu_open && s_sidebar_selected == 1 && Cheat::g_Settings.misc.esp_preview;
-            s_esp_anim += ((esp_wanted ? 1.f : 0.f) - s_esp_anim) * (1.f - std::exp(-14.f * dt));
-            if (!esp_wanted && s_esp_anim < 0.001f)
-                s_esp_anim = 0.f;
-            if (s_esp_anim > 0.01f)
-                render_esp_preview_window(&esp_preview_open, s_menu_pos, s_menu_size, s_esp_anim);
-        }
+        // ESP preview now lives inside the Players page (the reference has it
+        // built into the UI rather than as a window floating beside the menu);
+        // see ng_tabs::draw_esp_tab - no slide-out panel here any more.
 
         if (menu_a > 0.01f)
             render_menu_window(menu_a);
@@ -739,20 +817,10 @@ namespace gui
     // window is gone). The page controls are still the tabs from tabs/*.cpp;
     // only the shell and the glass are LiquidUI's.
     // -------------------------------------------------------------------------
-    constexpr float menu_default_w = 700.f;   // old chrome was 578x680
+    constexpr float menu_default_w = 900.f;
     constexpr float menu_default_h = 720.f;
     constexpr float menu_card_round = 26.f;   // the kit's BeginCard radius
-    constexpr float menu_side_w = 158.f;      // sidebar width inside the card
-
-    static const Glass::Icon k_menu_icons[6] = {
-        Glass::Icon::Crosshairs, Glass::Icon::Eye, Glass::Icon::Sliders,
-        Glass::Icon::Person,     Glass::Icon::Gear, Glass::Icon::Paintbrush
-    };
-    static const char* k_menu_labels[6] = { "Combat", "Visuals", "Misc", "Local", "Settings", "Customize" };
-    static const ImU32 k_menu_tints[6] = {
-        IM_COL32(10, 132, 255, 255), IM_COL32(52, 199, 89, 255), IM_COL32(255, 149, 0, 255),
-        IM_COL32(255, 69, 58, 255),  IM_COL32(94, 92, 230, 255), IM_COL32(0, 196, 160, 255)
-    };
+    constexpr float menu_side_w = 176.f;      // sidebar width inside the card
 
     // places the menu for the given open/close animation value. The position is
     // only forced while the entry animation is actually rising; once it settles
@@ -932,6 +1000,272 @@ namespace gui
     }
 
 
+    // -------------------------------------------------------------------------
+    // grouped sidebar: section labels (AIMBOT / COMMON), page rows with the
+    // kit's icons and the visuals sub-pages indented - the reference layout
+    // -------------------------------------------------------------------------
+    static void draw_grouped_sidebar(float x, float y, float w)
+    {
+        const float row_h = 36.f;
+        const float sub_row_h = 34.f;
+        ImDrawList* dl = ImGui::GetWindowDrawList();
+        float cy = y;
+
+        // a group's sub-pages only render while that group is the active one,
+        // so the rail stays short instead of always listing every sub-page
+        auto group_open = [&](int i) -> bool
+        {
+            int parent = i;
+            while (parent > 0 && k_nav[parent].sub) --parent;
+            if (s_sidebar_selected == k_nav[parent].page) return true;
+            for (int j = parent + 1; j < k_nav_count && k_nav[j].sub; ++j)
+                if (s_sidebar_selected == k_nav[j].page) return true;
+            return false;
+        };
+
+        for (int i = 0; i < k_nav_count; ++i)
+        {
+            const NavRow& n = k_nav[i];
+            if (n.sub && !group_open(i))
+                continue;
+            if (n.group)
+            {
+                cy += (i == 0) ? 0.f : 10.f;
+                const float fs = ImGui::GetFontSize() * 0.76f;
+                float gx = x + 12.f;
+                for (const char* p = n.group; *p; ++p)
+                {
+                    char ch[2] = { (char)toupper((unsigned char)*p), 0 };
+                    dl->AddText(ImGui::GetFont(), fs, ImVec2(gx, cy + 5.f),
+                                IM_COL32(134, 136, 148, 255), ch);
+                    gx += ImGui::GetFont()->CalcTextSizeA(fs, FLT_MAX, 0.f, ch).x + 1.f;
+                }
+                cy += 24.f;
+            }
+
+            const float h = n.sub ? sub_row_h : row_h;
+            const float ix = x + (n.sub ? 24.f : 6.f);
+            const float iw = w - (n.sub ? 30.f : 6.f);
+
+            ImGui::SetCursorScreenPos(ImVec2(ix, cy));
+            ImGui::PushID(i);
+            ImGui::InvisibleButton("##nav", ImVec2(iw, h));
+            const bool hov = ImGui::IsItemHovered();
+            const bool pick = ImGui::IsItemDeactivated() && hov;
+            const ImGuiID nid = ImGui::GetID("##nav");
+            ImGui::PopID();
+
+            const float dt = ImGui::GetIO().DeltaTime;
+            Glass::Spring& hv = Glass::g->springs().Get((uint32_t)nid, 30, Glass::SpringStyle::Critical, 0.f);
+            hv.target = hov ? 1.f : 0.f;
+            hv.Tick(dt);
+            Glass::Spring& sel = Glass::g->springs().Get((uint32_t)nid, 31, Glass::SpringStyle::Critical, 0.f);
+            sel.target = (s_sidebar_selected == n.page) ? 1.f : 0.f;
+            sel.Tick(dt);
+
+            float plate = hv.x * 0.45f;
+            if (sel.x > plate) plate = sel.x;
+            if (plate > 1.f) plate = 1.f;
+
+            if (plate > 0.01f)
+            {
+                Glass::Primitive p{};
+                p.cx = ix + iw * 0.5f;
+                p.cy = cy + h * 0.5f;
+                p.hw = iw * 0.5f;
+                p.hh = h * 0.5f - 1.f;
+                p.corner_radius = 10.f;
+                p.fade = plate;
+                p.material = Glass::Material::Thin;
+                Glass::g->Submit(p);
+            }
+
+            // the active page gets the reference's purple accent bar on the
+            // left edge of its plate
+            if (sel.x > 0.01f)
+            {
+                const float* ac = Glass::EditParams(Glass::Material::Accent).tint_rgb;
+                const float bar_h = 18.f;
+                dl->AddRectFilled(
+                    ImVec2(ix + 1.f, cy + (h - bar_h) * 0.5f),
+                    ImVec2(ix + 4.f, cy + (h + bar_h) * 0.5f),
+                    IM_COL32((int)(ac[0] * 255.f), (int)(ac[1] * 255.f),
+                             (int)(ac[2] * 255.f), (int)(255.f * sel.x)), 1.5f);
+            }
+
+            const bool on = (s_sidebar_selected == n.page);
+            Glass::DrawIcon(dl, n.icon, ImVec2(ix + 20.f, cy + h * 0.5f), 13.f,
+                            on ? IM_COL32(238, 239, 245, 255) : IM_COL32(148, 150, 162, 255), 2.f);
+            dl->AddText(ImVec2(ix + 40.f, cy + (h - ImGui::GetTextLineHeight()) * 0.5f),
+                        on ? IM_COL32(238, 239, 245, 255) : IM_COL32(178, 180, 192, 255),
+                        n.label);
+
+            if (pick && n.page != s_sidebar_selected)
+                s_sidebar_selected = n.page;
+
+            cy += h + 1.f;
+        }
+    }
+
+    // profile card pinned to the bottom of the sidebar (the reference has one)
+    // - clicking it opens the reference's profile menu
+    static void draw_profile_card(float x, float y, float w)
+    {
+        using namespace ng_tabs;
+
+        const float h = 54.f;
+
+        ImGui::SetCursorScreenPos(ImVec2(x, y));
+        ImGui::PushID("##profile");
+        ImGui::InvisibleButton("##open", ImVec2(w, h));
+        const bool hov = ImGui::IsItemHovered();
+        if (ImGui::IsItemDeactivated() && hov)
+            ImGui::OpenPopup("##profile_pop");
+
+        Glass::Primitive p{};
+        p.cx = x + w * 0.5f;
+        p.cy = y + h * 0.5f;
+        p.hw = w * 0.5f;
+        p.hh = h * 0.5f;
+        p.corner_radius = 14.f;
+        p.fade = hov ? 1.f : 0.85f;
+        p.material = Glass::Material::Thin;
+        Glass::g->Submit(p);
+
+        ImDrawList* dl = ImGui::GetWindowDrawList();
+        const ImVec2 ac(x + 26.f, y + h * 0.5f);
+        dl->AddCircleFilled(ac, 17.f, IM_COL32(240, 214, 88, 255), 32);
+        Glass::DrawIcon(dl, Glass::Icon::Person, ac, 15.f, IM_COL32(72, 60, 20, 255), 2.f);
+
+        dl->AddText(ImVec2(x + 52.f, y + 13.f), IM_COL32(236, 237, 243, 255), "ardvark");
+        dl->AddText(ImVec2(x + 52.f, y + 29.f), IM_COL32(138, 140, 152, 255), "Lifetime");
+        Glass::DrawIcon(dl, Glass::Icon::ChevronR, ImVec2(x + w - 16.f, y + h * 0.5f), 6.f,
+                        IM_COL32(150, 152, 164, 220), 2.f);
+
+        // ----------------------------------------------------------------
+        // profile menu (the reference's popup): quick access to the menu
+        // key, accent, density and the glass switches
+        // ----------------------------------------------------------------
+        static const std::vector<const char*> k_design = { "compact", "default", "spacious" };
+
+        auto& gui = Cheat::g_Settings.gui;
+
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 16.f);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(12.f, 10.f));
+        ImGui::PushStyleVar(ImGuiStyleVar_PopupBorderSize, 1.f);
+        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0.f, 0.f));
+        ImGui::PushStyleColor(ImGuiCol_PopupBg, ImVec4(0.055f, 0.055f, 0.068f, 0.985f));
+        ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(1.f, 1.f, 1.f, 0.10f));
+        // fixed size: it is a solid dark panel (not a glass primitive - glass is
+        // drawn in a single pass before all ImGui geometry, so a glass popup
+        // plate would let the card's own labels show through it)
+        ImGui::SetNextWindowSize(ImVec2(272.f, 8.f * k_row_h + 20.f), ImGuiCond_Always);
+        if (ImGui::BeginPopup("##profile_pop"))
+        {
+            // solid panel: rows highlight with ImGui chrome, not a glass plate
+            rows_use_imgui_chrome(true);
+
+            row_keybind_simple("##pm_key", "Menu Key", &menu_kb);
+            row_color("Style", gui.accent);
+            if (row_button("Upload Profile Picture"))
+            {
+                // no avatar pipeline yet - the row is honest about it
+            }
+            row_combo("Design", &gui.density, k_design);
+            row_checkbox("Glass", &gui.glass_on);
+            bool blur_on = gui.blur > 0.f;
+            if (row_checkbox("Blur", &blur_on))
+                gui.blur = blur_on ? 90.f : 0.f;
+            row_checkbox("Dark Background", &gui.dim_backdrop);
+            row_placeholder("Snow Effect");
+
+            ImGui::EndPopup();
+        }
+        ImGui::PopStyleColor(2);
+        ImGui::PopStyleVar(4);
+        ImGui::PopID();
+        rows_use_imgui_chrome(false);   // unconditional: restores the default for every other row
+
+        ImGui::SetCursorScreenPos(ImVec2(x, y + h));
+    }
+
+    // config selector in the page header ("No config" in the reference)
+    static void draw_config_selector(float x, float y, float w)
+    {
+        const float h = 34.f;
+        static char  s_current[64] = "default";
+        static char  s_items[64][128]{};
+        static int   s_count = 0;
+        static float s_refresh_at = 0.f;
+
+        const float now = (float)ImGui::GetTime();
+        if (now >= s_refresh_at)
+        {
+            std::vector<std::string> list = Cheat::Config::List();
+            s_count = 0;
+            for (int i = 0; i < (int)list.size() && s_count < 64; ++i)
+            {
+                snprintf(s_items[s_count], 128, "%s", list[i].c_str());
+                s_count++;
+            }
+            s_refresh_at = now + 1.f;
+        }
+
+        ImGui::SetCursorScreenPos(ImVec2(x, y));
+        ImGui::PushID("##cfg_sel");
+        ImGui::InvisibleButton("##box", ImVec2(w, h));
+        const bool hov = ImGui::IsItemHovered();
+        if (ImGui::IsItemDeactivated() && hov)
+            ImGui::OpenPopup("##cfg_pop");
+        const ImGuiID id = ImGui::GetID("##box");
+        ImGui::PopID();
+
+        Glass::Spring& hv = Glass::g->springs().Get((uint32_t)id, 40, Glass::SpringStyle::Critical, 0.f);
+        hv.target = hov ? 1.f : 0.f;
+        hv.Tick(ImGui::GetIO().DeltaTime);
+
+        ImDrawList* dl = ImGui::GetWindowDrawList();
+        dl->AddRectFilled(ImVec2(x, y), ImVec2(x + w, y + h),
+                          IM_COL32(255, 255, 255, (int)(16.f + 14.f * hv.x)), 10.f);
+        dl->AddRect(ImVec2(x, y), ImVec2(x + w, y + h),
+                    IM_COL32(255, 255, 255, (int)(24.f + 18.f * hv.x)), 10.f);
+        dl->AddText(ImVec2(x + 14.f, y + (h - ImGui::GetTextLineHeight()) * 0.5f),
+                    IM_COL32(236, 237, 243, 255), s_current);
+        Glass::DrawIcon(dl, Glass::Icon::ChevronD, ImVec2(x + w - 18.f, y + h * 0.5f), 6.f,
+                        IM_COL32(160, 162, 174, 255), 2.f);
+
+        ImGui::PushStyleColor(ImGuiCol_PopupBg, ImVec4(0.07f, 0.075f, 0.09f, 0.985f));
+        ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(1.f, 1.f, 1.f, 0.08f));
+        ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(1.f, 1.f, 1.f, 0.10f));
+        ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(1.f, 1.f, 1.f, 0.16f));
+        ImGui::PushStyleVar(ImGuiStyleVar_PopupRounding, 10.f);
+        ImGui::PushStyleVar(ImGuiStyleVar_PopupBorderSize, 1.f);
+        ImGui::SetNextWindowPos(ImVec2(x, y + h + 4.f));
+        if (ImGui::BeginPopup("##cfg_pop"))
+        {
+            if (s_count == 0)
+                ImGui::TextUnformatted("no configs yet");
+
+            for (int i = 0; i < s_count; ++i)
+            {
+                ImGui::PushID(i);
+                if (ImGui::Selectable(s_items[i], strcmp(s_items[i], s_current) == 0, 0,
+                                      ImVec2(w, ImGui::GetTextLineHeight() + 8.f)))
+                {
+                    if (Cheat::Config::Load(s_items[i]))
+                        snprintf(s_current, sizeof(s_current), "%s", s_items[i]);
+                    ImGui::CloseCurrentPopup();
+                }
+                ImGui::PopID();
+            }
+            ImGui::EndPopup();
+        }
+        ImGui::PopStyleVar(2);
+        ImGui::PopStyleColor(4);
+
+        ImGui::SetCursorScreenPos(ImVec2(x, y + h));
+    }
+
     // the card's interior: brand row, LiquidUI sidebar nav, page title and the
     // selected page's controls
     static void menu_card_body(float anim)
@@ -949,50 +1283,54 @@ namespace gui
         const ImVec2 o = ImGui::GetCursorScreenPos();
         const ImVec2 avail = ImGui::GetContentRegionAvail();
 
-        // brand row: spark badge + name (same as the reference dashboard card)
+        // brand row: wordmark (ExtraBold) + accent pill - the reference has no
+        // badge here, just the name and a small pill on the same baseline
         {
-            const float bs = 38.f;
-            if (Glass::g)
-            {
-                Glass::Primitive badge;
-                badge.cx = o.x + bs * 0.5f;
-                badge.cy = o.y + bs * 0.5f;
-                badge.hw = bs * 0.5f;
-                badge.hh = bs * 0.5f;
-                badge.corner_radius = 12.f;
-                badge.fade = 1.f;
-                badge.material = Glass::Material::Thin;
-                Glass::g->Submit(badge);
-            }
-            Glass::DrawIcon(wdl, Glass::Icon::Spark,
-                            ImVec2(o.x + bs * 0.5f, o.y + bs * 0.5f),
-                            bs * 0.62f, IM_COL32(236, 237, 243, 255), 2.6f);
-            wdl->AddText(ImVec2(o.x + bs + 12.f, o.y + 11.f),
-                         IM_COL32(236, 237, 243, 255), "ardvark");
+            const char* name = "ardvark";
+            ImFont* wf = fonts::proxima_soft_extrabold;
+            const float wsz = 15.f;
+            const ImVec2 ts = wf ? wf->CalcTextSizeA(wsz, FLT_MAX, 0.f, name)
+                                 : ImGui::CalcTextSize(name);
+            const float by = o.y + 27.f;
+            if (wf)
+                wdl->AddText(wf, wsz, ImVec2(o.x + 24.f, by - ts.y * 0.5f),
+                             IM_COL32(240, 241, 246, 255), name);
+            else
+                wdl->AddText(ImVec2(o.x + 24.f, by - ts.y * 0.5f),
+                             IM_COL32(240, 241, 246, 255), name);
+
+            const float* ac = Glass::EditParams(Glass::Material::Accent).tint_rgb;
+            const ImVec2 pt = ImGui::CalcTextSize("PRO");
+            const float px = o.x + 24.f + ts.x + 10.f;
+            const float pw = pt.x + 16.f, ph = 19.f;
+            wdl->AddRectFilled(ImVec2(px, by - ph * 0.5f), ImVec2(px + pw, by + ph * 0.5f),
+                               IM_COL32((int)(ac[0] * 255.f), (int)(ac[1] * 255.f),
+                                        (int)(ac[2] * 255.f), 235), 6.f);
+            wdl->AddText(ImVec2(px + 8.f, by - pt.y * 0.5f),
+                         IM_COL32(255, 255, 255, 255), "PRO");
         }
 
-        // page nav (LiquidUI sidebar, same widget the reference menu uses)
-        ImGui::SetCursorScreenPos(ImVec2(o.x, o.y + 56.f));
-        const int nav = Glass::SidebarNav("menu_nav", k_menu_icons, k_menu_labels,
-                                          k_menu_tints, 6, s_sidebar_selected,
-                                          menu_side_w - 6.f, 46.f);
-        if (nav >= 0 && nav != s_sidebar_selected)
-            s_sidebar_selected = nav;
+        // sidebar: grouped nav (AIMBOT / COMMON + the visuals sub-pages), with
+        // the profile card pinned to the bottom of the rail.
+        // NOTE: no rail plate here on purpose - the reference's sidebar is the
+        // same colour as the page body, only the active row gets a plate.
+        draw_grouped_sidebar(o.x, o.y + 54.f, menu_side_w - 8.f);
+        if (avail.y > 460.f)
+            draw_profile_card(o.x, o.y + avail.y - 58.f, menu_side_w - 8.f);
 
         // divider between the nav rail and the page
         const float sep_x = o.x + menu_side_w + 8.f;
         wdl->AddLine(ImVec2(sep_x, o.y + 2.f), ImVec2(sep_x, o.y + avail.y - 2.f), IM_COL32(0, 0, 0, 28), 1.f);
         wdl->AddLine(ImVec2(sep_x + 1.f, o.y + 2.f), ImVec2(sep_x + 1.f, o.y + avail.y - 2.f), IM_COL32(255, 255, 255, 40), 1.f);
 
-        // page: title + the tab controls
-        const float cx = sep_x + 22.f;
-        const float cw = o.x + avail.x - cx;
-        const float chh = avail.y - 38.f;
-        wdl->AddText(ImVec2(cx, o.y + 9.f), IM_COL32(236, 237, 243, 235),
-                     k_menu_labels[s_sidebar_selected]);
+        // page: config selector in the header, then the page's sections
+        const float cx = sep_x + 20.f;
+        const float cw = o.x + avail.x - cx - 4.f;
+        const float chh = avail.y - 62.f;
         if (cw > 60.f && chh > 60.f)
         {
-            ImGui::SetCursorScreenPos(ImVec2(cx, o.y + 34.f));
+            draw_config_selector(cx, o.y + 8.f, 210.f);
+            ImGui::SetCursorScreenPos(ImVec2(cx, o.y + 58.f));
             menu_tab_content(s_sidebar_selected, cw, chh);
         }
 
@@ -1016,7 +1354,11 @@ namespace gui
             // fade the whole card (panel, nav, widgets) with the open/close anim
             if (Glass::g) Glass::g->SetSubmitFade(anim);
             Glass::SetInk(IM_COL32(236, 237, 243, 255), IM_COL32(151, 154, 168, 255));
-            Glass::SetDensity(1.0f);
+            // profile menu "Design": the kit's density scale (card padding)
+            {
+                const int dens = Cheat::g_Settings.gui.density;
+                Glass::SetDensity(dens <= 0 ? 0.92f : (dens >= 2 ? 1.10f : 1.0f));
+            }
             Glass::SetWidgetScale(1.0f);
 
             if (begin_menu_card("menu"))

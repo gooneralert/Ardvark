@@ -506,6 +506,7 @@ namespace Cheat {
         }
 
         static bool s_had_text = false;
+
         LONG style = GetWindowLong(m_Hwnd, GWL_EXSTYLE);
 
         if (want_text)

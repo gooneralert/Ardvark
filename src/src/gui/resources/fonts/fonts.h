@@ -6,6 +6,7 @@
 
 namespace fonts {
     extern ImFont* proxima_soft_bold;
+    extern ImFont* proxima_soft_extrabold;  // wordmark only
     extern ImFont* fredoka_one;
     extern ImFont* imgui;
     extern ImFont* tahoma_bold;
@@ -23,7 +24,9 @@ namespace fonts {
     void load(ImGuiIO& io);
 
     inline ImFont* by_index(int index) {
-		// 0 prox soft bold, 1 fredoka, 2 tahoma bold, 3 proggy clean, 4 visitor, 5 verdana, 6 segoe ui, 7 imgui default
+		// 0 prox soft bold, 1 fredoka, 2 tahoma bold, 3 proggy clean, 4 visitor,
+		// 5 verdana, 6 segoe ui, 7 imgui default, 8 prox soft extrabold
+		// (new weights are appended so saved `gui.font` values keep working)
         switch (index) {
         case 0: if (proxima_soft_bold) return proxima_soft_bold; break;
         case 1: if (fredoka_one)  return fredoka_one;  break;
@@ -33,6 +36,7 @@ namespace fonts {
         case 5: if (verdana)      return verdana;      break;
         case 6: if (imgui)        return imgui;        break;
         case 7: if (menu)         return menu;         break;
+        case 8: if (proxima_soft_extrabold) return proxima_soft_extrabold; break;
         default: break;
         }
 

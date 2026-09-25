@@ -444,7 +444,20 @@ void Renderer::BeginFrame(int win_w, int win_h, int win_x, int win_y,
 size_t Renderer::Submit(const Primitive& p) {
     queue_.push_back(p);
     Primitive& q = queue_.back(); q.fade *= submit_fade_;
-    q.clip[0] = clip_[0]; q.clip[1] = clip_[1]; q.clip[2] = clip_[2]; q.clip[3] = clip_[3];
+    // Each primitive is scissored to the region its own window/child is
+    // allowed to paint into - the exact rect ImGui clips its own text and
+    // shapes to. The global clip_ below is a single rect for the whole frame
+    // and was therefore last-write-wins: a row that ran past its panel still
+    // painted on top of the card (knobs and plates visible outside the menu,
+    // their labels missing because ImGui *did* clip the text).
+    float x0 = clip_[0], y0 = clip_[1], x1 = clip_[2], y1 = clip_[3];
+    if (ImGui::GetCurrentContext() != nullptr && ImGui::GetCurrentWindowRead() != nullptr) {
+        const ImVec2 cmin = ImGui::GetWindowDrawList()->GetClipRectMin();
+        const ImVec2 cmax = ImGui::GetWindowDrawList()->GetClipRectMax();
+        x0 = std::max(x0, cmin.x); y0 = std::max(y0, cmin.y);
+        x1 = std::min(x1, cmax.x); y1 = std::min(y1, cmax.y);
+    }
+    q.clip[0] = x0; q.clip[1] = y0; q.clip[2] = x1; q.clip[3] = y1;
     return queue_.size() - 1;
 }
 Primitive& Renderer::At(size_t i) { return queue_[i]; }

@@ -1,4 +1,4 @@
-// -----------------------------------------------------------------------------
+﻿// -----------------------------------------------------------------------------
 // glass.cpp - frosted "liquid glass" for every overlay window.
 //
 // The old OS-compositor backdrop this file used to build (DirectComposition
@@ -171,15 +171,24 @@ namespace glass
             const float frost = clampf(g_frost, 0.f, 1.f);
             const float ta    = clampf(g_tint[3], 0.f, 1.f);
 
-            const float blur_mix = clampf(std::sqrt(blur) * 1.15f, 0.05f, 1.f);
-            const float opacity  = (0.25f + 0.55f * frost) * ta;
+            // profile menu switches: "Glass" off drops the material to a flat
+            // dark sheet with no blur at all, "Blur" off keeps the desktop
+            // sharp behind the tint
+            const bool glass_on = gui.glass_on;
+            const bool blur_on  = gui.blur > 0.01f;
 
-            // the "Customize" tab owns these live knobs (defaults keep the
-            // look identical to the old frost-derived values)
+            const float blur_mix = (glass_on && blur_on)
+                                 ? clampf(std::sqrt(blur) * 1.15f, 0.05f, 1.f) : 0.f;
+            const float opacity  = clampf((0.25f + 0.55f * frost) * ta * (glass_on ? 1.f : 1.35f),
+                                          0.f, 1.f);
+
+            // the "Customize" tab owns these live knobs; every default is zero
+            // because the panels are a flat 2D sheet - blur + tint only, no
+            // refraction, lighting, specular or rim
             Glass::SetGlobalMaterial(blur_mix, opacity,
                                      clampf(gui.glass_sat, 0.3f, 3.f),
-                                     clampf(gui.glass_refr, 0.f, 60.f),
-                                     clampf(gui.glass_chroma, 0.f, 8.f),
+                                     glass_on ? clampf(gui.glass_refr, 0.f, 60.f) : 0.f,
+                                     glass_on ? clampf(gui.glass_chroma, 0.f, 8.f) : 0.f,
                                      clampf(gui.glass_edge, 0.f, 1.f),
                                      clampf(gui.glass_shadow, 0.f, 1.f));
             Glass::SetAccent(gui.accent[0], gui.accent[1], gui.accent[2]);
@@ -196,6 +205,12 @@ namespace glass
             ec.grain_amt    = clampf(gui.grain, 0.f, 4.f);
             ec.ambient_rim  = clampf(gui.ambient_rim, 0.f, 2.f);
             ec.panel_rim_angle = 135.f;
+            // flat 2D: the only edge left is a hairline "lip". There is no
+            // bevel lighting, no depth shadow and no cross-panel light bleed -
+            // `lip` is not scaled by `highlight`, so it must be zeroed/set here.
+            ec.lip          = glass_on ? 0.06f : 0.f;
+            ec.light_height = 0.f;
+            ec.edge_shadow  = 0.f;
             Glass::g->SetEdgeConfig(ec);
 
             // the Settings-tab tint swatch drives the panel wash. SetGlobal
@@ -213,6 +228,25 @@ namespace glass
                 mp.tint_rgb[0] = tr;
                 mp.tint_rgb[1] = tg;
                 mp.tint_rgb[2] = tb;
+            }
+
+            // ---- flat, dark panel tuning ------------------------------------
+            // The kit's stock panel materials carry a lot of inner shadow,
+            // border rim and sheen - that is the "3D" look. These pin the
+            // three panel materials to the flat reference look and drop the
+            // sampled backdrop slightly so the glass reads dark instead of
+            // washed out. Written after SetAppearance(), which restores the
+            // per-material defaults, so this always wins; the Customize tab
+            // still owns the effect knobs on top of it.
+            for (Glass::Material m : tinted)
+            {
+                Glass::MaterialParams& mp = Glass::EditParams(m);
+                mp.inner_shadow     = 0.f;
+                mp.border_intensity = 0.f;
+                mp.border_width     = 0.8f;
+                mp.sheen            = 0.f;
+                mp.grain            = 0.f;
+                mp.brightness       = -0.10f;
             }
         }
 
