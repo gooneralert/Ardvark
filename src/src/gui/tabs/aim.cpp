@@ -175,26 +175,25 @@ namespace
 
 		row_placeholder("Health Check");
 
-		row_checkbox("Sticky Aim", &cfg.sticky);
+        row_checkbox("Sticky Aim", &cfg.sticky);
 
-		// the reference's second marker row: everything about *how* a target
-		// gets picked hangs off it
-		{
-			static bool s_rage_open = false;
-			static bool s_rage_on = false;
-			row_checkbox_expand("Rage Method", &s_rage_on, &s_rage_open);
-			if (s_rage_open)
-			{
-				row_combo("Target Select", &cfg.target_select, k_target);
-				if (row_multicombo("##parts", "Parts", cfg.parts, k_part_names))
-					cfg.SyncTiersFromParts();
-				row_combo("Part Select", &cfg.part_select, k_part_sel);
-				row_combo("Aim Pos", &cfg.fov_position, k_pos);
-				if (Cheat::Visuals::HavocWorldEsp::IsActivePlace())
-					row_checkbox("Target Bots", &Cheat::g_Settings.aim.target_bots);
-			}
-		}
-
+        // the reference's second marker row: everything about *how* a target
+        // gets picked hangs off it
+        {
+            static bool s_rage_open = false;
+            static bool s_rage_on = false;
+            row_checkbox_expand("Rage Method", &s_rage_on, &s_rage_open);
+            if (s_rage_open)
+            {
+                row_combo("Target Select", &cfg.target_select, k_target);
+                if (row_multicombo("##parts", "Parts", cfg.parts, k_part_names))
+                    cfg.SyncTiersFromParts();
+                row_combo("Part Select", &cfg.part_select, k_part_sel);
+                row_combo("Aim Pos", &cfg.fov_position, k_pos);
+                if (Cheat::Visuals::HavocWorldEsp::IsActivePlace())
+                    row_checkbox("Target Bots", &Cheat::g_Settings.aim.target_bots);
+            }
+        }
 		row_placeholder("Resolver");
 	}
 
@@ -276,9 +275,9 @@ namespace
 			}
 		}
 
-		// the reference's `Field Of View` row: a filled white square as the
-		// master control, plus a chevron that expands the sub-settings
-		if (expand_row("Field Of View", &s_fov_open, &cfg.fov_enabled))
+        // the reference's `Field Of View` row: green switch as the master,
+        // plus a chevron that expands the sub-settings (MATCHA_UI_SPEC §5.1)
+        if (expand_row_switch("Field Of View", &s_fov_open, &cfg.fov_enabled, /*green=*/true))
 		{
 			static const std::vector<const char*> k_fov_style = { "Circle", "Filled" };
 			row_combo("FOV Style", &cfg.fov_style, k_fov_style);

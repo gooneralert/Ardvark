@@ -26,8 +26,8 @@ namespace menu_icons
         Clock,   // Trigger  - watch face + two hands
         Eye,     // Visuals  - lens outline + pupil
         Globe,   // World    - sphere, equator and meridian
-        Folder,  // folder outline
-        Chat,    // speech bubble
+        Folder,  // NPC      - folder outline
+        Chat,    // Teams    - speech bubble
         Flag,    // Teams    - pennant on a staff
         Sliders  // Options  - three rails with knobs
     };
@@ -218,7 +218,6 @@ namespace menu_icons
             dl->AddLine(at(c, k, 6.4f, 0.6f), at(c, k, -5.6f, 0.6f), col, th);
             break;
         }
-
         case Kind::Sliders:
         {
             // three 13 px rails with a filled knob each (the reference's

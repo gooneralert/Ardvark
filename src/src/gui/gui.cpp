@@ -78,7 +78,7 @@ namespace gui
         { nullptr,  "Extras",    menu_icons::Kind::Spark,   page_extras,    true  },
         { nullptr,  "World",     menu_icons::Kind::Globe,   page_world,     false },
         { nullptr,  "Character", menu_icons::Kind::Person,  page_character, false },
-        { nullptr,  "NPC",       menu_icons::Kind::Person,  page_npc,       false },
+        { nullptr,  "NPC",       menu_icons::Kind::Folder,  page_npc,       false },
         { nullptr,  "Teams",     menu_icons::Kind::Flag,    page_teams,     false },
         { nullptr,  "Options",   menu_icons::Kind::Sliders, page_options,   false },
     };

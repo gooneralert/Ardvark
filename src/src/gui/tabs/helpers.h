@@ -10,14 +10,14 @@ namespace ng_tabs
 
 	// control-column metrics, taken from the reference menu: every row is
 	// label-left / control-right, and the controls line up in one column
-	constexpr float k_row_h    = 41.f;   // row pitch (reference: 41 px)
-	constexpr float k_ctl_h    = 24.f;   // slider value box height
-	constexpr float k_switch_h = 18.f;   // switch height (14 px thumb, 2 px inset)
-	constexpr float k_switch_w = 34.f;
-	constexpr float k_box_w    = 46.f;   // slider value box
-	constexpr float k_track_w  = 100.f;  // slider track (gradient fill)
-	constexpr float k_drop_w   = 132.f;  // dropdown value box
-	constexpr float k_drop_h   = 26.f;   // dropdown height (taller than a switch)
+    constexpr float k_row_h    = 41.f;   // row pitch (reference: 41 px)
+    constexpr float k_ctl_h    = 24.f;   // slider value box height
+    constexpr float k_switch_h = 18.f;   // switch height (14 px thumb, 2 px inset)
+    constexpr float k_switch_w = 34.f;
+    constexpr float k_box_w    = 46.f;   // slider value box
+    constexpr float k_track_w  = 100.f;  // slider track (gradient fill)
+    constexpr float k_drop_w   = 132.f;  // dropdown value box
+    constexpr float k_drop_h   = 26.f;   // dropdown height (taller than a switch)
 	constexpr float k_swatch_w = 24.f;   // color swatch (square)
 	constexpr float k_dots_w = 26.f;   // the "..." marker column (rows with sub-options)
 

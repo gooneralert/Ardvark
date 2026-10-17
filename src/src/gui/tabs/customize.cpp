@@ -41,28 +41,20 @@ void ng_tabs::accent_palette(float accent[4])
 			accent[0] = pal[i].r; accent[1] = pal[i].g; accent[2] = pal[i].b;
 			sel = i;
 		}
-		static std::unordered_map<uint64_t, float> s_ss, s_sr;
-		const float sdt = (io.DeltaTime > 0.f && io.DeltaTime < 0.1f) ? io.DeltaTime : 1.f / 60.f;
-		auto spring_tick = [&](std::unordered_map<uint64_t, float>& pool, uint64_t k,
-		                       float target, float speed) -> float {
-			float& x = pool[k];
-			x += (target - x) * (1.f - std::exp(-speed * sdt));
-			if (std::fabs(target - x) < 0.002f) x = target;
-			return x;
-		};
-		const uint64_t swid = (uint64_t)ImGui::GetID("sw");
-		const float ssx = spring_tick(s_ss, swid, act ? 0.86f : (hov ? 1.18f : 1.0f), 18.f);
-		const float srx = spring_tick(s_sr, swid, (sel == i) ? 1.0f : 0.0f, 18.f);
-		ImGui::PopID();
-		float rad = sw * 0.5f * clampf(ssx, 0.8f, 1.25f);
+        Glass::Spring& ss = Glass::g->springs().Get((uint32_t)ImGui::GetID("sw"), 1, Glass::SpringStyle::Bouncy, 1.0f);
+        ss.target = act ? 0.86f : (hov ? 1.18f : 1.0f); ss.Tick(io.DeltaTime);
+        Glass::Spring& sr = Glass::g->springs().Get((uint32_t)ImGui::GetID("sw"), 2, Glass::SpringStyle::Bouncy, sel == i ? 1.0f : 0.0f);
+        sr.target = (sel == i) ? 1.0f : 0.0f; sr.Tick(io.DeltaTime);
+        ImGui::PopID();
+        float rad = sw * 0.5f * clampf(ss.x, 0.8f, 1.25f);
 		ImU32 col = IM_COL32((int)(pal[i].r * 255), (int)(pal[i].g * 255), (int)(pal[i].b * 255), 255);
 		if (hov) sd->AddCircleFilled(ImVec2(cx, cy + 2.0f), rad + 1.5f, IM_COL32(0, 0, 0, 45));
 		sd->AddCircleFilled(ImVec2(cx, cy), rad, col);
 		sd->AddCircleFilled(ImVec2(cx - rad * 0.28f, cy - rad * 0.32f), rad * 0.42f, IM_COL32(255, 255, 255, 55));
-		float k = clampf(srx, 0.0f, 1.0f);
-		if (k > 0.01f)
-		{
-			sd->AddCircle(ImVec2(cx, cy), rad + 2.0f + 3.0f * k, IM_COL32(236, 237, 243, 255), 0, 1.6f + 1.0f * k);
+        float k = clampf(sr.x, 0.0f, 1.0f);
+        if (k > 0.01f)
+        {
+            sd->AddCircle(ImVec2(cx, cy), rad + 2.0f + 3.0f * k, Glass::InkColor(), 0, 1.6f + 1.0f * k);
 			float m = rad * 0.40f * k;
 			ImU32 wcol = IM_COL32(255, 255, 255, (int)(235 * k));
 			sd->AddLine(ImVec2(cx - m, cy + m * 0.05f), ImVec2(cx - m * 0.15f, cy + m * 0.7f), wcol, 2.2f);

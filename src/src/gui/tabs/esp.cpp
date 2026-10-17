@@ -362,7 +362,7 @@ void ng_tabs::draw_esp_tab()
 			// flat plate wash (not a glass layer - see begin_section): the pane is
 			// part of the card, so a second glass layer would tint it differently
 			// than the rest of the menu
-			const float a = ImGui::GetStyle().Alpha;
+            const float a = Glass::g ? Glass::g->SubmitFadeValue() : ImGui::GetStyle().Alpha;
 			ImDrawList* dl = ImGui::GetWindowDrawList();
 			const ImVec2 pe(po.x + pw, po.y + ph);
 			dl->AddRectFilled(po, pe, IM_COL32(255, 255, 255, (int)(6.f * a)), 14.f);
