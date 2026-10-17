@@ -2,10 +2,11 @@
 #include "helpers.h"
 #include "../widgets/widgets.h"
 #include "../widgets/text.h"
-#include "../glass.h"
-#include "../liquid_ui.h"
+#include "../menu_icons.h"   // rail/row chevrons drawn as geometry
+#include "app/Settings.h"    // Cheat::g_Settings.gui.accent - the live accent
 #include "imgui.h"
 #include <cstdio>
+#include <cmath>
 #include <vector>
 #include <unordered_map>
 #include <windows.h>
@@ -15,12 +16,45 @@ namespace ng_tabs
 	static const ImVec4 k_border = ImVec4(0.18f, 0.18f, 0.18f, 1.f);
 
 	// -------------------------------------------------------------------------
-	// LiquidUI mode: when the glass renderer is live every control renders
-	// through the vendored LiquidUI widget kit - the same widgets the reference
-	// app uses (RowToggle, Slider, Dropdown, Chip, ...). When it is unavailable
-	// we fall back to the legacy ImGui widgets so the menu stays usable.
+	// Reference-styled rows. The main menu now renders in its own window (see
+	// gui/menu_window.cpp + gui/matcha/matcha_menu.cpp) instead of inside the
+	// overlay's LiquidUI glass pass, so this kit is fully self-contained: the
+	// accent comes from the settings, the hover/reveal motion is a small local
+	// spring, and the ink colours are the reference's fixed greys. Nothing here
+	// touches the LiquidUI renderer any more.
 	// -------------------------------------------------------------------------
-	bool glass_mode() { return glass::ready() && Glass::g != nullptr; }
+	struct Spring { float x = 0.f; float target = 0.f; };
+
+	Spring& spring_for(ImGuiID id, int order, float init)
+	{
+		static std::unordered_map<uint64_t, Spring> pool;
+		const uint64_t key = (uint64_t)id * 131u + (uint64_t)(order + 1);
+		auto it = pool.find(key);
+		if (it == pool.end())
+		{
+			Spring s; s.x = init; s.target = init;
+			it = pool.emplace(key, s).first;
+		}
+		return it->second;
+	}
+
+	void spring_tick(Spring& s, float speed = 13.f)
+	{
+		float dt = ImGui::GetIO().DeltaTime;
+		if (dt <= 0.f || dt > 0.1f) dt = 1.f / 60.f;
+		s.x += (s.target - s.x) * (1.f - std::exp(-speed * dt));
+		if (std::fabs(s.target - s.x) < 0.002f) s.x = s.target;
+	}
+
+	inline ImU32 ink()      { return IM_COL32(236, 237, 243, 255); }
+	inline ImU32 ink_soft() { return IM_COL32(151, 154, 168, 255); }
+
+	inline const float* accent_rgb() { return Cheat::g_Settings.gui.accent; }
+
+	// The pages only ever render in the menu window, so the reference-styled
+	// rows are always used (the legacy ImGui fallback path stays compiled in
+	// for the non-menu callers, it is just never taken any more).
+	bool glass_mode() { return true; }
 
 	// Rows are normally highlighted with a glass hover plate. Inside a *solid*
 	// popup (the profile menu) that plate would be invisible: the whole glass
@@ -45,10 +79,9 @@ namespace ng_tabs
 
 		RowAnim row_anim(const char* key, float rise = 10.f)
 		{
-			Glass::Spring& sp = Glass::g->springs().Get((uint32_t)ImGui::GetID(key), 40,
-			                                           Glass::SpringStyle::Overdamped, 0.f);
+			Spring& sp = spring_for(ImGui::GetID(key), 40, 0.f);
 			sp.target = 1.f;
-			sp.Tick(ImGui::GetIO().DeltaTime);
+			spring_tick(sp, 9.f);
 			const float a = clamp01(sp.x);
 			return RowAnim{ a, (1.f - a) * rise };
 		}
@@ -94,6 +127,7 @@ namespace ng_tabs
 			float  h        = k_row_h;
 			float  a        = 1.f;   // reveal animation
 			float  hover    = 0.f;
+			float  on       = 0.f;   // master-switch state (0..1, springed)
 			float  ctl_x    = 0.f;   // left edge of the control column
 			float  ctl_w    = 0.f;
 			bool   hovered  = false;
@@ -112,15 +146,79 @@ namespace ng_tabs
 			return IM_COL32(r, g, bl, al);
 		}
 
-		// the accent the LiquidUI kit currently uses (accent palette swatch)
-		ImU32 accent_col(float a)
+		// The reference paints every "on" control with a two-stop gradient, not
+		// a flat colour: violet at the left edge through to magenta at the
+		// right. The second stop is derived from the live accent so switching
+		// the accent swatch keeps the gradient shape (see MATCHA_UI_SPEC §2).
+		ImU32 accent_grad(float t, float a)
 		{
-			const float* c = Glass::EditParams(Glass::Material::Accent).tint_rgb;
-			return IM_COL32((int)(c[0] * 255.f), (int)(c[1] * 255.f), (int)(c[2] * 255.f),
+			const float* c = accent_rgb();
+			const float e[3] = { clamp01(c[0] * 1.35f), clamp01(c[1] * 0.55f), clamp01(c[2] * 0.95f) };
+			t = clamp01(t);
+			const float ia = 1.f - t;
+			return IM_COL32((int)((c[0] * ia + e[0] * t) * 255.f),
+			                (int)((c[1] * ia + e[1] * t) * 255.f),
+			                (int)((c[2] * ia + e[2] * t) * 255.f),
 			                (int)(255.f * clamp01(a)));
 		}
 
-		Row row_begin(const char* label, float h, float ctl_w, const char* anim_key)
+		// rounded rect filled with the accent gradient, sampled between two
+		// stops of a normalised span (0 = track start, 1 = track end)
+		void accent_rect(ImDrawList* dl, const ImVec2& mn, const ImVec2& mx,
+		                 float t0, float t1, float rounding, float a)
+		{
+			dl->AddRectFilledMultiColorRounded(mn, mx, accent_grad(t0, a), accent_grad(t1, a),
+			                                   accent_grad(t1, a), accent_grad(t0, a), rounding);
+		}
+
+		// a row's master switch track: flat "off" wash, then either the accent
+		// gradient or a flat on-colour cross-faded in as the switch springs on.
+		// The reference's off track is a clearly visible mid grey, not a hint of
+		// one - it reads as a filled pill even when the feature is off.
+		void switch_track(ImDrawList* dl, const ImVec2& t0, const ImVec2& t1,
+		                  float rounding, float on, float a, ImU32 flat_on)
+		{
+			const ImU32 off = IM_COL32(255, 255, 255, (int)(60 * a));
+			dl->AddRectFilled(t0, t1, off, rounding);
+			if (on <= 0.002f)
+				return;
+			if (flat_on == 0)
+				accent_rect(dl, t0, t1, 0.f, 1.f, rounding, a * on);
+			else
+				dl->AddRectFilled(t0, t1, lerp_col(off, flat_on, on), rounding);
+		}
+
+		// the switch puck: grey while the track is off, white once it is on -
+		// and it slides across with the same spring that fills the track
+		void switch_thumb(ImDrawList* dl, const ImVec2& t0, const ImVec2& t1,
+		                  float on, float a)
+		{
+			const float h = t1.y - t0.y;
+			const float r = h * 0.5f - 2.f;             // 18 - 4 -> 14 px puck
+			const float cx0 = t0.x + h * 0.5f;          // left seat  (off)
+			const float cx1 = t1.x - h * 0.5f;          // right seat (on)
+			const ImVec2 kc(cx0 + (cx1 - cx0) * on, t0.y + h * 0.5f);
+			dl->AddCircleFilled(ImVec2(kc.x, kc.y + 1.f), r + 0.5f,
+			                    IM_COL32(0, 0, 0, (int)(55 * a)), 24);
+			dl->AddCircleFilled(kc, r,
+			                    ink_a(lerp_col(IM_COL32(158, 159, 170, 255),
+			                                   IM_COL32(248, 248, 252, 255), on), a), 24);
+		}
+
+		// the "..." marker: three dots laid out horizontally, left of the
+		// control column - the reference draws them in a row, not a column
+		void dots_marker(ImDrawList* dl, float cx, float cy, float a)
+		{
+			for (int i = -1; i <= 1; ++i)
+				dl->AddCircleFilled(ImVec2(cx + i * 5.f, cy), 1.4f,
+				                    IM_COL32(138, 140, 152, (int)(255 * a)), 8);
+		}
+
+		// `on_state` marks a row that owns a master switch: the reference keeps
+		// a soft plate behind every row whose feature is ON, so an enabled
+		// setting reads at a glance without looking at the switch itself.
+		Row row_begin(const char* label, float h, float ctl_w, const char* anim_key,
+		              const bool* on_state = nullptr)
 		{
 			Row r{};
 			ImGui::PushID(label ? label : "row");
@@ -145,38 +243,36 @@ namespace ng_tabs
 			r.y = r.pos.y + an.dy;
 
 			const ImGuiID id = ImGui::GetID("##row");
-			Glass::Spring& hv = Glass::g->springs().Get((uint32_t)id, 3, Glass::SpringStyle::Critical, 0.f);
+			Spring& hv = spring_for(id, 3, 0.f);
 			hv.target = (r.hovered || r.active) ? 1.f : 0.f;
-			hv.Tick(ImGui::GetIO().DeltaTime);
+			spring_tick(hv, 16.f);
 			r.hover = clamp01(hv.x);
 
-			// soft hover plate behind the row
-			if (hv.x > 0.01f)
+			if (on_state)
 			{
-				if (s_imgui_chrome)
-				{
-					ImGui::GetWindowDrawList()->AddRectFilled(
-						ImVec2(r.box.left, r.y), ImVec2(r.box.right, r.y + h),
-						IM_COL32(255, 255, 255, (int)(26.f * hv.x * r.a)), 10.f);
-				}
-				else
-				{
-					Glass::Primitive p{};
-					p.cx = r.box.left + r.box.width * 0.5f;
-					p.cy = r.y + h * 0.5f;
-					p.hw = r.box.width * 0.5f;
-					p.hh = h * 0.5f;
-					p.corner_radius = 10.f;
-					p.fade = hv.x * 0.5f * r.a;
-					p.material = Glass::Material::Thin;
-					Glass::g->Submit(p);
-				}
+				Spring& k = spring_for(id, 2, *on_state ? 1.f : 0.f);
+				k.target = *on_state ? 1.f : 0.f;
+				spring_tick(k, 16.f);
+				r.on = clamp01(k.x);
+			}
+
+			// soft plate behind the row. It is an ImGui-drawn wash, not a glass
+			// primitive: the glass pass runs before all ImGui geometry, so a
+			// glass plate would be painted *under* the section's plate wash and
+			// read as a foggy patch inside a flat box. An enabled row keeps a
+			// faint plate; hover lifts it a little further.
+			const float plate = 11.f * r.on + 10.f * hv.x;
+			if (plate > 0.4f)
+			{
+				ImGui::GetWindowDrawList()->AddRectFilled(
+					ImVec2(r.box.left, r.y), ImVec2(r.box.right, r.y + h),
+					IM_COL32(255, 255, 255, (int)(plate * r.a)), 10.f);
 			}
 
 			if (label && *label)
 				ImGui::GetWindowDrawList()->AddText(
 					ImVec2(r.box.left, r.y + (h - ImGui::GetTextLineHeight()) * 0.5f),
-					ink_a(Glass::InkColor(), r.a), label);
+					ink_a(ink(), r.a), label);
 
 			return r;
 		}
@@ -184,11 +280,13 @@ namespace ng_tabs
 		// closes the row: hairline along the bottom edge, cursor onto the next
 		void row_end(const Row& r)
 		{
+			// the rule stops at the row box (14 px inside the section plate) and
+			// is deliberately faint - it reads as a hairline, not a divider
 			if (r.a > 0.01f)
 				ImGui::GetWindowDrawList()->AddLine(
-					ImVec2(r.box.left - content_pad + 2.f, r.y + r.h - 1.f),
-					ImVec2(r.box.right + content_pad - 2.f, r.y + r.h - 1.f),
-					IM_COL32(255, 255, 255, (int)(12.f * r.a)), 1.f);
+					ImVec2(r.box.left, r.y + r.h - 1.f),
+					ImVec2(r.box.right, r.y + r.h - 1.f),
+					IM_COL32(255, 255, 255, (int)(15.f * r.a)), 1.f);
 
 			ImGui::SetCursorScreenPos(ImVec2(r.pos.x, r.pos.y + r.h));
 			ImGui::Dummy(ImVec2(0.01f, 0.01f));
@@ -198,21 +296,24 @@ namespace ng_tabs
 		// the feature switch: label left, pill switch right. `more` marks a
 		// row that owns sub-options (the reference draws "..." beside it);
 		// when `open` is given the marker is clickable and toggles it, so a
-		// row can carry hidden sub-options even while it is switched on
-		bool feature_toggle(const char* label, bool* v, bool more, bool* open = nullptr)
+		// row can carry hidden sub-options even while it is switched on.
+		// `flat_on` = 0 keeps the reference's accent gradient track; any other
+		// colour paints a flat "on" track.
+		bool feature_toggle(const char* label, bool* v, bool more, bool* open = nullptr,
+		                    ImU32 flat_on = 0)
 		{
 			const bool dots = more || (open != nullptr);
-			const float ctl_w = k_switch_w + (dots ? 26.f : 0.f);
-			Row r = row_begin(label, k_row_h, ctl_w, "tg");
+			const float ctl_w = k_switch_w + (dots ? 23.f : 0.f);
+			Row r = row_begin(label, k_row_h, ctl_w, "tg", v);
 
-			const float sw = k_switch_w, sh = k_switch_h, sp = 3.f;
+			const float sw = k_switch_w, sh = k_switch_h;
 			const float sx = r.box.right - sw;
 			const float sy = r.y + (r.h - sh) * 0.5f;
 
 			bool on_dots = false;
 			if (open && r.clicked)
 			{
-				const ImVec2 d0(sx - 26.f, r.y + 4.f), d1(sx - 4.f, r.y + r.h - 4.f);
+				const ImVec2 d0(sx - 24.f, r.y + 4.f), d1(sx - 5.f, r.y + r.h - 4.f);
 				on_dots = ImGui::IsMouseHoveringRect(d0, d1);
 			}
 			if (r.clicked)
@@ -221,57 +322,43 @@ namespace ng_tabs
 				else         *v = !*v;
 			}
 
-			const ImGuiID id = ImGui::GetID("##row");
-			Glass::Spring& k = Glass::g->springs().Get((uint32_t)id, 2, Glass::SpringStyle::Critical, *v ? 1.f : 0.f);
-			k.target = *v ? 1.f : 0.f;
-			k.Tick(ImGui::GetIO().DeltaTime);
-			const float on = clamp01(k.x);
+			const float on = r.on;
 
 			ImDrawList* dl = ImGui::GetWindowDrawList();
-			// the track fills with the accent when on; the knob is a crisp
-			// white puck drawn by ImGui rather than a glass primitive - a glass
-			// knob sitting on an accent track blended into it and the switch
-			// read as one solid blue slab with no visible thumb
-			const ImU32 track = lerp_col(IM_COL32(64, 64, 72, (int)(215 * r.a)), accent_col(r.a), on);
-			dl->AddRectFilled(ImVec2(sx, sy), ImVec2(sx + sw, sy + sh), track, sh * 0.5f);
-			dl->AddRect(ImVec2(sx, sy), ImVec2(sx + sw, sy + sh),
-			            IM_COL32(255, 255, 255, (int)(34 * r.a)), sh * 0.5f);
-
-			// the reference's switch keeps its thumb at the RIGHT end in both
-			// states - the track colour alone carries on/off
-			const ImVec2 kc(sx + sw - sh * 0.5f, sy + sh * 0.5f);
-			const float kr = sh * 0.5f - sp;
-			dl->AddCircleFilled(ImVec2(kc.x, kc.y + 1.f), kr, IM_COL32(0, 0, 0, (int)(70 * r.a)), 24);
-			dl->AddCircleFilled(kc, kr, ink_a(IM_COL32(245, 245, 248, 255), r.a), 24);
+			const ImVec2 t0(sx, sy), t1(sx + sw, sy + sh);
+			switch_track(dl, t0, t1, sh * 0.5f, on, r.a, flat_on);
+			switch_thumb(dl, t0, t1, on, r.a);
 
 			if (dots)
-			{
-				const float cx = sx - 20.f, cy = sy + sh * 0.5f;
-				for (int i = -1; i <= 1; ++i)
-					dl->AddCircleFilled(ImVec2(cx, cy + i * 5.f), 1.5f,
-					                    IM_COL32(170, 170, 182, (int)(220 * r.a)));
-			}
+				dots_marker(dl, sx - 17.f, sy + sh * 0.5f, r.a);
 
 			row_end(r);
 			return r.clicked;
 		}
 
-		// the reference's expandable rows: label left, chevron right, plus the
-		// white rounded square for rows that own a master switch. The square
-		// toggles the feature, anywhere else on the row expands it.
-		bool expand_row_impl(const char* label, bool* open, bool* check)
+		// the reference's expandable rows: label left, chevron right, plus a
+		// master control to the left of the chevron for rows that own a feature
+		// switch. The master toggles the feature, anywhere else expands the row.
+		// `master` picks the shape: none, the square checkbox (the reference's
+		// `Field Of View` control) or a pill switch.
+		enum class ExpandMaster { None, Square, Switch };
+
+		bool expand_row_impl(const char* label, bool* open, bool* check, ExpandMaster master)
 		{
-			const float ctl_w = check ? (16.f + 22.f + 8.f) : 22.f;
+			const bool has_master = (check != nullptr) && master != ExpandMaster::None;
+			const bool sw_master = (master == ExpandMaster::Switch);
+			const float master_w = !has_master ? 0.f : (sw_master ? k_switch_w + 10.f : 17.f + 10.f);
+			const float ctl_w = 20.f + master_w;
 			Row r = row_begin(label, k_row_h, ctl_w, "ex");
 
-			const float bs = 16.f;
-			const float bx = r.box.right - 22.f - bs;
+			const float bs = sw_master ? k_switch_h : 17.f;
+			const float bx = r.box.right - 20.f - bs;
 			const ImVec2 mn(bx, r.y + (r.h - bs) * 0.5f);
 			const ImVec2 mx(bx + bs, mn.y + bs);
 
 			if (r.clicked)
 			{
-				if (check && ImGui::IsMouseHoveringRect(mn, mx))
+				if (has_master && ImGui::IsMouseHoveringRect(mn, mx))
 					*check = !*check;
 				else if (open)
 					*open = !*open;
@@ -279,20 +366,35 @@ namespace ng_tabs
 
 			ImDrawList* dl = ImGui::GetWindowDrawList();
 
-			if (check)
+			if (has_master)
 			{
-				if (*check)
-					dl->AddRectFilled(mn, mx, ink_a(IM_COL32(238, 239, 245, 255), r.a), 4.f);
+				if (sw_master)
+				{
+					// a real switch: same spring + gradient as a toggle row
+					const ImGuiID id = ImGui::GetID("##row");
+					Spring& k = spring_for(id, 2, *check ? 1.f : 0.f);
+					k.target = *check ? 1.f : 0.f;
+					spring_tick(k, 16.f);
+					const float on = clamp01(k.x);
+					switch_track(dl, mn, mx, k_switch_h * 0.5f, on, r.a, 0);
+					switch_thumb(dl, mn, mx, on, r.a);
+				}
+				else if (*check)
+				{
+					// the reference's `Field Of View` master: a filled white
+					// rounded square, no tick glyph inside it
+					dl->AddRectFilled(mn, mx, ink_a(IM_COL32(243, 243, 248, 255), r.a), 5.f);
+				}
 				else
 				{
-					dl->AddRectFilled(mn, mx, IM_COL32(255, 255, 255, (int)(26 * r.a)), 4.f);
-					dl->AddRect(mn, mx, IM_COL32(255, 255, 255, (int)(70 * r.a)), 4.f);
+					dl->AddRectFilled(mn, mx, IM_COL32(255, 255, 255, (int)(26 * r.a)), 5.f);
+					dl->AddRect(mn, mx, IM_COL32(255, 255, 255, (int)(70 * r.a)), 5.f);
 				}
 			}
 
-			Glass::DrawIcon(dl, Glass::Icon::ChevronR,
-			                ImVec2(r.box.right - 8.f, r.y + r.h * 0.5f), 5.f,
-			                ink_a(Glass::InkSoftColor(), r.a), 2.f);
+			menu_icons::Chevron(dl, true,
+			                ImVec2(r.box.right - 7.f, r.y + r.h * 0.5f), 4.5f,
+			                ink_a(ink_soft(), r.a), 1.8f);
 
 			row_end(r);
 			return open ? *open : false;
@@ -305,25 +407,26 @@ namespace ng_tabs
 		void value_box(ImVec2 mn, ImVec2 mx, const char* text, float a, bool hot)
 		{
 			ImDrawList* dl = ImGui::GetWindowDrawList();
-			dl->AddRectFilled(mn, mx, IM_COL32(255, 255, 255, (int)((hot ? 28.f : 16.f) * a)), 8.f);
-			dl->AddRect(mn, mx, IM_COL32(255, 255, 255, (int)((hot ? 44.f : 26.f) * a)), 8.f);
+			// the reference's value plate is a faint wash with a hairline edge
+			dl->AddRectFilled(mn, mx, IM_COL32(255, 255, 255, (int)((hot ? 20.f : 14.f) * a)), 6.f);
+			dl->AddRect(mn, mx, IM_COL32(255, 255, 255, (int)((hot ? 34.f : 26.f) * a)), 6.f);
 			const ImVec2 ts = ImGui::CalcTextSize(text);
 			dl->AddText(ImVec2(mn.x + ((mx.x - mn.x) - ts.x) * 0.5f,
 			                   mn.y + ((mx.y - mn.y) - ts.y) * 0.5f),
-			            ink_a(Glass::InkColor(), a), text);
+			            IM_COL32(217, 219, 229, (int)(255.f * a)), text);
 		}
 
 		// the settings slider: label left, thin accent track, value box right
 		bool settings_slider(const char* label, float* v, float mn, float mx, const char* fmt)
 		{
-			const float ctl_w = k_box_w + 14.f + k_track_w;
+			const float ctl_w = k_box_w + 15.f + k_track_w;
 			Row r = row_begin(label, k_row_h, ctl_w, "sl");
 			const float old = *v;
 
 			const float bx = r.box.right - k_box_w;           // value box left
-			const float tx = bx - 14.f - k_track_w;           // track left
+			const float tx = bx - 15.f - k_track_w;           // track left
 			const float ty = r.y + r.h * 0.5f;
-			const float kr = 6.f;
+			const float kr = 6.5f;
 
 			if (r.active || r.clicked)
 			{
@@ -333,16 +436,18 @@ namespace ng_tabs
 
 			const float t = clamp01((mx != mn) ? ((*v - mn) / (mx - mn)) : 0.f);
 			ImDrawList* dl = ImGui::GetWindowDrawList();
-			dl->AddRectFilled(ImVec2(tx, ty - 2.f), ImVec2(tx + k_track_w, ty + 2.f),
-			                  IM_COL32(255, 255, 255, (int)(36 * r.a)), 2.f);
+			// empty rail is a flat mid-grey wash - the same weight as a switch
+			// track that is off; the filled part is the accent gradient sampled
+			// from the track start to the thumb
+			const ImVec2 tr0(tx, ty - 2.f), tr1(tx + k_track_w, ty + 2.f);
+			dl->AddRectFilled(tr0, tr1, IM_COL32(255, 255, 255, (int)(52 * r.a)), 2.f);
 			if (t > 0.002f)
-				dl->AddRectFilled(ImVec2(tx, ty - 2.f), ImVec2(tx + k_track_w * t, ty + 2.f),
-				                  accent_col(r.a), 2.f);
+				accent_rect(dl, tr0, ImVec2(tx + k_track_w * t, ty + 2.f), 0.f, t, 2.f, r.a);
 
 			const ImVec2 kc(tx + k_track_w * t, ty);
-			const float krr = kr * (r.active ? 1.3f : (r.hovered ? 1.12f : 1.f));
-			dl->AddCircleFilled(ImVec2(kc.x, kc.y + 1.f), krr, IM_COL32(0, 0, 0, (int)(70 * r.a)), 20);
-			dl->AddCircleFilled(kc, krr, ink_a(IM_COL32(245, 245, 248, 255), r.a), 20);
+			const float krr = kr * (r.active ? 1.25f : (r.hovered ? 1.1f : 1.f));
+			dl->AddCircleFilled(ImVec2(kc.x, kc.y + 1.f), krr + 0.5f, IM_COL32(0, 0, 0, (int)(55 * r.a)), 20);
+			dl->AddCircleFilled(kc, krr, ink_a(IM_COL32(248, 248, 252, 255), r.a), 20);
 
 			char buf[64];
 			_snprintf_s(buf, sizeof(buf), _TRUNCATE, (fmt && *fmt) ? fmt : "%.2f", *v);
@@ -365,7 +470,7 @@ namespace ng_tabs
 		{
 			bool changed = false;
 			const char* cur_val = (sel && *sel >= 0 && *sel < count) ? items[*sel] : "-";
-			const float dots_w = open ? 26.f : 0.f;
+			const float dots_w = open ? 23.f : 0.f;
 			Row r = row_begin(label, k_row_h, k_drop_w + dots_w, "dd");
 
 			ImDrawList* dl = ImGui::GetWindowDrawList();
@@ -373,8 +478,8 @@ namespace ng_tabs
 			bool on_dots = false;
 			if (open && r.clicked)
 			{
-				const ImVec2 d0(r.box.right - k_drop_w - 26.f, r.y + 4.f);
-				const ImVec2 d1(r.box.right - k_drop_w - 4.f, r.y + r.h - 4.f);
+				const ImVec2 d0(r.box.right - k_drop_w - 24.f, r.y + 4.f);
+				const ImVec2 d1(r.box.right - k_drop_w - 5.f, r.y + r.h - 4.f);
 				on_dots = ImGui::IsMouseHoveringRect(d0, d1);
 			}
 			if (r.clicked)
@@ -388,23 +493,20 @@ namespace ng_tabs
 			// right - not the centred value box the other controls share
 			{
 				const bool hot = r.hovered || ImGui::IsPopupOpen("##ddpop");
-				dl->AddRectFilled(mn, mx, IM_COL32(255, 255, 255, (int)((hot ? 28.f : 16.f) * r.a)), 8.f);
-				dl->AddRect(mn, mx, IM_COL32(255, 255, 255, (int)((hot ? 44.f : 26.f) * r.a)), 8.f);
+				// the reference's dropdown is a slightly lighter plate than the
+				// slider value box, with a hairline edge
+				dl->AddRectFilled(mn, mx, IM_COL32(255, 255, 255, (int)((hot ? 24.f : 18.f) * r.a)), 6.f);
+				dl->AddRect(mn, mx, IM_COL32(255, 255, 255, (int)((hot ? 36.f : 28.f) * r.a)), 6.f);
 
 				const ImVec2 ts = ImGui::CalcTextSize(cur_val);
-				dl->AddText(ImVec2(mn.x + 13.f, mn.y + (k_drop_h - ts.y) * 0.5f),
-				            ink_a(Glass::InkColor(), r.a), cur_val);
+				dl->AddText(ImVec2(mn.x + 12.f, mn.y + (k_drop_h - ts.y) * 0.5f),
+				            IM_COL32(217, 219, 229, (int)(255.f * r.a)), cur_val);
 			}
-			Glass::DrawIcon(dl, Glass::Icon::ChevronD, ImVec2(mx.x - 13.f, mn.y + k_drop_h * 0.5f),
-			                5.f, ink_a(Glass::InkSoftColor(), r.a), 2.f);
+			menu_icons::Chevron(dl, false, ImVec2(mx.x - 12.f, mn.y + k_drop_h * 0.5f),
+			                5.f, ink_a(ink_soft(), r.a), 1.6f);
 
 			if (open)
-			{
-				const float cx = r.box.right - k_drop_w - 20.f, cy = r.y + r.h * 0.5f;
-				for (int i = -1; i <= 1; ++i)
-					dl->AddCircleFilled(ImVec2(cx, cy + i * 5.f), 1.5f,
-					                    IM_COL32(170, 170, 182, (int)(220 * r.a)));
-			}
+				dots_marker(dl, r.box.right - k_drop_w - 17.f, r.y + r.h * 0.5f, r.a);
 
 			ImGui::PushStyleColor(ImGuiCol_PopupBg, ImVec4(0.07f, 0.075f, 0.09f, 0.985f));
 			ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(1.f, 1.f, 1.f, 0.08f));
@@ -528,20 +630,18 @@ namespace ng_tabs
 			}
 
 			ImDrawList* dl = ImGui::GetWindowDrawList();
-			if (Glass::g)
+			const ImVec2 kmin = cur;
+			const ImVec2 kmax = ImVec2(cur.x + w, cur.y + h);
+			if (listening)
+				accent_rect(dl, kmin, kmax, 0.f, 1.f, h * 0.5f, 1.f);
+			else
 			{
-				Glass::Primitive p{};
-				p.cx = cur.x + w * 0.5f;
-				p.cy = cur.y + h * 0.5f;
-				p.hw = w * 0.5f;
-				p.hh = h * 0.5f;
-				p.corner_radius = h * 0.5f;
-				p.fade = 1.f;
-				p.material = listening ? Glass::Material::Accent : Glass::Material::Thin;
-				Glass::g->Submit(p);
+				dl->AddRectFilled(kmin, kmax, IM_COL32(255, 255, 255,
+					(int)((ImGui::IsItemHovered() ? 44.f : 30.f))), h * 0.5f);
+				dl->AddRect(kmin, kmax, IM_COL32(255, 255, 255, 46), h * 0.5f);
 			}
 			dl->AddText(ImVec2(cur.x + (w - ts.x) * 0.5f, cur.y + (h - ts.y) * 0.5f),
-			            listening ? IM_COL32(255, 255, 255, 255) : Glass::InkColor(), buf);
+			            listening ? IM_COL32(255, 255, 255, 255) : ink(), buf);
 
 			ImGui::PopID();
 			return changed;
@@ -588,12 +688,51 @@ namespace ng_tabs
 				ImGui::EndPopup();
 			}
 		}
+
+		// a pill toggle used by the multi-select rows: flat wash when off, the
+		// accent gradient when on - the reference kit's Chip, drawn with the
+		// plain draw list (no LiquidUI submission)
+		bool chip(const char* label, bool selected)
+		{
+			ImGui::PushID(label);
+			const ImVec2 ts = ImGui::CalcTextSize(label);
+			const float w = ts.x + 26.f, h = 30.f;
+			const ImVec2 cur = ImGui::GetCursorScreenPos();
+			ImGui::InvisibleButton("##chip", ImVec2(w, h));
+			const bool hov = ImGui::IsItemHovered();
+			const bool clicked = ImGui::IsItemDeactivated() && hov;
+
+			ImDrawList* dl = ImGui::GetWindowDrawList();
+			const ImVec2 mn = cur, mx = ImVec2(cur.x + w, cur.y + h);
+			if (selected)
+				accent_rect(dl, mn, mx, 0.f, 1.f, h * 0.5f, 1.f);
+			else
+			{
+				dl->AddRectFilled(mn, mx, IM_COL32(255, 255, 255, hov ? 34 : 22), h * 0.5f);
+				dl->AddRect(mn, mx, IM_COL32(255, 255, 255, hov ? 60 : 42), h * 0.5f);
+			}
+			dl->AddText(ImVec2(cur.x + (w - ts.x) * 0.5f, cur.y + (h - ts.y) * 0.5f),
+			            selected ? IM_COL32(255, 255, 255, 255) : ink(), label);
+			ImGui::PopID();
+			return clicked;
+		}
 	}
 
-	// exported wrapper - the implementation lives in the anonymous namespace above
+	// exported wrappers - the implementation lives in the anonymous namespace above
 	bool expand_row(const char* label, bool* open, bool* check)
 	{
-		return expand_row_impl(label, open, check);
+		return expand_row_impl(label, open, check,
+			check ? ExpandMaster::Square : ExpandMaster::None);
+	}
+
+	// a pill-switch master instead of the square. The reference's own
+	// `Field Of View` row uses the square (expand_row), so `green` is kept
+	// only for callers that still ask for it and no longer tints anything.
+	bool expand_row_switch(const char* label, bool* open, bool* check, bool green)
+	{
+		(void)green;
+		return expand_row_impl(label, open, check,
+			check ? ExpandMaster::Switch : ExpandMaster::None);
 	}
 
 	void pad()
@@ -616,9 +755,11 @@ namespace ng_tabs
 	{
 		if (glass_mode())
 		{
-			// same geometry as the legacy panel, but the chrome is a LiquidUI
-			// Thin plate and the rows are kit widgets. The renderer clip keeps
-			// glass primitives inside the panel (dropdown lists, scrolling...)
+			// same geometry as the legacy panel, but the chrome is the reference's
+			// flat plate wash (MATCHA_UI_SPEC §4.5: rgba(255,255,255,0.022) fill
+			// + a 1 px rgba(255,255,255,0.04) edge). It is deliberately NOT a
+			// glass primitive: a second glass layer on top of the card stacks
+			// blur + tint and makes the panel a different shade than the rail.
 			ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.f, 0.f, 0.f, 0.f));
 			ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.f, 0.f));
 			ImGui::PushStyleVar(ImGuiStyleVar_ScrollbarSize, 0.f);
@@ -627,22 +768,17 @@ namespace ng_tabs
 			ImGui::PopStyleVar(2);
 			ImGui::PopStyleColor();
 
-			if (Glass::g)
+			// the plate takes the child's REAL rect, so it can never sit offset
+			// from its own rows - a clamped/short child used to let the plate
+			// stick out past them and look cut off
 			{
-				// the plate takes the child's REAL rect, so it can never sit
-				// offset from its own rows - a clamped/short child used to let
-				// the plate stick out past them and look cut off
 				const ImVec2 o = ImGui::GetWindowPos();
 				const ImVec2 s = ImGui::GetWindowSize();
-				Glass::Primitive p{};
-				p.cx = o.x + s.x * 0.5f;
-				p.cy = o.y + s.y * 0.5f;
-				p.hw = s.x * 0.5f;
-				p.hh = s.y * 0.5f;
-				p.corner_radius = 15.f;        // the kit's panel radius
-				p.fade = Glass::g->SubmitFadeValue();
-				p.material = Glass::Material::Thin;
-				Glass::g->Submit(p);
+				const ImVec2 p1(o.x + s.x, o.y + s.y);
+				const float a = 1.f;
+				ImDrawList* dl = ImGui::GetWindowDrawList();
+				dl->AddRectFilled(o, p1, IM_COL32(255, 255, 255, (int)(6.f * a)), 14.f);
+				dl->AddRect(o, p1, IM_COL32(255, 255, 255, (int)(10.f * a)), 14.f, 0, 1.f);
 			}
 
 			float content_w = width - content_pad * 2.f;
@@ -686,7 +822,6 @@ namespace ng_tabs
 	// column is a stack of "SECTION header + box" pairs that size themselves
 	// to their rows
 	// -------------------------------------------------------------------------
-	static std::vector<size_t> s_section_stack;
 
 	void begin_column(const char* id, float width, float height)
 	{
@@ -735,20 +870,30 @@ namespace ng_tabs
 			return;
 		}
 
-		const float fs = ImGui::GetFontSize() * 0.82f;
+		// 10.5 px caps with 1.2 px of tracking, soft grey - the reference's
+		// section label (MATCHA_UI_SPEC §3 / §4.4), drawn in the menu face
+		ImFont* sf = ImGui::GetFont();
+		const float fs = 10.5f;
 		float x = o.x;
 		for (const char* p = text; *p; ++p)
 		{
 			char ch[2] = { (char)toupper((unsigned char)*p), 0 };
-			dl->AddText(ImGui::GetFont(), fs, ImVec2(x, o.y), Glass::InkSoftColor(), ch);
-			x += ImGui::GetFont()->CalcTextSizeA(fs, FLT_MAX, 0.f, ch).x + 1.f;
+			dl->AddText(sf, fs, ImVec2(x, o.y), ink_soft(), ch);
+			x += sf->CalcTextSizeA(fs, FLT_MAX, 0.f, ch).x + 1.2f;
 		}
 		// the reference has no rule under its section labels, just the label
 		ImGui::Dummy(ImVec2(w, 24.f));
 	}
 
-	// a box around its rows; the plate is submitted up front and its geometry
-	// filled in when the box closes (so it always matches the real content)
+	// a box around its rows; the plate is drawn in a *reserved channel* of this
+	// child's draw list and filled in by end_section(), so it always matches the
+	// real content while staying behind the rows.
+	//
+	// NOTE: the plate is a flat wash, NOT a glass primitive. Every extra glass
+	// layer inside the card stacks blur + tint, which made the page read as a
+	// different colour than the rail beside it. MATCHA_UI_SPEC §4.5 describes the
+	// reference's plate as exactly this: fill rgba(255,255,255,0.022) + a 1 px
+	// rgba(255,255,255,0.04) edge.
 	bool begin_section(const char* id)
 	{
 		if (!glass_mode())
@@ -762,25 +907,10 @@ namespace ng_tabs
 			ImGuiWindowFlags_NoScrollWithMouse);
 		ImGui::PopStyleColor();
 
-		size_t idx = (size_t)-1;
-		if (Glass::g)
-		{
-			Glass::Primitive p{};
-			// the section plate is deliberately faint: the reference's boxes are
-			// only a hair lighter than the card behind them
-			// the reference's boxes are clearly a backdrop behind the rows - they
-			// read as a distinct plate over the card, not a hairline
-			p.fade = Glass::g->SubmitFadeValue() * 0.55f;
-			p.material = Glass::Material::Thin;
-			p.corner_radius = 10.f;
-			// geometry is filled in by end_section(); the scissor is
-			// per-primitive now (Renderer::Submit clips every primitive to the
-			// rect its own window/child may paint into), so the old global
-			// SetClipRect call here - which was last-write-wins for the whole
-			// frame - is gone
-			idx = Glass::g->Submit(p);
-		}
-		s_section_stack.push_back(idx);
+		// channel 0 = the plate, channel 1 = the rows drawn after it
+		ImDrawList* dl = ImGui::GetWindowDrawList();
+		dl->ChannelsSplit(2);
+		dl->ChannelsSetCurrent(1);
 
 		ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0.f, 0.f));
 		ImGui::PushItemWidth(ImGui::GetWindowSize().x - content_pad * 2.f);
@@ -795,21 +925,18 @@ namespace ng_tabs
 			return;
 		}
 
+		// fill in the plate (channel 0), then merge so it lands behind the rows
 		const ImVec2 o = ImGui::GetWindowPos();
 		const ImVec2 s = ImGui::GetWindowSize();
-		if (!s_section_stack.empty())
+		ImDrawList* dl = ImGui::GetWindowDrawList();
+		dl->ChannelsSetCurrent(0);
 		{
-			const size_t idx = s_section_stack.back();
-			s_section_stack.pop_back();
-			if (Glass::g && idx != (size_t)-1)
-			{
-				Glass::Primitive& p = Glass::g->At(idx);
-				p.cx = o.x + s.x * 0.5f;
-				p.cy = o.y + s.y * 0.5f;
-				p.hw = s.x * 0.5f;
-				p.hh = s.y * 0.5f;
-			}
+			const float a = 1.f;
+			const ImVec2 p1(o.x + s.x, o.y + s.y);
+			dl->AddRectFilled(o, p1, IM_COL32(255, 255, 255, (int)(6.f * a)), 14.f);
+			dl->AddRect(o, p1, IM_COL32(255, 255, 255, (int)(10.f * a)), 14.f, 0, 1.f);
 		}
+		dl->ChannelsMerge();
 
 		ImGui::PopStyleVar();          // item spacing
 		ImGui::PopItemWidth();
@@ -1050,7 +1177,7 @@ namespace ng_tabs
 			bool changed = false;
 			if (label && *label)
 			{
-				ImGui::PushStyleColor(ImGuiCol_Text, Glass::InkColor());
+				ImGui::PushStyleColor(ImGuiCol_Text, ink());
 				ImGui::TextUnformatted(label);
 				ImGui::PopStyleColor();
 			}
@@ -1067,7 +1194,7 @@ namespace ng_tabs
 				if (!first_on_line && !need_wrap)
 					ImGui::SameLine(0.f, 6.f);
 				// on wrap the cursor is already on the next line
-				if (Glass::Chip(items[i], selected[i]))
+				if (chip(items[i], selected[i]))
 				{
 					selected[i] = !selected[i];
 					changed = true;
@@ -1139,7 +1266,7 @@ namespace ng_tabs
 	bool row_button(const char* label)
 	{
 		if (glass_mode())
-			return Glass::Button(label ? label : "##btn", false);
+			return widgets::button(label ? label : "##btn");
 
 		return widgets::button(label);
 	}
@@ -1147,7 +1274,7 @@ namespace ng_tabs
 	bool row_input_text(const char* label, char* buf, int len)
 	{
 		if (glass_mode())
-			return Glass::TextField(label ? label : "##field", buf, len);
+			return widgets::input_text(label ? label : "##field", buf, len);
 
 		return widgets::input_text(label, buf, len);
 	}
@@ -1160,7 +1287,7 @@ namespace ng_tabs
 			const Row r = row_begin(nullptr, k_row_h, 0.f, "note");
 			ImGui::GetWindowDrawList()->AddText(
 				ImVec2(r.box.left, r.y + (r.h - ImGui::GetTextLineHeight()) * 0.5f),
-				ink_a(Glass::InkSoftColor(), r.a), text ? text : "");
+				ink_a(ink_soft(), r.a), text ? text : "");
 			row_end(r);
 			return;
 		}

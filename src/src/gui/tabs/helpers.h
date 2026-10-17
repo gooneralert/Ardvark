@@ -4,21 +4,22 @@
 
 namespace ng_tabs
 {
-	constexpr float content_pad = 14.f;   // padding inside a section box
+	constexpr float content_pad = 13.f;   // padding inside a section box
 	constexpr float content_spacing = 0.f;
-	constexpr float panel_gap = 22.f;     // gap between the two page columns
+	constexpr float panel_gap = 12.f;     // gap between the two page columns
 
 	// control-column metrics, taken from the reference menu: every row is
 	// label-left / control-right, and the controls line up in one column
-	constexpr float k_row_h    = 43.f;   // row pitch
-	constexpr float k_ctl_h    = 22.f;   // slider value box height
-	constexpr float k_switch_h = 18.f;   // switch height (the reference's are lower)
-	constexpr float k_switch_w = 36.f;
-	constexpr float k_box_w    = 44.f;   // slider value box
-	constexpr float k_track_w  = 89.f;   // slider track
-	constexpr float k_drop_w   = 128.f;  // dropdown value box
-	constexpr float k_drop_h   = 30.f;   // dropdown height (taller than a switch)
+	constexpr float k_row_h    = 41.f;   // row pitch (reference: 41 px)
+	constexpr float k_ctl_h    = 24.f;   // slider value box height
+	constexpr float k_switch_h = 18.f;   // switch height (14 px thumb, 2 px inset)
+	constexpr float k_switch_w = 34.f;
+	constexpr float k_box_w    = 46.f;   // slider value box
+	constexpr float k_track_w  = 100.f;  // slider track (gradient fill)
+	constexpr float k_drop_w   = 132.f;  // dropdown value box
+	constexpr float k_drop_h   = 26.f;   // dropdown height (taller than a switch)
 	constexpr float k_swatch_w = 24.f;   // color swatch (square)
+	constexpr float k_dots_w = 26.f;   // the "..." marker column (rows with sub-options)
 
 	bool glass_mode();   // true when the LiquidUI glass kit drives the controls
 	// switch rows to ImGui-drawn hover chrome (used inside solid popups, where
@@ -64,6 +65,12 @@ namespace ng_tabs
 	// expandable row: label + chevron (optionally a master square checkbox).
 	// Returns true while `open`; the square toggles `check`, the rest expands.
 	bool expand_row(const char* label, bool* open, bool* check);
+	// same row, but the master control is a switch instead of the square: the
+	// reference uses this shape for `Field Of View`, and paints that one green
+	bool expand_row_switch(const char* label, bool* open, bool* check, bool green = false);
+	// 16-swatch accent palette (glass/theme knobs moved off the rail and onto
+	// the Options page); picking writes rgb into an accent[4] and re-tints the kit
+	void accent_palette(float accent[4]);
 	// a feature we do not implement yet: the switch works and its state is
 	// remembered per row, it just doesn't drive anything
 	bool row_placeholder(const char* label);

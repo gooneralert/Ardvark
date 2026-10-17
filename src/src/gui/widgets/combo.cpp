@@ -54,7 +54,12 @@ namespace widgets
         ImGui::SetNextWindowSize(ImVec2(width, 0.f));
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(4.f, 4.f));
         ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0.f, 2.f));
-        ImGui::PushStyleColor(ImGuiCol_PopupBg, ImVec4(0.05f, 0.055f, 0.065f, 0.25f));
+        // the overlay draws a frosted panel behind the popup; when glass is
+        // suppressed (the matcha menu window has its own DWM blur) fall back to
+        // an opaque plate so the list stays readable
+        ImGui::PushStyleColor(ImGuiCol_PopupBg, glass::suppressed()
+            ? ImVec4(0.11f, 0.11f, 0.13f, 0.98f)
+            : ImVec4(0.05f, 0.055f, 0.065f, 0.25f));
         ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(1.f, 1.f, 1.f, 0.14f));
         ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(1.f, 1.f, 1.f, 0.10f));
         ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(1.f, 1.f, 1.f, 0.08f));
@@ -158,7 +163,12 @@ namespace widgets
         ImGui::SetNextWindowSize(ImVec2(width, 0.f));
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(4.f, 4.f));
         ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0.f, 2.f));
-        ImGui::PushStyleColor(ImGuiCol_PopupBg, ImVec4(0.05f, 0.055f, 0.065f, 0.25f));
+        // the overlay draws a frosted panel behind the popup; when glass is
+        // suppressed (the matcha menu window has its own DWM blur) fall back to
+        // an opaque plate so the list stays readable
+        ImGui::PushStyleColor(ImGuiCol_PopupBg, glass::suppressed()
+            ? ImVec4(0.11f, 0.11f, 0.13f, 0.98f)
+            : ImVec4(0.05f, 0.055f, 0.065f, 0.25f));
         ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(1.f, 1.f, 1.f, 0.14f));
         ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(1.f, 1.f, 1.f, 0.10f));
         ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(1.f, 1.f, 1.f, 0.08f));

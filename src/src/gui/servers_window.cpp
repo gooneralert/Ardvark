@@ -23,7 +23,7 @@
 
 namespace gui
 {
-    static const ImVec4 border_outer = ImVec4(0.92f, 0.94f, 0.93f, 1.f); // matcha near-white (same as the main menu)
+    static const ImVec4 border_outer = ImVec4(1.f, 1.f, 1.f, 30.f / 255.f); // matcha hairline (the menu card outline)
     static const ImVec4 border_inner = ImVec4(1.f, 1.f, 1.f, 0.16f); // translucent white hairline
 
     struct server_entry_t
@@ -496,7 +496,7 @@ namespace gui
 
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.f, 0.f));
         ImGui::PushStyleColor(ImGuiCol_Border, border_outer);
-        ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.055f, 0.06f, 0.07f, 0.34f));
+        ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(30.f / 255.f, 30.f / 255.f, 39.f / 255.f, 176.f / 255.f));  // matcha card fill over the DWM blur
         bool visible = ImGui::Begin("##servers_window", nullptr,
             ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoCollapse |
             ImGuiWindowFlags_NoScrollbar);

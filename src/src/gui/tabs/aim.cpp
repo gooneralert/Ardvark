@@ -15,6 +15,7 @@ namespace
 	using ng_tabs::end_column;
 	using ng_tabs::end_section;
 	using ng_tabs::expand_row;
+	using ng_tabs::expand_row_switch;
 	using ng_tabs::panel_gap;
 	using ng_tabs::row_checkbox;
 	using ng_tabs::row_checkbox_color;
@@ -32,32 +33,35 @@ namespace
 	// (a using-declaration can't name a nested type - typedef instead)
 	typedef Cheat::Settings::AimbotConfig AimbotConfig;
 
+	// Title Case throughout: the reference shows "Head" / "Mouse" in its
+	// dropdowns, not the lower-case strings the pages used to carry.
 	static const std::vector<const char*> k_part_names = {
-		"head", "upper torso", "lower torso", "hrp",
-		"left hand", "right hand", "left foot", "right foot"
+		"Head", "Upper Torso", "Lower Torso", "HRP",
+		"Left Hand", "Right Hand", "Left Foot", "Right Foot"
 	};
-	static const std::vector<const char*> k_target = { "fov center", "distance", "lowest hp" };
-	static const std::vector<const char*> k_part_sel = { "cycle", "random", "closest" };
-	static const std::vector<const char*> k_pos = { "center", "mouse" };
+	static const std::vector<const char*> k_target = { "FOV Center", "Distance", "Lowest HP" };
+	static const std::vector<const char*> k_part_sel = { "Cycle", "Random", "Closest" };
+	static const std::vector<const char*> k_pos = { "Center", "Mouse" };
+	static const std::vector<const char*> k_aim_type = { "Mouse", "Camera", "Off" };
 
 	// target selection rows - shared by the Aimbot and Silent pages
 	void cfg_target(AimbotConfig& cfg)
 	{
-		row_combo("target select", &cfg.target_select, k_target);
-		if (row_multicombo("##parts", "parts", cfg.parts, k_part_names))
+		row_combo("Target Select", &cfg.target_select, k_target);
+		if (row_multicombo("##parts", "Parts", cfg.parts, k_part_names))
 			cfg.SyncTiersFromParts();
-		row_combo("part select", &cfg.part_select, k_part_sel);
+		row_combo("Part Select", &cfg.part_select, k_part_sel);
 	}
 
 	// visibility / validity checks
 	void cfg_checks(AimbotConfig& cfg)
 	{
-		row_checkbox_more("visible only", &cfg.visible_only);
+		row_checkbox_more("Visible Only", &cfg.visible_only);
 		if (cfg.visible_only)
 			Cheat::g_Settings.misc.raycast_engine = true;   // the raycast engine is required
-		row_checkbox("dead check", &cfg.dead_check);
+		row_checkbox("Dead Check", &cfg.dead_check);
 
-		row_checkbox_more("distance check", &cfg.distance_check);
+		row_checkbox_more("Distance Check", &cfg.distance_check);
 		if (Cheat::Visuals::HavocWorldEsp::IsActivePlace())
 		{
 			float hi = Cheat::Visuals::HavocWorldEsp::MaxRangeStuds();
@@ -65,29 +69,29 @@ namespace
 			if (d < 50.f) d = 50.f;
 			if (d > hi) d = hi;
 			cfg.max_distance = d;
-			row_slider_f("max distance (400m cap)", &cfg.max_distance, 50.0f, hi, "%.0f");
+			row_slider_f("Max Distance", &cfg.max_distance, 50.0f, hi, "%.0f");
 		}
 		else
 		{
-			row_slider_f("max distance", &cfg.max_distance, 50.0f, 5000.0f, "%.0f");
+			row_slider_f("Max Distance", &cfg.max_distance, 50.0f, 5000.0f, "%.0f");
 		}
 	}
 
 	// fov / aim position / tracer
 	void cfg_selection(AimbotConfig& cfg)
 	{
-		static const std::vector<const char*> k_fov_style = { "circle", "filled" };
+		static const std::vector<const char*> k_fov_style = { "Circle", "Filled" };
 
-		row_checkbox_color("fov check", &cfg.fov_enabled, cfg.fov_color);
+		row_checkbox_color("FOV Check", &cfg.fov_enabled, cfg.fov_color);
 		if (cfg.fov_enabled)
 		{
-			row_combo("fov style", &cfg.fov_style, k_fov_style);
-			row_checkbox_color("fov outline", &cfg.fov_outline, cfg.fov_outline_color);
-			row_slider_f("fov size", &cfg.fov_size, 10.0f, 600.0f, "%.0f");
+			row_combo("FOV Style", &cfg.fov_style, k_fov_style);
+			row_checkbox_color("FOV Outline", &cfg.fov_outline, cfg.fov_outline_color);
+			row_slider_f("FOV Size", &cfg.fov_size, 10.0f, 600.0f, "%.0f");
 		}
 
-		row_combo("aim pos", &cfg.fov_position, k_pos);
-		row_checkbox_color("aim tracer", &cfg.tracer, cfg.tracer_color);
+		row_combo("Aim Pos", &cfg.fov_position, k_pos);
+		row_checkbox_color("Aim Tracer", &cfg.tracer, cfg.tracer_color);
 	}
 
 	// everything the reference parks in its "OTHER" column
@@ -96,35 +100,35 @@ namespace
 		if (show_smooth)
 		{
 			static const std::vector<const char*> k_curve = {
-				"linear", "exponential", "spring", "bezier"
+				"Linear", "Exponential", "Spring", "Bezier"
 			};
-			row_checkbox_more("smoothing", &cfg.smooth_enabled);
+			row_checkbox_more("Smoothing", &cfg.smooth_enabled);
 			if (cfg.smooth_enabled)
 			{
-				row_combo("aim curve", &cfg.aim_curve, k_curve);
-				row_slider_f("sensitivity", &cfg.aim_sensitivity, 0.05f, 3.0f, "%.2f");
-				row_slider_f("smoothness x", &cfg.smooth_x, 0.1f, 5.0f, "%.2f");
-				row_slider_f("smoothness y", &cfg.smooth_y, 0.1f, 5.0f, "%.2f");
+				row_combo("Aim Curve", &cfg.aim_curve, k_curve);
+				row_slider_f("Sensitivity", &cfg.aim_sensitivity, 0.05f, 3.0f, "%.2f");
+				row_slider_f("Smoothness X", &cfg.smooth_x, 0.1f, 5.0f, "%.2f");
+				row_slider_f("Smoothness Y", &cfg.smooth_y, 0.1f, 5.0f, "%.2f");
 			}
 		}
 
-		row_checkbox_more("sticky target", &cfg.sticky);
+		row_checkbox_more("Sticky Target", &cfg.sticky);
 		if (cfg.sticky)
-			row_slider_f("sticky fov", &cfg.sticky_fov_scale, 1.0f, 4.0f, "%.2f");
+			row_slider_f("Sticky FOV", &cfg.sticky_fov_scale, 1.0f, 4.0f, "%.2f");
 
-		row_checkbox_more("prediction", &cfg.prediction);
+		row_checkbox_more("Prediction", &cfg.prediction);
 		if (cfg.prediction)
-			row_slider_f("bullet speed", &cfg.bullet_speed, 100.0f, 5000.0f, "%.0f");
+			row_slider_f("Bullet Speed", &cfg.bullet_speed, 100.0f, 5000.0f, "%.0f");
 
-		row_checkbox_more("humanize", &cfg.humanize);
+		row_checkbox_more("Humanize", &cfg.humanize);
 		if (cfg.humanize)
-			row_slider_f("reaction", &cfg.reaction_ms, 0.0f, 400.0f, "%.0f");
+			row_slider_f("Reaction", &cfg.reaction_ms, 0.0f, 400.0f, "%.0f");
 
 		if (show_hitchance)
 		{
-			row_checkbox_more("hitchance", &cfg.hitchance_enabled);
+			row_checkbox_more("Hitchance", &cfg.hitchance_enabled);
 			if (cfg.hitchance_enabled)
-				row_slider_f("hit chance", &cfg.hitchance, 1.0f, 100.0f, "%.0f");
+				row_slider_f("Hit Chance", &cfg.hitchance, 1.0f, 100.0f, "%.0f");
 		}
 	}
 }
@@ -135,46 +139,63 @@ namespace
 //               Sticky Aim / Rage Method / Resolver
 //   SELECTION : Distance / Sensitivity / Hit Part / Aim Type
 //   OTHER     : Prediction / Smoothing / Field Of View
-// Rows the reference shows that we do not implement are kept as placeholders:
-// they toggle and remember their state, they just do not drive anything yet.
+// The reference draws its "..." marker on exactly two MAIN rows - `Enabled`
+// and `Rage Method` - and on nothing in SELECTION, so every extra knob we
+// carry lives behind one of those two. Rows the reference shows that we do
+// not implement are kept as placeholders: they toggle and remember their
+// state, they just do not drive anything yet.
 // -----------------------------------------------------------------------------
 namespace
 {
 	void aim_main(AimbotConfig& cfg)
 	{
 		// "Enabled" is the real master switch: on = an aim mode is selected,
-		// off = type "off". Its sub-rows hold the key and the distance check.
+		// off = type "off". Its marker holds the key, the range checks and the
+		// sticky tuning, so MAIN stays a clean list of seven toggles.
 		{
 			bool on = Cheat::g_Settings.aim.type != 2;
-			// the reference shows no key/distance rows here by default - they
-			// live behind the marker so MAIN stays a clean list of toggles
 			static bool s_enabled_open = false;
 			row_checkbox_expand("Enabled", &on, &s_enabled_open);
 			Cheat::g_Settings.aim.type = on ? 0 : 2;
-			if (on && s_enabled_open)
+			if (s_enabled_open)
 			{
-				row_keybind("##aim_kb", "aim key", &Cheat::g_Settings.aim.bind,
+				row_keybind("##aim_kb", "Aim Key", &Cheat::g_Settings.aim.bind,
 				            &Cheat::g_Settings.aim.bind_mode);
-				row_checkbox("distance check", &cfg.distance_check);
+				row_checkbox("Distance Check", &cfg.distance_check);
+				row_checkbox("Dead Check", &cfg.dead_check);
+				row_slider_f("Sticky FOV", &cfg.sticky_fov_scale, 1.0f, 4.0f, "%.2f");
 			}
 		}
 
 		row_checkbox("Team Check", &Cheat::g_Settings.misc.teamcheck);
 
-		row_checkbox_more("Visible Check", &cfg.visible_only);
+		row_checkbox("Visible Check", &cfg.visible_only);
 		if (cfg.visible_only)
-		{
 			Cheat::g_Settings.misc.raycast_engine = true;   // the raycast engine is required
-			row_checkbox("dead check", &cfg.dead_check);
-		}
 
 		row_placeholder("Health Check");
-		row_placeholder("Rage Method");
-		row_placeholder("Resolver");
 
-		row_checkbox_more("Sticky Aim", &cfg.sticky);
-		if (cfg.sticky)
-			row_slider_f("sticky fov", &cfg.sticky_fov_scale, 1.0f, 4.0f, "%.2f");
+		row_checkbox("Sticky Aim", &cfg.sticky);
+
+		// the reference's second marker row: everything about *how* a target
+		// gets picked hangs off it
+		{
+			static bool s_rage_open = false;
+			static bool s_rage_on = false;
+			row_checkbox_expand("Rage Method", &s_rage_on, &s_rage_open);
+			if (s_rage_open)
+			{
+				row_combo("Target Select", &cfg.target_select, k_target);
+				if (row_multicombo("##parts", "Parts", cfg.parts, k_part_names))
+					cfg.SyncTiersFromParts();
+				row_combo("Part Select", &cfg.part_select, k_part_sel);
+				row_combo("Aim Pos", &cfg.fov_position, k_pos);
+				if (Cheat::Visuals::HavocWorldEsp::IsActivePlace())
+					row_checkbox("Target Bots", &Cheat::g_Settings.aim.target_bots);
+			}
+		}
+
+		row_placeholder("Resolver");
 	}
 
 	void aim_selection(AimbotConfig& cfg)
@@ -196,50 +217,28 @@ namespace
 		row_slider_f("Sensitivity", &cfg.aim_sensitivity, 0.05f, 3.0f, "%.2f");
 
 		// ----------------------------------------------------------------
-		// The reference shows EXACTLY four rows here. Everything else we
-		// need for targeting lives behind the "..." marker of the row that
-		// owns it, so the panel matches line for line until you ask for it.
+		// The reference shows EXACTLY these four rows, and none of them
+		// carries a "..." marker - the multi-select and the pick rule live
+		// behind `Rage Method` in MAIN instead.
 		// ----------------------------------------------------------------
 
-		// Hit Part: the reference's single-select dropdown. We store body
-		// parts as a multi-select, so picking one enables exactly that part;
-		// the multi-select chips and the pick rule expand behind the marker.
+		// Hit Part: a single-select dropdown. We store body parts as a
+		// multi-select, so picking one here enables exactly that part.
 		{
 			int first = -1;
 			for (int i = 0; i < (int)k_part_names.size(); ++i)
 				if (cfg.parts[i]) { first = i; break; }
 			int sel = (first < 0) ? 0 : first;
 
-			static bool s_parts_open = false;
-			if (row_combo_more("Hit Part", &sel, k_part_names, &s_parts_open))
+			if (row_combo("Hit Part", &sel, k_part_names))
 			{
 				for (int i = 0; i < (int)k_part_names.size(); ++i)
 					cfg.parts[i] = (i == sel);
 				cfg.SyncTiersFromParts();
 			}
-
-			if (s_parts_open)
-			{
-				if (row_multicombo("##parts", "parts", cfg.parts, k_part_names))
-					cfg.SyncTiersFromParts();
-				row_combo("part select", &cfg.part_select, k_part_sel);
-			}
 		}
 
-		// Aim Type: everything about how the target is picked sits under it
-		{
-			static const std::vector<const char*> k_aim_type = { "mouse", "camera", "off" };
-			static bool s_type_open = false;
-			row_combo_more("Aim Type", &Cheat::g_Settings.aim.type, k_aim_type, &s_type_open);
-
-			if (s_type_open)
-			{
-				row_combo("target select", &cfg.target_select, k_target);
-				row_combo("aim pos", &cfg.fov_position, k_pos);
-				if (Cheat::Visuals::HavocWorldEsp::IsActivePlace())
-					row_checkbox("target bots", &Cheat::g_Settings.aim.target_bots);
-			}
-		}
+		row_combo("Aim Type", &Cheat::g_Settings.aim.type, k_aim_type);
 	}
 
 	void aim_other(AimbotConfig& cfg, bool show_smooth)
@@ -254,37 +253,38 @@ namespace
 
 		if (expand_row("Prediction", &s_pred_open, nullptr))
 		{
-			row_checkbox("prediction", &cfg.prediction);
+			row_checkbox("Prediction", &cfg.prediction);
 			if (cfg.prediction)
-				row_slider_f("bullet speed", &cfg.bullet_speed, 100.0f, 5000.0f, "%.0f");
+				row_slider_f("Bullet Speed", &cfg.bullet_speed, 100.0f, 5000.0f, "%.0f");
 		}
 
 		if (expand_row("Smoothing", &s_smooth_open, nullptr))
 		{
 			static const std::vector<const char*> k_curve = {
-				"linear", "exponential", "spring", "bezier"
+				"Linear", "Exponential", "Spring", "Bezier"
 			};
-			row_checkbox("smoothing", &cfg.smooth_enabled);
+			row_checkbox("Smoothing", &cfg.smooth_enabled);
 			if (cfg.smooth_enabled)
 			{
-				row_combo("aim curve", &cfg.aim_curve, k_curve);
-				row_slider_f("smoothness x", &cfg.smooth_x, 0.1f, 5.0f, "%.2f");
-				row_slider_f("smoothness y", &cfg.smooth_y, 0.1f, 5.0f, "%.2f");
+				row_combo("Aim Curve", &cfg.aim_curve, k_curve);
+				row_slider_f("Smoothness X", &cfg.smooth_x, 0.1f, 5.0f, "%.2f");
+				row_slider_f("Smoothness Y", &cfg.smooth_y, 0.1f, 5.0f, "%.2f");
 
-				row_checkbox_more("humanize", &cfg.humanize);
+				row_checkbox_more("Humanize", &cfg.humanize);
 				if (cfg.humanize)
-					row_slider_f("reaction", &cfg.reaction_ms, 0.0f, 400.0f, "%.0f");
+					row_slider_f("Reaction", &cfg.reaction_ms, 0.0f, 400.0f, "%.0f");
 			}
 		}
 
-		// the square on this row is the master switch, the rest expands
+		// the reference's `Field Of View` row: a filled white square as the
+		// master control, plus a chevron that expands the sub-settings
 		if (expand_row("Field Of View", &s_fov_open, &cfg.fov_enabled))
 		{
-			static const std::vector<const char*> k_fov_style = { "circle", "filled" };
-			row_combo("fov style", &cfg.fov_style, k_fov_style);
-			row_checkbox_color("fov outline", &cfg.fov_outline, cfg.fov_outline_color);
-			row_slider_f("fov size", &cfg.fov_size, 10.0f, 600.0f, "%.0f");
-			row_checkbox_color("aim tracer", &cfg.tracer, cfg.tracer_color);
+			static const std::vector<const char*> k_fov_style = { "Circle", "Filled" };
+			row_combo("FOV Style", &cfg.fov_style, k_fov_style);
+			row_checkbox_color("FOV Outline", &cfg.fov_outline, cfg.fov_outline_color);
+			row_slider_f("FOV Size", &cfg.fov_size, 10.0f, 600.0f, "%.0f");
+			row_checkbox_color("Aim Tracer", &cfg.tracer, cfg.tracer_color);
 		}
 	}
 }

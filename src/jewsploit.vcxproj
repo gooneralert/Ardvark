@@ -189,7 +189,8 @@
       <!-- ship the preview model next to the exe: the loader looks in
            assets\roblox-noob beside the exe first, then walks up the tree -->
       <Command>xcopy /y /i /d "$(ProjectDir)assets\roblox-noob\*" "$(TargetDir)assets\roblox-noob" &gt;NUL
-xcopy /y /i /d "$(ProjectDir)src\gui\resources\fonts\*.ttf" "$(TargetDir)fonts" &gt;NUL</Command>
+xcopy /y /i /d "$(ProjectDir)src\gui\resources\fonts\*.ttf" "$(TargetDir)fonts" &gt;NUL
+xcopy /y /i /d "$(ProjectDir)src\gui\matcha-ui\assets\fonts\*" "$(TargetDir)assets\fonts" &gt;NUL</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
@@ -267,8 +268,13 @@ xcopy /y /i /d "$(ProjectDir)src\gui\resources\fonts\*.ttf" "$(TargetDir)fonts" 
     <ClInclude Include="src\music-player\include\music-player_ui.h" />
     <ClInclude Include="src\gui\glass.h" />
     <ClInclude Include="src\gui\liquid_ui.h" />
+    <ClInclude Include="src\gui\menu_icons.h" />
     <ClInclude Include="src\gui\gui.h" />
     <ClInclude Include="src\gui\Menu.h" />
+    <ClInclude Include="src\gui\menu_window.h" />
+    <ClInclude Include="src\gui\matcha-ui\src\gui.h" />
+    <ClInclude Include="src\gui\matcha-ui\src\tabs.h" />
+    <ClInclude Include="src\gui\matcha-ui\src\widgets.h" />
     <ClInclude Include="src\gui\colors\colors.h" />
     <ClInclude Include="src\gui\tabs\aim.h" />
     <ClInclude Include="src\gui\tabs\esp.h" />
@@ -752,6 +758,16 @@ xcopy /y /i /d "$(ProjectDir)src\gui\resources\fonts\*.ttf" "$(TargetDir)fonts" 
     <ClCompile Include="src\gui\glass.cpp" />
     <ClCompile Include="src\gui\gui.cpp" />
     <ClCompile Include="src\gui\Menu.cpp" />
+    <ClCompile Include="src\gui\menu_window.cpp" />
+    <ClCompile Include="src\gui\matcha-ui\src\gui.cpp">
+      <ObjectFileName>$(IntDir)mui_gui.obj</ObjectFileName>
+    </ClCompile>
+    <ClCompile Include="src\gui\matcha-ui\src\tabs.cpp">
+      <ObjectFileName>$(IntDir)mui_tabs.obj</ObjectFileName>
+    </ClCompile>
+    <ClCompile Include="src\gui\matcha-ui\src\widgets.cpp">
+      <ObjectFileName>$(IntDir)mui_widgets.obj</ObjectFileName>
+    </ClCompile>
     <!-- LiquidUI (liquidDX11) glass kit: renderer + widget kit, desktop-capture
          blur chain and the extra surfaces. Vendored sources, compiled as-is
          (they do not use our pch) with their own object names so they cannot

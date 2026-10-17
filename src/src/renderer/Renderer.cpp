@@ -3,6 +3,7 @@
 #include <d3d11.h>
 #include <dxgi1_2.h>
 #include "gui/Menu.h"
+#include "gui/menu_window.h"
 #include "gui/glass.h"
 #include "imgui.h"
 #include "app/Graphics.h"
@@ -21,6 +22,11 @@
 #pragma comment(lib, "dwmapi.lib")
 
 namespace Cheat {
+
+    // overlay click-through state, kept in sync by SetClickThrough() and read
+    // by WndProc()'s WM_NCHITTEST (WS_EX_TRANSPARENT already covers this, but
+    // the hit-test keeps the two in agreement)
+    static bool s_overlay_click_through = true;
 
     // окно роблокса по пиду, берём самое жирное
     HWND Renderer::FindGameWindow()
@@ -151,7 +157,8 @@ namespace Cheat {
         bool focused =
             (fg == m_GameHwnd) ||
             IsChild(m_GameHwnd, fg) ||
-            (fg == m_Hwnd);
+            (fg == m_Hwnd) ||
+            menu_window::owns_foreground();
 
         if (!focused)
         {
@@ -294,6 +301,14 @@ namespace Cheat {
             return false;
         }
 
+        // the matcha menu's own window (DWM blur + its own ImGui context). A
+        // failure is not fatal - the overlay (ESP, navbar, tools) still runs.
+        if (!menu_window::init(instance))
+            Console::Log(Console::Color::Red, "menu window init failed");
+
+        // real DWM blur windows for the tool panels (same mechanism as the menu)
+        glass::init_backdrop();
+
         return true;
     }
 
@@ -332,7 +347,9 @@ namespace Cheat {
                 // nothing to hide anymore: the frosted panels only exist while
                 // the ui renders (they live in the overlay's swap chain now)
                 glass::set_menu_rect(0, 0, 0, 0);
+                glass::hide_backdrop();
                 Visuals::Crosshair::NotifyInactive();
+                menu_window::hide();
                 Sleep(15);
                 continue;
             }
@@ -390,25 +407,27 @@ namespace Cheat {
                 ScreenToClient(m_Hwnd, &pt);
                 bool over_ui = GUI::Menu::ShouldCaptureMouse((float)pt.x, (float)pt.y);
 
-                if (GUI::Menu::IsVisible() || over_ui)
+                // The overlay is ALWAYS click-through except while the physical
+                // cursor is over one of its own tool windows - the main menu
+                // now lives in its own window, so ESP never blocks the game.
+                if (over_ui)
                 {
-                    SetClickThrough(!over_ui);
-                    if (GUI::Menu::IsVisible())
-                    {
-                        ClipCursor(nullptr);
-                    }
+                    SetClickThrough(false);
+                    ClipCursor(nullptr);
 
-                    bool want_text = GUI::Menu::IsVisible() &&
-                        ImGui::GetCurrentContext() && ImGui::GetIO().WantTextInput;
+                    bool want_text = ImGui::GetCurrentContext() && ImGui::GetIO().WantTextInput;
                     SetTextInputFocus(want_text);
                 }
-
                 else
                 {
                     SetClickThrough(true);
                     SetTextInputFocus(false);
                 }
             }
+
+            // the matcha menu's own window: shown/hidden by the menu key and
+            // rendered on its own swapchain
+            menu_window::tick();
 
             // vsync: on = present syncs to the monitor's refresh, off = uncapped
             // (present as fast as the loop can, less lag relative to the game camera)
@@ -461,6 +480,8 @@ namespace Cheat {
 
     void Renderer::SetClickThrough(bool click_through)
     {
+        s_overlay_click_through = click_through;
+
         if (!m_Hwnd || !IsWindow(m_Hwnd))
         {
             return;
@@ -541,6 +562,8 @@ namespace Cheat {
 
     void Renderer::Shutdown()
     {
+        menu_window::shutdown();
+        glass::shutdown_backdrop();
         GUI::Menu::Shutdown();
         Cheat::Visuals::BoxFill::Shutdown();
         Visuals::MeshDxShader::Shutdown();
@@ -664,11 +687,14 @@ namespace Cheat {
     {
         if (msg == WM_NCHITTEST)
         {
-            if (GUI::Menu::IsVisible())
+            // The fullscreen overlay is click-through unless a tool window
+            // (music card, etc.) is currently being hovered. The main menu now
+            // lives in its own top-level window and never captures this one.
+            if (s_overlay_click_through)
             {
-                return HTCLIENT;
+                return HTTRANSPARENT;
             }
-            return HTTRANSPARENT;
+            return HTCLIENT;
         }
 
         if (GUI::Menu::HandleMessage(hwnd, msg, wparam, lparam))
@@ -691,7 +717,10 @@ namespace Cheat {
             return 0;
 
         case WM_MOUSEACTIVATE:
-            if (GUI::Menu::IsVisible() && ImGui::GetCurrentContext() &&
+            // Only activate the overlay when it is currently capturing input
+            // (cursor over one of its own tool windows) and a text field wants
+            // focus; the main menu window handles its own activation.
+            if (!s_overlay_click_through && ImGui::GetCurrentContext() &&
                 ImGui::GetIO().WantTextInput)
             {
                 return MA_ACTIVATE;

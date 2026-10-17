@@ -28,6 +28,8 @@
 #include "app/Settings.h"
 #include "core/console/Console.h"
 #include <Windows.h>
+#include <dwmapi.h>
+#pragma comment(lib, "dwmapi.lib")
 #include <cstdarg>
 #include <cmath>
 #include <vector>
@@ -42,6 +44,13 @@ namespace glass
         bool  g_renderer_ok = false;   // glass shaders/states are up
         bool  g_backdrop_ok = false;   // desktop duplication capture is up
         float g_capture_wait = 0.f;    // capture throttle accumulator
+
+        // when set, every submit/add_rect/draw is ignored. The matcha menu lives
+        // in its own window (and has its own real DWM blur), so widgets that ask
+        // for a glass panel while it renders must not leak into the overlay's
+        // glass pass - set around the menu window's frame (see menu_window.cpp).
+        bool  g_suppressed = false;
+bool  g_dwm_backdrop = false;  // rects get a real DWM blur window instead of a LiquidUI panel
 
         // mirrors of the gui settings; pushed into the materials every frame
         float g_frost = 0.10f;
@@ -255,6 +264,7 @@ namespace glass
         void submit(float x, float y, float w, float h, float rounding, float alpha,
                     Glass::Material mat)
         {
+            if (g_suppressed) return;
             if (!g_renderer_ok || alpha <= 0.001f || w <= 1.f || h <= 1.f) return;
             Glass::Primitive p{};   // value-init: unset fields (elevate, blobs) feed the shader
             p.cx = x + w * 0.5f;
@@ -303,6 +313,184 @@ namespace glass
     }
 
     bool ready() { return g_renderer_ok; }
+
+    void set_suppressed(bool on) { g_suppressed = on; }
+    bool suppressed() { return g_suppressed; }
+
+    // --- real DWM blur backdrop ----------------------------------------------
+    // One small topmost, click-through window per glass rect, parked directly
+    // under the overlay. Its client area is never painted and the DWM frame is
+    // extended over it, so it is pure blur of whatever sits behind it - i.e.
+    // the game. Same recipe the matcha menu window uses.
+    namespace
+    {
+        constexpr int kBackdropMax = 12;
+        HWND s_backdrop_hwnd[kBackdropMax]{};
+        RECT s_backdrop_last[kBackdropMax]{};
+        bool s_backdrop_shown[kBackdropMax]{};
+        bool s_backdrop_ready = false;
+
+        LRESULT CALLBACK backdrop_proc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
+        {
+            switch (msg)
+            {
+            case WM_ERASEBKGND:    return 1;              // never erase: stay glass
+            case WM_NCHITTEST:     return HTTRANSPARENT;  // clicks pass through
+            case WM_MOUSEACTIVATE: return MA_NOACTIVATE;
+            case WM_PAINT:
+            {
+                PAINTSTRUCT ps{};
+                BeginPaint(hwnd, &ps);
+                EndPaint(hwnd, &ps);
+                return 0;
+            }
+            }
+            return DefWindowProcW(hwnd, msg, wparam, lparam);
+        }
+
+        void backdrop_blur(HWND hwnd)
+        {
+            struct accent_policy { int state; int flags; COLORREF color; int animation; };
+            struct composition_data { int attribute; void* data; SIZE_T size; };
+            constexpr int blur_behind      = 3;   // ACCENT_ENABLE_BLURBEHIND
+            constexpr int accent_attribute = 19;  // WCA_ACCENT_POLICY
+
+            MARGINS margins{ -1 };
+            DwmExtendFrameIntoClientArea(hwnd, &margins);
+
+            using set_composition_fn = BOOL(WINAPI*)(HWND, const composition_data*);
+            auto set_composition = reinterpret_cast<set_composition_fn>(
+                GetProcAddress(GetModuleHandleW(L"user32.dll"), "SetWindowCompositionAttribute"));
+            if (set_composition)
+            {
+                accent_policy accent{ blur_behind, 0, 0, 0 };
+                composition_data data{ accent_attribute, &accent, sizeof(accent) };
+                set_composition(hwnd, &data);
+            }
+
+            DWM_WINDOW_CORNER_PREFERENCE corners = DWMWCP_ROUND;
+            DwmSetWindowAttribute(hwnd, DWMWA_WINDOW_CORNER_PREFERENCE, &corners, sizeof(corners));
+        }
+    }
+
+    void origin(int& x, int& y)
+    {
+        int w = 0, h = 0;
+        client_size(w, h, x, y);
+    }
+
+    void init_backdrop()
+    {
+        if (s_backdrop_ready)
+            return;
+
+        WNDCLASSEXW wc{ sizeof(wc) };
+        wc.style         = 0;
+        wc.lpfnWndProc   = backdrop_proc;
+        wc.hInstance     = GetModuleHandleW(nullptr);
+        wc.hCursor       = nullptr;
+        wc.hbrBackground = nullptr;   // no background brush: keep the DWM glass
+        wc.lpszClassName = L"ardvark.glassbacking";
+        RegisterClassExW(&wc);        // fine if it already exists
+
+        for (int i = 0; i < kBackdropMax; ++i)
+        {
+            s_backdrop_hwnd[i] = CreateWindowExW(
+                WS_EX_TOPMOST | WS_EX_TRANSPARENT | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE,
+                wc.lpszClassName, L"", WS_POPUP,
+                -32000, -32000, 2, 2, nullptr, nullptr, wc.hInstance, nullptr);
+            if (!s_backdrop_hwnd[i])
+                return;
+
+            backdrop_blur(s_backdrop_hwnd[i]);
+            s_backdrop_last[i]  = RECT{ -32000, -32000, -31998, -31998 };
+            s_backdrop_shown[i] = false;
+        }
+
+        s_backdrop_ready = true;
+        g_dwm_backdrop   = true;
+    }
+
+    void hide_backdrop()
+    {
+        for (int i = 0; i < kBackdropMax; ++i)
+        {
+            if (s_backdrop_hwnd[i] && s_backdrop_shown[i])
+            {
+                ShowWindow(s_backdrop_hwnd[i], SW_HIDE);
+                s_backdrop_shown[i] = false;
+            }
+        }
+    }
+
+    void shutdown_backdrop()
+    {
+        for (int i = 0; i < kBackdropMax; ++i)
+        {
+            if (s_backdrop_hwnd[i])
+            {
+                DestroyWindow(s_backdrop_hwnd[i]);
+                s_backdrop_hwnd[i] = nullptr;
+            }
+        }
+        s_backdrop_ready = false;
+        g_dwm_backdrop   = false;
+    }
+
+    void update_backdrop()
+    {
+        if (!s_backdrop_ready)
+            return;
+
+        HWND overlay = Cheat::Renderer::GetHwnd();
+        if (!overlay || !IsWindowVisible(overlay))
+        {
+            hide_backdrop();
+            return;
+        }
+
+        int ox = 0, oy = 0;
+        origin(ox, oy);
+
+        int used = 0;
+        const int n = rect_count();
+        for (int i = 0; i < n && used < kBackdropMax; ++i)
+        {
+            float x = 0.f, y = 0.f, w = 0.f, h = 0.f;
+            if (!rect_at(i, x, y, w, h))
+                continue;
+            if (w < 2.f || h < 2.f)
+                continue;
+
+            const RECT want{ ox + (int)x, oy + (int)y, ox + (int)(x + w), oy + (int)(y + h) };
+            const bool same = s_backdrop_shown[used] &&
+                s_backdrop_last[used].left   == want.left  &&
+                s_backdrop_last[used].top    == want.top   &&
+                s_backdrop_last[used].right  == want.right &&
+                s_backdrop_last[used].bottom == want.bottom;
+
+            // SetWindowPos synchronizes with DWM, so only touch the window when
+            // its rect actually changed (or it is still hidden)
+            if (!same)
+            {
+                SetWindowPos(s_backdrop_hwnd[used], overlay,
+                             want.left, want.top, want.right - want.left, want.bottom - want.top,
+                             SWP_NOACTIVATE | SWP_SHOWWINDOW);
+                s_backdrop_last[used]  = want;
+                s_backdrop_shown[used] = true;
+            }
+            ++used;
+        }
+
+        for (int i = used; i < kBackdropMax; ++i)
+        {
+            if (s_backdrop_hwnd[i] && s_backdrop_shown[i])
+            {
+                ShowWindow(s_backdrop_hwnd[i], SW_HIDE);
+                s_backdrop_shown[i] = false;
+            }
+        }
+    }
 
     void init(ID3D11Device* device, ID3D11DeviceContext* context)
     {
@@ -447,9 +635,13 @@ namespace glass
 
     void add_rect(float x, float y, float w, float h, float rounding, float alpha)
     {
+        if (g_suppressed) return;
         if (w <= 1.f || h <= 1.f) return;
         Rect r{ x, y, w, h, rounding, alpha };
         g_rects.push_back(r);
+        // with the DWM backdrop up the panel is a real blur window parked under
+        // the overlay, so the LiquidUI desktop-capture pass is skipped entirely
+        if (g_dwm_backdrop) return;
         if (!g_renderer_ok || !g_clip_on) { submit(x, y, w, h, rounding, alpha, Glass::Material::Regular); return; }
         g_renderer.SetClipRect(g_clip[0], g_clip[1], g_clip[2], g_clip[3]);
         submit(x, y, w, h, rounding, alpha, Glass::Material::Regular);
@@ -458,6 +650,7 @@ namespace glass
 
     void add_hole(float x, float y, float w, float h, float rounding)
     {
+        if (g_suppressed) return;
         if (w <= 1.f || h <= 1.f) return;
         g_rects.push_back(Rect{ x, y, w, h, rounding, 1.f });
     }
@@ -536,6 +729,7 @@ namespace glass
               float rounding, float alpha)
     {
         (void)draw_list;
+        if (g_suppressed) return;
         if (!g_renderer_ok) return;
 
         const float x = rect_min.x, y = rect_min.y;
@@ -553,19 +747,15 @@ namespace glass
     void draw_header(ImDrawList* draw_list, const ImVec2& wp, const ImVec2& ws,
                      float title_h, float alpha, float rounding)
     {
+        // matcha's windows carry no tinted title bar - just the hairline divider
+        // under the title row (their col::divider = white(8))
+        (void)rounding;
         if (!draw_list) return;
         if (ws.x <= 2.f || ws.y <= 2.f || title_h <= 0.f) return;
 
-        const ImU32 fill = IM_COL32(
-            (int)(g_tint[0] * 255.f), (int)(g_tint[1] * 255.f), (int)(g_tint[2] * 255.f),
-            (ImU32)(96.f * alpha));
-        const ImVec2 min(wp.x + 1.f, wp.y + 1.f);
-        const ImVec2 max(wp.x + ws.x - 1.f, wp.y + title_h);
-        if (max.x <= min.x || max.y <= min.y) return;
-
-        draw_list->AddRectFilled(min, max, fill, rounding, ImDrawFlags_RoundCornersTop);
-        draw_list->AddRectFilled(ImVec2(min.x, max.y), ImVec2(max.x, max.y + 1.f),
-            IM_COL32(235, 240, 237, (ImU32)(46.f * alpha)));
+        const float y = wp.y + title_h;
+        draw_list->AddLine(ImVec2(wp.x + 1.f, y), ImVec2(wp.x + ws.x - 1.f, y),
+                           IM_COL32(255, 255, 255, (ImU32)(8.f * alpha)));
     }
 
     // The dark menu backdrop carves square holes around the glass windows; the

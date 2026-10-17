@@ -25,6 +25,7 @@
 #include "widgets/widgets.h"
 #include "widgets/text.h"
 #include "glass.h"
+#include "menu_icons.h"     // rail line icons (geometry, not font glyphs)
 #include "liquid_ui.h"      // LiquidUI glass kit: menu card, sidebar nav, widgets
 #include "music_player_ui.h"
 #include "media.h"
@@ -47,35 +48,39 @@ namespace gui
     const ImVec4 border_color_inner = ImVec4(0.18f, 0.18f, 0.18f, 1.f);
 
     // sidebar pages, in the reference's order and grouping
+    // (the reference rail stops at Options; customize knobs live on Options)
     enum : int
     {
         page_aimbot = 0, page_silent, page_trigger,
         page_players, page_extras, page_world, page_character,
-        page_npc, page_teams, page_options, page_customize, page_count
+        page_npc, page_teams, page_options, page_count
     };
 
     static const char* k_page_titles[page_count] = {
         "Aimbot", "Silent", "Trigger", "Players", "Extras", "World",
-        "Character", "NPC", "Teams", "Options", "Customize"
+        "Character", "NPC", "Teams", "Options"
     };
 
     // sidebar model: group headers plus pages, with the visuals sub-pages
     // (Players / Extras) nested under Visuals - the reference's arrangement
-    struct NavRow { const char* group; const char* label; Glass::Icon icon; int page; bool sub; };
+    // Icons match the reference (MATCHA_UI_SPEC 6) and are drawn as geometry by
+    // menu_icons.h: sparkle, person, watch, eye, globe, person, folder, bubble,
+    // sliders. Geometry instead of an icon-font glyph means a missing font can
+    // never leave a row blank (NPC / Teams used to render with no icon).
+    struct NavRow { const char* group; const char* label; menu_icons::Kind icon; int page; bool sub; };
     static const NavRow k_nav[] = {
-        { "AIMBOT", "Aimbot",    Glass::Icon::Crosshairs, page_aimbot,    false },
-        { nullptr,  "Silent",    Glass::Icon::Person,     page_silent,    false },
-        { nullptr,  "Trigger",   Glass::Icon::Bolt,       page_trigger,   false },
+        { "AIMBOT", "Aimbot",    menu_icons::Kind::Spark,   page_aimbot,    false },
+        { nullptr,  "Silent",    menu_icons::Kind::Person,  page_silent,    false },
+        { nullptr,  "Trigger",   menu_icons::Kind::Clock,   page_trigger,   false },
 
-        { "COMMON", "Visuals",   Glass::Icon::Eye,        page_players,   false },
-        { nullptr,  "Players",   Glass::Icon::Users,      page_players,   true  },
-        { nullptr,  "Extras",    Glass::Icon::Gem,        page_extras,    true  },
-        { nullptr,  "World",     Glass::Icon::Globe,      page_world,     false },
-        { nullptr,  "Character", Glass::Icon::Running,    page_character, false },
-        { nullptr,  "NPC",       Glass::Icon::Box,        page_npc,       false },
-        { nullptr,  "Teams",     Glass::Icon::Flag,       page_teams,     false },
-        { nullptr,  "Options",   Glass::Icon::Sliders,    page_options,   false },
-        { nullptr,  "Customize", Glass::Icon::Paintbrush, page_customize, false },
+        { "COMMON", "Visuals",   menu_icons::Kind::Eye,     page_players,   false },
+        { nullptr,  "Players",   menu_icons::Kind::Person,  page_players,   true  },
+        { nullptr,  "Extras",    menu_icons::Kind::Spark,   page_extras,    true  },
+        { nullptr,  "World",     menu_icons::Kind::Globe,   page_world,     false },
+        { nullptr,  "Character", menu_icons::Kind::Person,  page_character, false },
+        { nullptr,  "NPC",       menu_icons::Kind::Person,  page_npc,       false },
+        { nullptr,  "Teams",     menu_icons::Kind::Flag,    page_teams,     false },
+        { nullptr,  "Options",   menu_icons::Kind::Sliders, page_options,   false },
     };
     static const int k_nav_count = (int)(sizeof(k_nav) / sizeof(k_nav[0]));
 
@@ -115,6 +120,9 @@ namespace gui
     bool music_visible() { return music_open; }
 
     ImVec2 menu_pos() { return s_menu_pos; }
+
+    int*  menu_key_ptr() { return &menu_kb; }
+    bool* menu_key_skip_ptr() { return &menu_kb_skip; }
 
     static bool rect_contains(ImVec2 mn, ImVec2 mx, float x, float y)
     {
@@ -315,7 +323,7 @@ namespace gui
         case page_npc:       ng_tabs::draw_npc_page();      break;
         case page_teams:     draw_teams_page();             break;
         case page_options:   ng_tabs::draw_settings_tab(&menu_kb, &menu_kb_skip); break;
-        default:             ng_tabs::draw_customize_tab(); break;
+        default:             ng_tabs::draw_settings_tab(&menu_kb, &menu_kb_skip); break;
         }
     }
 
@@ -630,8 +638,11 @@ namespace gui
         // built into the UI rather than as a window floating beside the menu);
         // see ng_tabs::draw_esp_tab - no slide-out panel here any more.
 
-        if (menu_a > 0.01f)
-            render_menu_window(menu_a);
+        // The main menu no longer renders in the overlay: it lives in its own
+        // top-level window (gui/menu_window.cpp + gui/matcha/matcha_menu.cpp)
+        // with matcha's DWM blur. The overlay keeps the launcher navbar, the
+        // tool windows, the music player and the watermark, and stays
+        // click-through so ESP never blocks the game.
 
         // Ã‘â€¡ÃÂµÃÂºÃÂ±ÃÂ¾ÃÂºÃ‘Â ÃÂ¿Ã‘â‚¬ÃÂµÃÂ²Ã‘Å’Ã‘Å½ ÃÂ¶ÃÂ¸ÃÂ²Ã‘â€˜Ã‘â€š ÃÂ²ÃÂ¾ ÃÂ²ÃÂºÃÂ»ÃÂ°ÃÂ´ÃÂºÃÂµ esp, Ã‘â€šÃÂ¾ ÃÂµÃ‘ÂÃ‘â€šÃ‘Å’ ÃÂ²ÃÂ½Ã‘Æ’Ã‘â€šÃ‘â‚¬ÃÂ¸ ÃÂ¼ÃÂµÃÂ½Ã‘Å½, ÃÂ¿ÃÂ¾Ã‘ÂÃ‘â€šÃÂ¾ÃÂ¼Ã‘Æ’
         // ÃÂµÃÂ³ÃÂ¾ ÃÂ·ÃÂ½ÃÂ°Ã‘â€¡ÃÂµÃÂ½ÃÂ¸ÃÂµ ÃÂ¿ÃÂ¾ÃÂ´Ã‘â€¦ÃÂ²ÃÂ°Ã‘â€šÃ‘â€¹ÃÂ²ÃÂ°ÃÂµÃÂ¼ Ã‘Æ’ÃÂ¶ÃÂµ ÃÂ¿ÃÂ¾Ã‘ÂÃÂ»ÃÂµ ÃÂ¾Ã‘â€šÃ‘â‚¬ÃÂ¸Ã‘ÂÃÂ¾ÃÂ²ÃÂºÃÂ¸
@@ -820,7 +831,7 @@ namespace gui
     constexpr float menu_default_w = 900.f;
     constexpr float menu_default_h = 720.f;
     constexpr float menu_card_round = 26.f;   // the kit's BeginCard radius
-    constexpr float menu_side_w = 176.f;      // sidebar width inside the card
+    constexpr float menu_side_w = 170.f;      // sidebar width inside the card
 
     // places the menu for the given open/close animation value. The position is
     // only forced while the entry animation is actually rising; once it settles
@@ -1004,10 +1015,19 @@ namespace gui
     // grouped sidebar: section labels (AIMBOT / COMMON), page rows with the
     // kit's icons and the visuals sub-pages indented - the reference layout
     // -------------------------------------------------------------------------
-    static void draw_grouped_sidebar(float x, float y, float w)
+    // grouped sidebar: section labels (AIMBOT / COMMON), page rows with the
+    // kit's icons and the visuals sub-pages indented - the reference layout.
+    // Returns the y the rail consumed, so the profile card below it can be
+    // pinned without ever overlapping the last row.
+    // -------------------------------------------------------------------------
+    static float draw_grouped_sidebar(float x, float y, float w)
     {
-        const float row_h = 36.f;
-        const float sub_row_h = 34.f;
+        // the reference's rail: a 30 px plate on a 37 px pitch, inset on BOTH
+        // sides of the rail panel (it never touches the rail's own edge), with
+        // an 8 px radius and 13.5 px labels
+        const float row_h = 30.f;
+        const float sub_row_h = 27.f;
+        const float row_gap = 7.f;
         ImDrawList* dl = ImGui::GetWindowDrawList();
         float cy = y;
 
@@ -1030,22 +1050,24 @@ namespace gui
                 continue;
             if (n.group)
             {
-                cy += (i == 0) ? 0.f : 10.f;
-                const float fs = ImGui::GetFontSize() * 0.76f;
-                float gx = x + 12.f;
+                cy += (i == 0) ? 0.f : 11.f;
+                // 10.5 px caps, 1.2 px tracking, soft grey
+                ImFont* gf = fonts::menu_regular();
+                const float fs = 10.5f;
+                float gx = x + 18.f;
                 for (const char* p = n.group; *p; ++p)
                 {
                     char ch[2] = { (char)toupper((unsigned char)*p), 0 };
-                    dl->AddText(ImGui::GetFont(), fs, ImVec2(gx, cy + 5.f),
-                                IM_COL32(134, 136, 148, 255), ch);
-                    gx += ImGui::GetFont()->CalcTextSizeA(fs, FLT_MAX, 0.f, ch).x + 1.f;
+                    dl->AddText(gf, fs, ImVec2(gx, cy),
+                                IM_COL32(118, 120, 134, 255), ch);
+                    gx += gf->CalcTextSizeA(fs, FLT_MAX, 0.f, ch).x + 1.2f;
                 }
-                cy += 24.f;
+                cy += 22.f;
             }
 
             const float h = n.sub ? sub_row_h : row_h;
-            const float ix = x + (n.sub ? 24.f : 6.f);
-            const float iw = w - (n.sub ? 30.f : 6.f);
+            const float ix = x + (n.sub ? 24.f : 10.f);
+            const float iw = w - (n.sub ? 34.f : 20.f);
 
             ImGui::SetCursorScreenPos(ImVec2(ix, cy));
             ImGui::PushID(i);
@@ -1063,48 +1085,44 @@ namespace gui
             sel.target = (s_sidebar_selected == n.page) ? 1.f : 0.f;
             sel.Tick(dt);
 
-            float plate = hv.x * 0.45f;
-            if (sel.x > plate) plate = sel.x;
-            if (plate > 1.f) plate = 1.f;
-
-            if (plate > 0.01f)
-            {
-                Glass::Primitive p{};
-                p.cx = ix + iw * 0.5f;
-                p.cy = cy + h * 0.5f;
-                p.hw = iw * 0.5f;
-                p.hh = h * 0.5f - 1.f;
-                p.corner_radius = 10.f;
-                p.fade = plate;
-                p.material = Glass::Material::Thin;
-                Glass::g->Submit(p);
-            }
-
-            // the active page gets the reference's purple accent bar on the
-            // left edge of its plate
-            if (sel.x > 0.01f)
-            {
-                const float* ac = Glass::EditParams(Glass::Material::Accent).tint_rgb;
-                const float bar_h = 18.f;
-                dl->AddRectFilled(
-                    ImVec2(ix + 1.f, cy + (h - bar_h) * 0.5f),
-                    ImVec2(ix + 4.f, cy + (h + bar_h) * 0.5f),
-                    IM_COL32((int)(ac[0] * 255.f), (int)(ac[1] * 255.f),
-                             (int)(ac[2] * 255.f), (int)(255.f * sel.x)), 1.5f);
-            }
-
             const bool on = (s_sidebar_selected == n.page);
-            Glass::DrawIcon(dl, n.icon, ImVec2(ix + 20.f, cy + h * 0.5f), 13.f,
-                            on ? IM_COL32(238, 239, 245, 255) : IM_COL32(148, 150, 162, 255), 2.f);
-            dl->AddText(ImVec2(ix + 40.f, cy + (h - ImGui::GetTextLineHeight()) * 0.5f),
-                        on ? IM_COL32(238, 239, 245, 255) : IM_COL32(178, 180, 192, 255),
+
+            // Active plate: faint wash + hairline edge; hover is a softer
+            // spring fade underneath it. The reference draws NO accent bar on
+            // the selected row - the tinted icon alone carries the selection.
+            if (sel.x > 0.01f || hv.x > 0.01f)
+            {
+                const ImVec2 p0(ix, cy), p1(ix + iw, cy + h);
+                const int fa = (int)(255.f * (0.065f * sel.x + 0.035f * hv.x * (1.f - sel.x)));
+                dl->AddRectFilled(p0, p1, IM_COL32(255, 255, 255, fa), 8.f);
+                dl->AddRect(p0, p1, IM_COL32(255, 255, 255, (int)(fa * 0.8f)), 8.f);
+            }
+
+            // icon: a 15 px box centred 13 px into the plate. Active rows take
+            // the accent colour, idle rows a soft grey.
+            const float* ac = Glass::EditParams(Glass::Material::Accent).tint_rgb;
+            const ImU32 ic_col = on ? IM_COL32((int)(ac[0] * 255.f), (int)(ac[1] * 255.f),
+                                               (int)(ac[2] * 255.f), 255)
+                                    : IM_COL32(140, 142, 154, 255);
+            menu_icons::Draw(dl, n.icon, ImVec2(ix + 17.f, cy + h * 0.5f),
+                             15.f, ic_col, 1.6f);
+
+            // label starts at ix + 29: 13.5 px Regular, idle #b0b2be /
+            // active #eceef4
+            ImFont* lf = fonts::menu_regular();
+            const float lsz = 13.5f;
+            const float lh = lf->CalcTextSizeA(lsz, FLT_MAX, 0.f, n.label).y;
+            dl->AddText(lf, lsz, ImVec2(ix + 29.f, cy + (h - lh) * 0.5f),
+                        on ? IM_COL32(236, 238, 244, 255) : IM_COL32(176, 178, 190, 255),
                         n.label);
 
             if (pick && n.page != s_sidebar_selected)
                 s_sidebar_selected = n.page;
 
-            cy += h + 1.f;
+            cy += h + row_gap;
         }
+
+        return cy;
     }
 
     // profile card pinned to the bottom of the sidebar (the reference has one)
@@ -1122,25 +1140,39 @@ namespace gui
         if (ImGui::IsItemDeactivated() && hov)
             ImGui::OpenPopup("##profile_pop");
 
-        Glass::Primitive p{};
-        p.cx = x + w * 0.5f;
-        p.cy = y + h * 0.5f;
-        p.hw = w * 0.5f;
-        p.hh = h * 0.5f;
-        p.corner_radius = 14.f;
-        p.fade = hov ? 1.f : 0.85f;
-        p.material = Glass::Material::Thin;
-        Glass::g->Submit(p);
-
+        // The reference has NO plate under the profile row - just a hairline
+        // rule across the rail above it. Only hover lifts a soft plate.
         ImDrawList* dl = ImGui::GetWindowDrawList();
-        const ImVec2 ac(x + 26.f, y + h * 0.5f);
-        dl->AddCircleFilled(ac, 17.f, IM_COL32(240, 214, 88, 255), 32);
-        Glass::DrawIcon(dl, Glass::Icon::Person, ac, 15.f, IM_COL32(72, 60, 20, 255), 2.f);
+        const float menu_a = Glass::g ? Glass::g->SubmitFadeValue() : 1.f;
+        dl->AddLine(ImVec2(x + 10.f, y - 6.f), ImVec2(x + w - 10.f, y - 6.f),
+                    IM_COL32(255, 255, 255, (int)(20.f * menu_a)), 1.f);
+        if (hov)
+            dl->AddRectFilled(ImVec2(x + 10.f, y), ImVec2(x + w - 10.f, y + h),
+                              IM_COL32(255, 255, 255, (int)(12.f * menu_a)), 8.f);
 
-        dl->AddText(ImVec2(x + 52.f, y + 13.f), IM_COL32(236, 237, 243, 255), "ardvark");
-        dl->AddText(ImVec2(x + 52.f, y + 29.f), IM_COL32(138, 140, 152, 255), "Lifetime");
-        Glass::DrawIcon(dl, Glass::Icon::ChevronR, ImVec2(x + w - 16.f, y + h * 0.5f), 6.f,
-                        IM_COL32(150, 152, 164, 220), 2.f);
+        const ImVec2 ac(x + 30.f, y + h * 0.5f);
+        // pink gradient avatar disc with an initial letter
+        dl->AddRectFilledMultiColorRounded(
+            ImVec2(ac.x - 16.f, ac.y - 16.f), ImVec2(ac.x + 16.f, ac.y + 16.f),
+            IM_COL32(240, 87, 127, 255), IM_COL32(208, 48, 92, 255),
+            IM_COL32(208, 48, 92, 255), IM_COL32(240, 87, 127, 255), 16.f);
+        {
+            const char* initial = "A";
+            ImFont* af = fonts::menu_bold();
+            const float asz = 14.f;
+            const ImVec2 its = af->CalcTextSizeA(asz, FLT_MAX, 0.f, initial);
+            dl->AddText(af, asz, ImVec2(ac.x - its.x * 0.5f, ac.y - its.y * 0.5f),
+                        IM_COL32(255, 255, 255, 255), initial);
+        }
+
+        // name 13 px / subtitle 11.5 px, 17 px apart
+        ImFont* pf = fonts::menu_regular();
+        dl->AddText(pf, 13.f, ImVec2(x + 64.f, y + 11.f),
+                    IM_COL32(236, 238, 244, 255), "ardvark");
+        dl->AddText(pf, 11.5f, ImVec2(x + 64.f, y + 28.f),
+                    IM_COL32(138, 140, 153, 255), "Lifetime");
+        menu_icons::Chevron(dl, true, ImVec2(x + w - 16.f, y + h * 0.5f), 4.5f,
+                            IM_COL32(150, 154, 166, 220), 1.6f);
 
         // ----------------------------------------------------------------
         // profile menu (the reference's popup): quick access to the menu
@@ -1192,8 +1224,9 @@ namespace gui
     // config selector in the page header ("No config" in the reference)
     static void draw_config_selector(float x, float y, float w)
     {
-        const float h = 34.f;
-        static char  s_current[64] = "default";
+        // the reference's config selector is 200 x 28 with a 6 px radius
+        const float h = 28.f;
+        static char  s_current[64] = "";
         static char  s_items[64][128]{};
         static int   s_count = 0;
         static float s_refresh_at = 0.f;
@@ -1224,15 +1257,23 @@ namespace gui
         hv.target = hov ? 1.f : 0.f;
         hv.Tick(ImGui::GetIO().DeltaTime);
 
+        // soft wash + hairline edge (MATCHA_UI_SPEC §4.3)
         ImDrawList* dl = ImGui::GetWindowDrawList();
         dl->AddRectFilled(ImVec2(x, y), ImVec2(x + w, y + h),
-                          IM_COL32(255, 255, 255, (int)(16.f + 14.f * hv.x)), 10.f);
+                          IM_COL32(255, 255, 255, (int)(12.f + 6.f * hv.x)), 8.f);
         dl->AddRect(ImVec2(x, y), ImVec2(x + w, y + h),
-                    IM_COL32(255, 255, 255, (int)(24.f + 18.f * hv.x)), 10.f);
-        dl->AddText(ImVec2(x + 14.f, y + (h - ImGui::GetTextLineHeight()) * 0.5f),
-                    IM_COL32(236, 237, 243, 255), s_current);
-        Glass::DrawIcon(dl, Glass::Icon::ChevronD, ImVec2(x + w - 18.f, y + h * 0.5f), 6.f,
-                        IM_COL32(160, 162, 174, 255), 2.f);
+                    IM_COL32(255, 255, 255, (int)(23.f + 8.f * hv.x)), 8.f);
+
+        // empty state is "No config", matching the reference (MATCHA_UI_SPEC §4.3):
+        // 13 px at x + 12, #d3d5df
+        const char* display_name = (s_current[0] != '\0') ? s_current : "No config";
+        ImFont* cf = fonts::menu_regular();
+        const float cfs = 13.f;
+        dl->AddText(cf, cfs,
+                    ImVec2(x + 12.f, y + (h - cf->CalcTextSizeA(cfs, FLT_MAX, 0.f, display_name).y) * 0.5f),
+                    IM_COL32(211, 213, 223, 255), display_name);
+        menu_icons::Chevron(dl, false, ImVec2(x + w - 14.f, y + h * 0.5f), 5.f,
+                            IM_COL32(143, 145, 157, 255), 1.6f);
 
         ImGui::PushStyleColor(ImGuiCol_PopupBg, ImVec4(0.07f, 0.075f, 0.09f, 0.985f));
         ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(1.f, 1.f, 1.f, 0.08f));
@@ -1283,54 +1324,94 @@ namespace gui
         const ImVec2 o = ImGui::GetCursorScreenPos();
         const ImVec2 avail = ImGui::GetContentRegionAvail();
 
-        // brand row: wordmark (ExtraBold) + accent pill - the reference has no
-        // badge here, just the name and a small pill on the same baseline
+        // brand row: wordmark + "PRO" pill on the same baseline. The pill is
+        // NOT a solid accent chip with white text - the reference fills it with
+        // a heavily knocked-back accent wash and writes the label in a light
+        // tint of the same hue.
         {
             const char* name = "ardvark";
-            ImFont* wf = fonts::proxima_soft_extrabold;
-            const float wsz = 15.f;
-            const ImVec2 ts = wf ? wf->CalcTextSizeA(wsz, FLT_MAX, 0.f, name)
-                                 : ImGui::CalcTextSize(name);
-            const float by = o.y + 27.f;
-            if (wf)
-                wdl->AddText(wf, wsz, ImVec2(o.x + 24.f, by - ts.y * 0.5f),
-                             IM_COL32(240, 241, 246, 255), name);
-            else
-                wdl->AddText(ImVec2(o.x + 24.f, by - ts.y * 0.5f),
-                             IM_COL32(240, 241, 246, 255), name);
+            ImFont* wf = fonts::menu_bold();
+            const float wsz = 15.5f;                 // wordmark size
+            const ImVec2 ts = wf->CalcTextSizeA(wsz, FLT_MAX, 0.f, name);
+            const float by = o.y + 26.f;
+            wdl->AddText(wf, wsz, ImVec2(o.x + 20.f, by - ts.y * 0.5f),
+                         IM_COL32(240, 241, 246, 255), name);
 
             const float* ac = Glass::EditParams(Glass::Material::Accent).tint_rgb;
-            const ImVec2 pt = ImGui::CalcTextSize("PRO");
-            const float px = o.x + 24.f + ts.x + 10.f;
-            const float pw = pt.x + 16.f, ph = 19.f;
-            wdl->AddRectFilled(ImVec2(px, by - ph * 0.5f), ImVec2(px + pw, by + ph * 0.5f),
-                               IM_COL32((int)(ac[0] * 255.f), (int)(ac[1] * 255.f),
-                                        (int)(ac[2] * 255.f), 235), 6.f);
-            wdl->AddText(ImVec2(px + 8.f, by - pt.y * 0.5f),
-                         IM_COL32(255, 255, 255, 255), "PRO");
+            const ImU32 pill_bg = IM_COL32((int)(ac[0] * 255.f), (int)(ac[1] * 255.f),
+                                           (int)(ac[2] * 255.f), 58);
+            // the label is the accent lifted ~55 % toward white
+            const ImU32 pill_fg = IM_COL32((int)((ac[0] * 0.45f + 0.55f) * 255.f),
+                                           (int)((ac[1] * 0.45f + 0.55f) * 255.f),
+                                           (int)((ac[2] * 0.45f + 0.55f) * 255.f), 255);
+
+            const float px = o.x + 20.f + ts.x + 9.f;
+            const float pw = 34.f, ph = 16.f;        // 34 x 16 pill, radius 4
+            const ImVec2 p0(px, by - ph * 0.5f), p1(px + pw, by + ph * 0.5f);
+            wdl->AddRectFilled(p0, p1, pill_bg, 4.f);
+
+            // 9 px SemiBold "PRO" with 0.9 px of tracking, optically centred
+            // in the pill (the last glyph has no tracking after it)
+            const char* tag = "PRO";
+            ImFont* bf = fonts::menu_bold();
+            const float bs = 9.f;
+            const float track = 0.9f;
+            float text_w = 0.f;
+            for (const char* p = tag; *p; ++p)
+            {
+                char ch[2] = { *p, 0 };
+                text_w += bf->CalcTextSizeA(bs, FLT_MAX, 0.f, ch).x;
+                if (*(p + 1)) text_w += track;
+            }
+            const float tx0 = p0.x + (pw - text_w) * 0.5f;
+            const float ty = by - bf->CalcTextSizeA(bs, FLT_MAX, 0.f, "P").y * 0.5f;
+            float tx = tx0;
+            for (const char* p = tag; *p; ++p)
+            {
+                char ch[2] = { *p, 0 };
+                wdl->AddText(bf, bs, ImVec2(tx, ty), pill_fg, ch);
+                tx += bf->CalcTextSizeA(bs, FLT_MAX, 0.f, ch).x + track;
+            }
         }
 
-        // sidebar: grouped nav (AIMBOT / COMMON + the visuals sub-pages), with
-        // the profile card pinned to the bottom of the rail.
-        // NOTE: no rail plate here on purpose - the reference's sidebar is the
-        // same colour as the page body, only the active row gets a plate.
-        draw_grouped_sidebar(o.x, o.y + 54.f, menu_side_w - 8.f);
-        if (avail.y > 460.f)
-            draw_profile_card(o.x, o.y + avail.y - 58.f, menu_side_w - 8.f);
+        // sidebar: the rail is its OWN rounded panel, a touch lighter than the
+        // page body, so the two halves of the card read apart (the reference's
+        // "curved" rail). The row plates sit 18 px inside it on both sides, so
+        // the panel never looks like it is cropping them.
+        {
+            const float rail_l = o.x - 8.f;
+            const float rail_r = o.x + menu_side_w - 4.f;
+            const float rail_t = o.y - 10.f;
+            const float rail_b = o.y + avail.y + 10.f;
+            const ImVec2 r0(rail_l, rail_t), r1(rail_r, rail_b);
+            wdl->AddRectFilled(r0, r1, IM_COL32(255, 255, 255, 9), 16.f);
+            wdl->AddRect(r0, r1, IM_COL32(255, 255, 255, 18), 16.f);
+        }
 
-        // divider between the nav rail and the page
-        const float sep_x = o.x + menu_side_w + 8.f;
-        wdl->AddLine(ImVec2(sep_x, o.y + 2.f), ImVec2(sep_x, o.y + avail.y - 2.f), IM_COL32(0, 0, 0, 28), 1.f);
-        wdl->AddLine(ImVec2(sep_x + 1.f, o.y + 2.f), ImVec2(sep_x + 1.f, o.y + avail.y - 2.f), IM_COL32(255, 255, 255, 40), 1.f);
+        // grouped nav (AIMBOT / COMMON + the visuals sub-pages), with the
+        // profile card pinned to the bottom of the rail - only when the rows
+        // actually leave room for it (the rail grew with the bigger type, so the
+        // rail's own height decides rather than a fixed window height)
+        const float nav_bottom = draw_grouped_sidebar(o.x, o.y + 78.f, menu_side_w - 12.f);
+        const float prof_h = 54.f;
+        const float prof_top = o.y + avail.y - prof_h;
+        if (prof_top >= nav_bottom + 10.f)
+            draw_profile_card(o.x, prof_top, menu_side_w - 12.f);
+
+        // divider between the nav rail and the page: 1 px hairline, 16 px inset
+        // top and bottom
+        const float sep_x = o.x + menu_side_w + 2.f;
+        wdl->AddLine(ImVec2(sep_x, o.y + 16.f), ImVec2(sep_x, o.y + avail.y - 16.f),
+                     IM_COL32(255, 255, 255, 15), 1.f);
 
         // page: config selector in the header, then the page's sections
-        const float cx = sep_x + 20.f;
-        const float cw = o.x + avail.x - cx - 4.f;
-        const float chh = avail.y - 62.f;
+        const float cx = sep_x + 12.f;
+        const float cw = o.x + avail.x - cx - 2.f;
+        const float chh = avail.y - 76.f;
         if (cw > 60.f && chh > 60.f)
         {
-            draw_config_selector(cx, o.y + 8.f, 210.f);
-            ImGui::SetCursorScreenPos(ImVec2(cx, o.y + 58.f));
+            draw_config_selector(cx, o.y + 12.f, 200.f);
+            ImGui::SetCursorScreenPos(ImVec2(cx, o.y + 72.f));
             menu_tab_content(s_sidebar_selected, cw, chh);
         }
 
@@ -1348,6 +1429,12 @@ namespace gui
     {
         menu_place(anim);
         ImGui::PushStyleVar(ImGuiStyleVar_Alpha, anim);
+
+        // The menu draws with Inter (regular labels, SemiBold headers) - the face
+        // of the Matcha UI remake - at the reference's row-label size. Pushing it
+        // here covers the card, the rail, every page and the popups begun inside
+        // the menu; the rest of the overlay keeps the user's "gui font".
+        ImGui::PushFont(fonts::menu_regular(), fonts::menu_size());
 
         if (glass::ready())
         {
@@ -1416,6 +1503,7 @@ namespace gui
             ImGui::End();
         }
 
+        ImGui::PopFont();       // menu face (Inter)
         ImGui::PopStyleVar();   // alpha
     }
 }

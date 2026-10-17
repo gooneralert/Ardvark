@@ -112,6 +112,7 @@ void Menu::Render()
     // LiquidUI glass pass: draws every window's frosted panel (blurred desktop
     // capture + liquid glass shader) into the overlay target, then ImGui paints
     // the ui on top of it.
+    glass::update_backdrop();
     glass::render_pass();
 
     // ---- diagnostic: probe the backbuffer after the full frame is drawn ----
@@ -199,7 +200,9 @@ void Menu::Render()
 
 bool Menu::IsVisible()
 {
-    return m_bMenuVisible;
+    // the matcha menu lives in its own window now - treat it as "menu open" so
+    // the triggerbot stands down and the session cursor/clip handling applies
+    return m_bMenuVisible || gui::menu_visible();
 }
 
 bool Menu::IsPointOverUI(float x, float y)
@@ -233,22 +236,20 @@ bool Menu::ShouldCaptureMouse(float x, float y)
 {
     if (!m_bInitialized) return false;
 
-    if (m_bMenuVisible)
-        return true;
-
+    // The main menu now lives in its own window, so the overlay only captures
+    // the mouse while the physical cursor is over one of its own tool windows.
     return gui::point_over_ui(x, y) || IsPointOverUI(x, y);
 }
 
 float Menu::DrawMenu()
 {
-    const bool was_open = gui::any_ui_open();
+    const bool was_open = gui::any_ui_open() || gui::menu_visible();
     gui::render();
-    const bool open = gui::any_ui_open();
+    const bool open = gui::any_ui_open() || gui::menu_visible();
 
     if (open != m_bMenuVisible)
     {
         m_bMenuVisible = open;
-        Renderer::SetClickThrough(!m_bMenuVisible);
 
         if (m_bMenuVisible)
         {
@@ -292,7 +293,6 @@ float Menu::DrawMenu()
     else if (open != was_open)
     {
         m_bMenuVisible = open;
-        Renderer::SetClickThrough(!m_bMenuVisible);
     }
 
     // Music player: while the menu is closed, the card becomes interactive

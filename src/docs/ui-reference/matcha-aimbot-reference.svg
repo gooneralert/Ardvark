@@ -1,0 +1,136 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="903" height="718" viewBox="0 0 903 718" font-family="Segoe UI, Inter, Helvetica, Arial, sans-serif">
+<defs>
+  <linearGradient id="accent" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#8b5cf6"/><stop offset="1" stop-color="#e04ec8"/></linearGradient>
+  <linearGradient id="avatar" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f0577f"/><stop offset="1" stop-color="#d0305c"/></linearGradient>
+  <linearGradient id="gamebg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2a2d3a"/><stop offset="1" stop-color="#141620"/></linearGradient>
+  <clipPath id="cardclip"><rect x="25" y="8" width="853" height="702" rx="20"/></clipPath>
+</defs>
+<rect width="903" height="718" fill="url(#gamebg)"/>
+<rect x="0" y="600" width="903" height="118" fill="rgba(0,0,0,0.35)"/>
+<rect x="25" y="8" width="853" height="702" rx="20" fill="#0f0f13" stroke="rgba(255,255,255,0.07)"/>
+<g clip-path="url(#cardclip)">
+<line x1="200" y1="24" x2="200" y2="694" stroke="rgba(255,255,255,0.06)"/>
+<text x="40" y="44" font-size="17" font-weight="700" fill="#eceef4" letter-spacing="0.2">ardvark</text>
+<rect x="115" y="28" width="42" height="18" rx="5" fill="url(#accent)"/>
+<text x="136" y="41" font-size="10" font-weight="700" fill="#ffffff" letter-spacing="1" text-anchor="middle">PRO</text>
+<rect x="210" y="30" width="200" height="32" rx="8" fill="rgba(255,255,255,0.045)" stroke="rgba(255,255,255,0.09)"/>
+<text x="222" y="50" font-size="13" fill="#d3d5df">No config</text>
+<path d="M387 45 l5 5 l5 -5" fill="none" stroke="#8f919d" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="40" y="95" font-size="10.5" fill="#7e8090" letter-spacing="1.2">AIMBOT</text>
+<rect x="35" y="110" width="150" height="34" rx="10" fill="rgba(255,255,255,0.06)" stroke="rgba(255,255,255,0.05)"/>
+<rect x="35" y="118" width="3" height="18" rx="1.5" fill="url(#accent)"/>
+<path d="M47.0 119.0 L49.6 124.4 L55.0 127.0 L49.6 129.6 Z" fill="none" stroke="#8b5cf6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M47.0 135.0 L44.4 129.6 L39.0 127.0 L44.4 124.4 Z" fill="none" stroke="#8b5cf6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="62" y="132" font-size="13" fill="#eceef4">Aimbot</text>
+<circle cx="47.0" cy="162.0" r="3.1" fill="none" stroke="#8f919d" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M41.6 171.4 a5.4 5.4 0 0 1 10.8 0" fill="none" stroke="#8f919d" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="62" y="170" font-size="13" fill="#b3b5c1">Silent</text>
+<circle cx="47.0" cy="203.0" r="6.6" fill="none" stroke="#8f919d" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M47.0 203.0 L47.0 198.8 M47.0 203.0 L50.4 204.6" fill="none" stroke="#8f919d" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="62" y="208" font-size="13" fill="#b3b5c1">Trigger</text>
+<text x="40" y="243" font-size="10.5" fill="#7e8090" letter-spacing="1.2">COMMON</text>
+<path d="M39.6 271.0 C44.0 265.6 50.0 265.6 54.4 271.0 C50.0 276.4 44.0 276.4 39.6 271.0 Z" fill="none" stroke="#8f919d" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="47.0" cy="271.0" r="2.3" fill="none" stroke="#8f919d" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="62" y="276" font-size="13" fill="#b3b5c1">Visuals</text>
+<circle cx="47.0" cy="309.0" r="6.8" fill="none" stroke="#8f919d" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M40.2 309.0 h13.6" fill="none" stroke="#8f919d" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+<ellipse cx="47.0" cy="309.0" rx="3.0" ry="6.8" fill="none" stroke="#8f919d" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="62" y="314" font-size="13" fill="#b3b5c1">World</text>
+<circle cx="47.0" cy="344.0" r="3.1" fill="none" stroke="#8f919d" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M41.6 353.4 a5.4 5.4 0 0 1 10.8 0" fill="none" stroke="#8f919d" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="62" y="352" font-size="13" fill="#b3b5c1">Character</text>
+<path d="M40.0 379.4 h4.2 l1.6 2.2 h6.6 a1.6 1.6 0 0 1 1.6 1.6 v5.4 a1.6 1.6 0 0 1 -1.6 1.6 h-12.4 a1.6 1.6 0 0 1 -1.6 -1.6 v-7.6 a1.6 1.6 0 0 1 1.6 -1.6 Z" fill="none" stroke="#8f919d" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="62" y="390" font-size="13" fill="#b3b5c1">NPC</text>
+<path d="M39.3 417.6 h12.6 a1.8 1.8 0 0 1 1.8 1.8 v6.2 a1.8 1.8 0 0 1 -1.8 1.8 h-6.4 l-3.6 3.0 v-3.0 h-2.6 a1.8 1.8 0 0 1 -1.8 -1.8 v-6.2 a1.8 1.8 0 0 1 1.8 -1.8 Z" fill="none" stroke="#8f919d" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="62" y="428" font-size="13" fill="#b3b5c1">Teams</text>
+<path d="M40.5 457.4 h13" fill="none" stroke="#8f919d" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M40.5 462.2 h13" fill="none" stroke="#8f919d" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M40.5 467.0 h13" fill="none" stroke="#8f919d" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="48.4" cy="457.4" r="2.0" fill="#8f919d"/>
+<circle cx="44.4" cy="462.2" r="2.0" fill="#8f919d"/>
+<circle cx="50.4" cy="467.0" r="2.0" fill="#8f919d"/>
+<text x="62" y="466" font-size="13" fill="#b3b5c1">Options</text>
+<text x="215.0" y="94.0" font-size="10.5" fill="#7e8090" letter-spacing="1.2">MAIN</text>
+<rect x="210.0" y="105.0" width="306.0" height="296.0" rx="14" fill="rgba(255,255,255,0.022)" stroke="rgba(255,255,255,0.04)"/>
+<line x1="224.0" y1="148.5" x2="502.0" y2="148.5" stroke="rgba(255,255,255,0.06)"/>
+<line x1="224.0" y1="190.0" x2="502.0" y2="190.0" stroke="rgba(255,255,255,0.06)"/>
+<line x1="224.0" y1="231.5" x2="502.0" y2="231.5" stroke="rgba(255,255,255,0.06)"/>
+<line x1="224.0" y1="273.0" x2="502.0" y2="273.0" stroke="rgba(255,255,255,0.06)"/>
+<line x1="224.0" y1="314.5" x2="502.0" y2="314.5" stroke="rgba(255,255,255,0.06)"/>
+<line x1="224.0" y1="356.0" x2="502.0" y2="356.0" stroke="rgba(255,255,255,0.06)"/>
+<text x="215.0" y="132.0" font-size="13" fill="#eceef4">Enabled</text>
+<circle cx="446.0" cy="123.0" r="1.5" fill="#aaacb8"/>
+<circle cx="446.0" cy="128.0" r="1.5" fill="#aaacb8"/>
+<circle cx="446.0" cy="133.0" r="1.5" fill="#aaacb8"/>
+<rect x="466.0" y="118.0" width="36.0" height="20.0" rx="10.0" fill="url(#accent)" stroke="rgba(255,255,255,0.12)"/>
+<circle cx="492.0" cy="128.0" r="7.0" fill="#f5f5f8"/>
+<text x="215.0" y="173.5" font-size="13" fill="#eceef4">Team Check</text>
+<rect x="466.0" y="159.5" width="36.0" height="20.0" rx="10.0" fill="url(#accent)" stroke="rgba(255,255,255,0.12)"/>
+<circle cx="492.0" cy="169.5" r="7.0" fill="#f5f5f8"/>
+<text x="215.0" y="215.0" font-size="13" fill="#eceef4">Visible Check</text>
+<rect x="466.0" y="201.0" width="36.0" height="20.0" rx="10.0" fill="rgba(255,255,255,0.13)" stroke="rgba(255,255,255,0.05)"/>
+<circle cx="492.0" cy="211.0" r="7.0" fill="#f5f5f8"/>
+<text x="215.0" y="256.5" font-size="13" fill="#eceef4">Health Check</text>
+<rect x="466.0" y="242.5" width="36.0" height="20.0" rx="10.0" fill="rgba(255,255,255,0.13)" stroke="rgba(255,255,255,0.05)"/>
+<circle cx="492.0" cy="252.5" r="7.0" fill="#f5f5f8"/>
+<text x="215.0" y="298.0" font-size="13" fill="#eceef4">Sticky Aim</text>
+<circle cx="446.0" cy="289.0" r="1.5" fill="#aaacb8"/>
+<circle cx="446.0" cy="294.0" r="1.5" fill="#aaacb8"/>
+<circle cx="446.0" cy="299.0" r="1.5" fill="#aaacb8"/>
+<rect x="466.0" y="284.0" width="36.0" height="20.0" rx="10.0" fill="url(#accent)" stroke="rgba(255,255,255,0.12)"/>
+<circle cx="492.0" cy="294.0" r="7.0" fill="#f5f5f8"/>
+<text x="215.0" y="339.5" font-size="13" fill="#eceef4">Rage Method</text>
+<circle cx="446.0" cy="330.5" r="1.5" fill="#aaacb8"/>
+<circle cx="446.0" cy="335.5" r="1.5" fill="#aaacb8"/>
+<circle cx="446.0" cy="340.5" r="1.5" fill="#aaacb8"/>
+<rect x="466.0" y="325.5" width="36.0" height="20.0" rx="10.0" fill="rgba(255,255,255,0.13)" stroke="rgba(255,255,255,0.05)"/>
+<circle cx="492.0" cy="335.5" r="7.0" fill="#f5f5f8"/>
+<text x="215.0" y="381.0" font-size="13" fill="#eceef4">Resolver</text>
+<rect x="466.0" y="367.0" width="36.0" height="20.0" rx="10.0" fill="rgba(255,255,255,0.13)" stroke="rgba(255,255,255,0.05)"/>
+<circle cx="492.0" cy="377.0" r="7.0" fill="#f5f5f8"/>
+<text x="538.0" y="94.0" font-size="10.5" fill="#7e8090" letter-spacing="1.2">SELECTION</text>
+<rect x="538.0" y="105.0" width="306.0" height="171.0" rx="14" fill="rgba(255,255,255,0.022)" stroke="rgba(255,255,255,0.04)"/>
+<line x1="552.0" y1="148.5" x2="830.0" y2="148.5" stroke="rgba(255,255,255,0.06)"/>
+<line x1="552.0" y1="190.0" x2="830.0" y2="190.0" stroke="rgba(255,255,255,0.06)"/>
+<line x1="552.0" y1="231.5" x2="830.0" y2="231.5" stroke="rgba(255,255,255,0.06)"/>
+<text x="552.0" y="132.0" font-size="13" fill="#eceef4">Distance</text>
+<rect x="784.0" y="115.0" width="46" height="26" rx="8" fill="rgba(255,255,255,0.045)" stroke="rgba(255,255,255,0.09)"/>
+<text x="807.0" y="132.0" font-size="12" fill="#eceef4" text-anchor="middle">778</text>
+<rect x="680.0" y="126.0" width="90" height="4" rx="2" fill="rgba(255,255,255,0.13)"/>
+<rect x="680.0" y="126.0" width="36.0" height="4" rx="2" fill="url(#accent)"/>
+<circle cx="716.0" cy="128.0" r="6.0" fill="#f5f5f8"/>
+<text x="552.0" y="173.5" font-size="13" fill="#eceef4">Sensitivity</text>
+<rect x="784.0" y="156.5" width="46" height="26" rx="8" fill="rgba(255,255,255,0.045)" stroke="rgba(255,255,255,0.09)"/>
+<text x="807.0" y="173.5" font-size="12" fill="#eceef4" text-anchor="middle">2.00</text>
+<rect x="680.0" y="167.5" width="90" height="4" rx="2" fill="rgba(255,255,255,0.13)"/>
+<rect x="680.0" y="167.5" width="82.8" height="4" rx="2" fill="url(#accent)"/>
+<circle cx="762.8" cy="169.5" r="6.0" fill="#f5f5f8"/>
+<text x="552.0" y="215.0" font-size="13" fill="#eceef4">Hit Part</text>
+<rect x="702.0" y="196.0" width="128" height="30" rx="8" fill="rgba(255,255,255,0.045)" stroke="rgba(255,255,255,0.09)"/>
+<text x="715.0" y="215.0" font-size="12.5" fill="#b3b5c1">Head</text>
+<path d="M807.0 209.0 l5 5 l5 -5" fill="none" stroke="#8f919d" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="552.0" y="256.5" font-size="13" fill="#eceef4">Aim Type</text>
+<rect x="702.0" y="237.5" width="128" height="30" rx="8" fill="rgba(255,255,255,0.045)" stroke="rgba(255,255,255,0.09)"/>
+<text x="715.0" y="256.5" font-size="12.5" fill="#b3b5c1">Mouse</text>
+<path d="M807.0 250.5 l5 5 l5 -5" fill="none" stroke="#8f919d" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="538.0" y="300.0" font-size="10.5" fill="#7e8090" letter-spacing="1.2">OTHER</text>
+<rect x="538.0" y="311.0" width="306.0" height="138.0" rx="14" fill="rgba(255,255,255,0.022)" stroke="rgba(255,255,255,0.04)"/>
+<line x1="552.0" y1="354.5" x2="830.0" y2="354.5" stroke="rgba(255,255,255,0.06)"/>
+<line x1="552.0" y1="396.0" x2="830.0" y2="396.0" stroke="rgba(255,255,255,0.06)"/>
+<text x="552.0" y="338.0" font-size="13" fill="#eceef4">Prediction</text>
+<path d="M816.0 339.0 l5 -5 l5 5" fill="none" stroke="#aaacb8" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" transform="rotate(90 821.0 334.0)"/>
+<text x="552.0" y="379.5" font-size="13" fill="#eceef4">Smoothing</text>
+<path d="M816.0 380.5 l5 -5 l5 5" fill="none" stroke="#aaacb8" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" transform="rotate(90 821.0 375.5)"/>
+<text x="552.0" y="421.0" font-size="13" fill="#eceef4">Field Of View</text>
+<rect x="772.0" y="407.0" width="36.0" height="20.0" rx="10.0" fill="#35c85f" stroke="rgba(255,255,255,0.12)"/>
+<circle cx="798.0" cy="417.0" r="7.0" fill="#f5f5f8"/>
+<path d="M816.0 422.0 l5 -5 l5 5" fill="none" stroke="#aaacb8" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" transform="rotate(90 821.0 417.0)"/>
+<rect x="35" y="646" width="150" height="48" rx="14" fill="rgba(255,255,255,0.05)" stroke="rgba(255,255,255,0.04)"/>
+<circle cx="67" cy="670" r="16" fill="url(#avatar)"/>
+<text x="67" y="675" font-size="14" font-weight="700" fill="#ffffff" text-anchor="middle">A</text>
+<text x="92" y="666" font-size="13" fill="#eceef4">ardvark</text>
+<text x="92" y="682" font-size="11.5" fill="#8a8c99">Lifetime</text>
+<path d="M170 665 l5 5 l-5 5" fill="none" stroke="#969aa6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
+</svg>

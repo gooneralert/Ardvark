@@ -877,8 +877,12 @@ void Triggerbot::Render()
         return;
     }
 
-    // не стреляем когда мышь занята меню/окошками оверлея
-    dbg.menu_capture = GUI::Menu::ShouldCaptureMouse(cursor.x, cursor.y);
+    // не стреляем когда мышь занята меню/окошками оверлея. The main menu now
+    // lives in its own window, so its visibility is no longer reported by
+    // ShouldCaptureMouse (which only covers the overlay's own tool windows) -
+    // OR it in explicitly so clicking the menu never fires the triggerbot.
+    dbg.menu_capture = GUI::Menu::ShouldCaptureMouse(cursor.x, cursor.y) ||
+                       GUI::Menu::IsVisible();
     if (dbg.menu_capture)
     {
         draw_dbg("menu capture");

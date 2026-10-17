@@ -43,7 +43,7 @@ void ng_tabs::draw_settings_tab(int* menu_kb, bool* kb_skip)
 
 		static const std::vector<const char*> gui_fonts = {
 			"proxima soft bold", "fredoka one", "tahoma bold", "proggy clean", "visitor", "verdana", "segoe ui", "imgui default",
-			"proxima soft extrabold"
+			"proxima soft extrabold", "inter regular", "inter semibold"
 		};
 		row_combo("gui font", &g_Settings.gui.font, gui_fonts);
 
@@ -155,6 +155,30 @@ void ng_tabs::draw_settings_tab(int* menu_kb, bool* kb_skip)
 
 	begin_column("##opt_r", right_w, h);
 	{
+		section_header("THEME");
+		begin_section("##set_theme");
+		{
+			static const std::vector<const char*> k_theme = { "dark", "light" };
+			row_combo("theme", &g_Settings.gui.appearance, k_theme);
+			row_checkbox("dim background", &g_Settings.gui.dim_backdrop);
+			accent_palette(g_Settings.gui.accent);
+			g_Settings.gui.accent[3] = 1.f;
+			row_color("custom accent", g_Settings.gui.accent);
+		}
+		end_section();
+
+		section_header("GLASS MATERIAL");
+		begin_section("##set_glass_mat");
+		{
+			row_slider_f("saturation", &g_Settings.gui.glass_sat, 0.3f, 3.f, "%.2f");
+			row_slider_f("refraction", &g_Settings.gui.glass_refr, 0.f, 60.f, "%.1f");
+			row_slider_f("chroma", &g_Settings.gui.glass_chroma, 0.f, 8.f, "%.2f");
+			row_slider_f("edge glow", &g_Settings.gui.glass_edge, 0.f, 1.f, "%.2f");
+			row_slider_f("shadow", &g_Settings.gui.glass_shadow, 0.f, 1.f, "%.2f");
+			row_slider_f("liquid flow", &g_Settings.gui.glass_flow, 0.f, 10.f, "%.1f");
+		}
+		end_section();
+
 		section_header("CONFIG");
 		begin_section("##set_cfgs");
 		{

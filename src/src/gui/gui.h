@@ -15,4 +15,9 @@ namespace gui
     bool any_ui_open();
     ImVec2 menu_pos();      // last rendered menu position (0,0 until first frame)
 bool music_visible();   // music player card currently toggled on
+
+    // menu key bind, owned here because the overlay's key handler drives it and
+    // the matcha menu's Options page edits it
+    int*  menu_key_ptr();
+    bool* menu_key_skip_ptr();
 }

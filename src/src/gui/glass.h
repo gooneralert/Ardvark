@@ -11,6 +11,13 @@ namespace glass
     // false the UI still runs, it just has no frosted panels.
     bool ready();
 
+    // while suppressed, every add_rect()/add_hole()/draw() is ignored. Used
+    // around the matcha menu window's frame: it has its own real DWM blur, so
+    // any widget inside it that asks for a glass panel must not leak into the
+    // overlay's glass pass (the panels are drawn in overlay space).
+    void set_suppressed(bool on);
+    bool suppressed();
+
     void init(ID3D11Device* device, ID3D11DeviceContext* context);
     void shutdown();
     void invalidate();
@@ -38,6 +45,26 @@ namespace glass
     void new_frame();
     void add_rect(float x, float y, float w, float h, float rounding = 8.f, float alpha = 1.f);
     void commit();
+
+    // --- real DWM blur backdrop ---------------------------------------------
+    // The tool windows get their frosted panel from actual DWM blur windows
+    // (the same mechanism the main menu window uses) instead of the LiquidUI
+    // desktop-capture shader, which is often stale or black over a fullscreen
+    // game. One small topmost, click-through window is parked just under the
+    // overlay for every glass rect and its client area is pure blur.
+    //
+    // init_backdrop() once at startup, update_backdrop() every frame after all
+    // add_rect() calls, hide_backdrop() when the overlay is not on screen, and
+    // shutdown_backdrop() at exit. While the backdrop is up add_rect() only
+    // records the rect - the LiquidUI panel is skipped so the DWM blur shows.
+    void init_backdrop();
+    void update_backdrop();
+    void hide_backdrop();
+    void shutdown_backdrop();
+
+    // screen-space origin of the overlay's client area (the space glass rects
+    // live in)
+    void origin(int& x, int& y);
 
     // records the rect for the dark menu backdrop's hole carving WITHOUT
     // submitting a panel - for windows that already draw their own panel (the
@@ -74,9 +101,7 @@ namespace glass
     // gui tint slider — used to tint secondary windows' chrome the same way.
     void tint_color(float* r, float* g, float* b, float* a);
 
-    // draws a tinted glass header band across the top of a window: rounded top
-    // corners (matches the window rounding), tinted by the same glass tint as
-    // the main menu, with a subtle hairline divider under it.
+    // draws the header hairline under a window's title row (matcha's divider)
     void draw_header(ImDrawList* draw_list, const ImVec2& wp, const ImVec2& ws, float title_h, float alpha = 1.f, float rounding = 8.f);
 
     // --- glass rects / corners ------------------------------------------------

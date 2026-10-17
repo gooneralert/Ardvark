@@ -7,7 +7,7 @@
 
 namespace gui
 {
-    static const ImVec4 border_outer = ImVec4(0.92f, 0.94f, 0.93f, 1.f); // matcha near-white (same as the main menu)
+    static const ImVec4 border_outer = ImVec4(1.f, 1.f, 1.f, 30.f / 255.f); // matcha hairline (the menu card outline)
 
     void render_esp_preview_window(bool* open, ImVec2 anchor_pos, ImVec2 anchor_size, float anim)
     {

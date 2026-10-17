@@ -2,8 +2,6 @@
 #include "esp.h"
 #include "misc.h"
 #include "helpers.h"
-#include "../glass.h"
-#include "../liquid_ui.h"
 #include "../widgets/widgets.h"
 #include "features/visuals/ESPPreview.h"
 #include "imgui.h"
@@ -359,17 +357,16 @@ void ng_tabs::draw_esp_tab()
 		}
 		else
 		{
-		if (Glass::g && pw > 40.f && ph > 80.f)
+		if (pw > 40.f && ph > 80.f)
 		{
-			Glass::Primitive pane{};
-			pane.cx = po.x + pw * 0.5f;
-			pane.cy = po.y + ph * 0.5f;
-			pane.hw = pw * 0.5f;
-			pane.hh = ph * 0.5f;
-			pane.corner_radius = 15.f;
-			pane.fade = Glass::g->SubmitFadeValue();
-			pane.material = Glass::Material::Thin;
-			Glass::g->Submit(pane);
+			// flat plate wash (not a glass layer - see begin_section): the pane is
+			// part of the card, so a second glass layer would tint it differently
+			// than the rest of the menu
+			const float a = ImGui::GetStyle().Alpha;
+			ImDrawList* dl = ImGui::GetWindowDrawList();
+			const ImVec2 pe(po.x + pw, po.y + ph);
+			dl->AddRectFilled(po, pe, IM_COL32(255, 255, 255, (int)(6.f * a)), 14.f);
+			dl->AddRect(po, pe, IM_COL32(255, 255, 255, (int)(10.f * a)), 14.f, 0, 1.f);
 		}
 
 		ImGui::SetCursorScreenPos(po);

@@ -32,6 +32,12 @@ namespace fonts {
     ImFont* esp = nullptr;
     ImFont* esp_bold = nullptr;
 
+    // Inter: the face the Matcha UI remake draws with (see add_inter). These are
+    // the menu's own font - ui()/ui_bold() prefer them, the wordmark and the
+    // section/tab headers pin them explicitly.
+    ImFont* inter_regular = nullptr;
+    ImFont* inter_semi_bold = nullptr;
+
     static void cfg_aa(ImFontConfig& c, float size, bool own_data)
     {
         c = ImFontConfig();
@@ -89,6 +95,53 @@ namespace fonts {
         {
             ImFontConfig cfg;
             cfg_aa(cfg, size, true);
+            if (ImFont* f = io.Fonts->AddFontFromFileTTF(p.c_str(), size, &cfg, ranges))
+            {
+                merge_cyr(io, size, ranges_cyr);
+                return f;
+            }
+        }
+        return def;
+    }
+
+    // -------------------------------------------------------------------------
+    // Inter - the face the Matcha UI remake draws its whole menu with. The
+    // remake embeds the two .ttf files as byte arrays; the same files ship in
+    // resources/fonts here (the post-build step copies them into "fonts\" next
+    // to the exe), with the remake's own rasterization settings: pixel-snapped
+    // pen, 2x oversampling, light hinting + forced autohint. Falls back to
+    // `def` so a missing file can never leave the menu fontless.
+    // -------------------------------------------------------------------------
+    static ImFont* add_inter(ImGuiIO& io, const char* file, float size, float multiply,
+                             const ImWchar* ranges, const ImWchar* ranges_cyr,
+                             ImFont* def)
+    {
+        char base[MAX_PATH] = {};
+        GetModuleFileNameA(nullptr, base, MAX_PATH);
+        char* slash = strrchr(base, '\\');
+        if (slash) *(slash + 1) = 0;
+        const std::string dir = base;
+
+        const std::string tries[4] = {
+            dir + "fonts\\" + file,
+            dir + "..\\..\\src\\gui\\resources\\fonts\\" + file,
+            std::string("src/gui/resources/fonts/") + file,
+            dir + "..\\..\\src\\music-player\\assets\\fonts\\" + file,
+        };
+
+        for (const std::string& p : tries)
+        {
+            ImFontConfig cfg;
+            cfg = ImFontConfig();
+            cfg.PixelSnapH          = true;   // whole-pixel glyph positions
+            cfg.OversampleH         = 2;
+            cfg.OversampleV         = 2;
+            cfg.RasterizerMultiply  = multiply;
+            cfg.FontDataOwnedByAtlas = true;
+            cfg.Flags               = ImFontFlags_NoLoadError;  // probing 4 paths
+            cfg.FontLoaderFlags     = ImGuiFreeTypeLoaderFlags_LightHinting |
+                                      ImGuiFreeTypeLoaderFlags_ForceAutoHint;
+            cfg.SizePixels          = size;
             if (ImFont* f = io.Fonts->AddFontFromFileTTF(p.c_str(), size, &cfg, ranges))
             {
                 merge_cyr(io, size, ranges_cyr);
@@ -202,6 +255,17 @@ namespace fonts {
         }
         if (!music_regular) music_regular = tahoma;
         if (!music_bold)    music_bold = tahoma_bold ? tahoma_bold : tahoma;
+
+        // Inter (Matcha UI remake face). Loaded at the same 14 px the legacy UI
+        // faces use so every layout that pushes fonts::ui() keeps its metrics;
+        // the menu itself pushes it at fonts::menu_size() (13 px) - see
+        // gui.cpp render_menu_window.
+        inter_regular = add_inter(io, "Inter-Regular.ttf", 14.f, 1.15f,
+                                  ranges_def, ranges_cyr, nullptr);
+        inter_semi_bold = add_inter(io, "Inter-SemiBold.ttf", 14.f, 1.10f,
+                                    ranges_def, ranges_cyr, nullptr);
+        // both stay null when neither the shipped nor the source path exists;
+        // fonts::menu_regular()/menu_bold() then fall back to the legacy UI font
 
         io.FontDefault = menu ? menu : (imgui ? imgui : tahoma);
     }

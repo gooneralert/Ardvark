@@ -617,7 +617,7 @@ bool  music{ false };   // music player window
 
         struct {
             int   theme{ 0 };
-            int   font{ 0 }; // 0 = proxima soft bold (see fonts::by_index)
+            int   font{ 9 }; // 9 = Inter Regular - the Matcha UI face (fonts::by_index)
             bool  vsync{ false };     // sync overlay present to the monitor's refresh
             int   fps_cap{ 0 };       // 0 = uncapped, else overlay render cap (fps)
             float frost{ 0.95f };  // glass milkiness 0..1 (tint + white wash, 0 = clear)
