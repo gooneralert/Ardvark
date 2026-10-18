@@ -385,8 +385,6 @@ namespace ng_tabs
 			{
 				if (sw_master)
 				{
-                if (sw_master)
-                {
                     // a real switch: same spring + gradient as a toggle row, or
                     // the reference's green for Field Of View
                     const ImGuiID id = ImGui::GetID("##row");

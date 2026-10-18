@@ -3,6 +3,7 @@
 #include "misc.h"
 #include "helpers.h"
 #include "../widgets/widgets.h"
+#include "../liquid_ui.h"   // Glass:: - the LiquidUI glass kit (Glass::g, ...)
 #include "features/visuals/ESPPreview.h"
 #include "imgui.h"
 #include "app/Settings.h"

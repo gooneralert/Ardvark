@@ -1,6 +1,7 @@
 #include "pch.h"
 #include "customize.h"
 #include "helpers.h"
+#include "../liquid_ui.h"   // Glass:: - the LiquidUI glass kit (Glass::g, ...)
 #include "imgui.h"
 #include "app/Settings.h"
 #include <vector>
